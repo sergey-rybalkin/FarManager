@@ -265,7 +265,7 @@ LINK_OBJS = \
 	"$(INTDIR)\vc_crt_fix_ulink.obj"
 !endif
 
-LINK_LIBS=kernel32.lib user32.lib winspool.lib advapi32.lib shell32.lib netapi32.lib mpr.lib ole32.lib psapi.lib secur32.lib setupapi.lib rpcrt4.lib version.lib userenv.lib comdlg32.lib
+LINK_LIBS=kernel32.lib user32.lib winspool.lib advapi32.lib shell32.lib netapi32.lib mpr.lib ole32.lib psapi.lib secur32.lib setupapi.lib rpcrt4.lib version.lib userenv.lib comdlg32.lib Winhttp.lib Crypt32.lib git2.lib
 
 TEST_OBJS = "$(INTDIR)\api_test_c.testobj" "$(INTDIR)\api_test_c++.testobj"
 
@@ -287,7 +287,7 @@ DEFINES=\
 
 DISABLED_WARNINGS=/FI disabled_warnings.hpp
 
-ADDINCLUDE=/I $(BOOTSTRAPDIR)..
+ADDINCLUDE=/I $(BOOTSTRAPDIR).. /I ..\..\libgit2-1.0.1\include
 
 # common
 CPPFLAGS=\
@@ -321,6 +321,7 @@ LINKFLAGS=\
 	/dynamicbase\
 	/map\
 	/out:"$(OUTDIR)\Far.exe"\
+	/LIBPATH:"..\..\libgit2-1.0.1\build\MinSizeRel\"\
 
 
 ULINKFLAGS=-q -m- -ap -Gz -O- -o- -Gh -Gh- -GF:LARGEADDRESSAWARE -d*kernel32

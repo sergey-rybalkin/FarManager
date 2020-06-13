@@ -6505,7 +6505,7 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	SortGroupsRead = false;
 
 	if (IsFocused())
-		Parent()->GetCmdLine()->SetCurDir(m_CurDir);
+		Parent()->GetCmdLine()->SetCurDir(m_CurDir, KeepSelection > 0); // Directory content has changed, refresh git data
 
 	LastCurFile=-1;
 	const auto AnotherPanel = Parent()->GetAnotherPanel(this);

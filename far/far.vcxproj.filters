@@ -733,9 +733,6 @@
     <ClInclude Include="exitcode.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="FarDlgBuilder.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="FarGuid.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>

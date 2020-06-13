@@ -45,6 +45,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/function_ref.hpp"
 
 // External:
+#include <git2.h>
 
 //----------------------------------------------------------------------------
 
@@ -67,6 +68,42 @@ struct execute_info
 	bool Silent{};
 };
 
+// Contains git prompt cache for last scanned repository
+struct git_info_context
+{
+	bool IsValidForRepository(git_repository* repo)
+	{
+		if (0 == dwRepoHash || GetTickCount() > dwValidOn)
+			return false;
+
+		DWORD dwHash = 0;
+		const char* workdir = git_repository_workdir(repo);
+
+		while (*workdir != '\0')
+			dwHash += *workdir++;
+
+		return dwRepoHash == dwHash;
+	}
+
+	void CacheRepository(git_repository* repo, string postfixCache, WORD colorCache)
+	{
+		dwRepoHash = 0;
+		const char* workdir = git_repository_workdir(repo);
+
+		while (*workdir != '\0')
+			dwRepoHash += *workdir++;
+
+		promptPostfix = postfixCache;
+		color = colorCache;
+		dwValidOn = GetTickCount() + 60000;
+	}
+
+	DWORD dwRepoHash;
+	string promptPostfix;
+	WORD color;
+	DWORD dwValidOn;
+};
+
 class CommandLine:public SimpleScreenObject
 {
 public:
@@ -78,7 +115,7 @@ public:
 	long long VMProcess(int OpCode, void* vParam = nullptr, long long iParam=0) override;
 
 	const string& GetCurDir() const { return m_CurDir; }
-	void SetCurDir(string_view CurDir);
+	void SetCurDir(string_view CurDir, bool redrawPrompt = false);
 
 	const string& GetString() const { return CmdStr.GetString(); }
 	void SetString(const string& Str, bool Redraw);
@@ -120,6 +157,9 @@ private:
 	int LastCmdPartLength;
 	string m_CurCmdStr;
 	std::stack<string> ppstack;
+	void PrepareGitPrompt();
+	std::list<segment> m_Prompt; // Custom modified prompt that replaces default in git repositories
+	git_info_context m_GitCtxCache; // Cache validation logic and hash, cached prompt is in m_Prompt
 };
 
 #endif // CMDLINE_HPP_7E68C776_4AA9_4A24_BE9F_7F7FA6D50F30

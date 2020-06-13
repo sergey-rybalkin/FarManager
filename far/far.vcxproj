@@ -69,8 +69,10 @@
     <BootstrapDir>$(IntDir)include\bootstrap\</BootstrapDir>
     <TargetOsVersion Condition="'$(Platform)'=='Win32'">5.0</TargetOsVersion>
     <TargetOsVersion Condition="'$(Platform)'=='x64'">5.2</TargetOsVersion>
-    <NewOptions Condition="'$(VisualStudioVersion)'=='15.0'"></NewOptions>
-    <NewOptions Condition="'$(VisualStudioVersion)'&gt;='16.0'"></NewOptions>
+    <NewOptions Condition="'$(VisualStudioVersion)'=='15.0'">
+    </NewOptions>
+    <NewOptions Condition="'$(VisualStudioVersion)'&gt;='16.0'">
+    </NewOptions>
     <M4Cmd>tools\m4.exe -P -DFARBIT=$(PlatformArchitecture) -DBUILD_TYPE=%25FARMANAGER_BUILD_TYPE%25 -DSCM_REVISION=%25FARMANAGER_SCM_REVISION%25</M4Cmd>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)'=='Release'">
@@ -87,7 +89,7 @@
 if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(BootstrapDir)..</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(BootstrapDir)..;..\..\libgit2-1.0.1\include</AdditionalIncludeDirectories>
       <AdditionalOptions>/J /Zc:__cplusplus,externConstexpr,inline,throwingNew /volatile:iso $(NewOptions) %(AdditionalOptions)</AdditionalOptions>
       <PreprocessorDefinitions>_ENABLE_EXTENDED_ALIGNED_STORAGE;_HAS_AUTO_PTR_ETC=0;_CRT_SECURE_NO_WARNINGS;FAR_ALPHA_VERSION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -113,7 +115,7 @@ if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
       <Culture>0x0409</Culture>
     </ResourceCompile>
     <Link>
-      <AdditionalDependencies>netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;version.lib;userenv.lib;comdlg32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;version.lib;userenv.lib;comdlg32.lib;Winhttp.lib;Crypt32.lib;git2.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <GenerateManifest>false</GenerateManifest>
       <ModuleDefinitionFile>
       </ModuleDefinitionFile>
@@ -139,6 +141,7 @@ if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <SetChecksum>true</SetChecksum>
       <Profile>true</Profile>
+      <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">..\..\libgit2-1.0.1\build\MinSizeRel</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64'">
       <Command>editbin /nologo /subsystem:console,$(TargetOsVersion) /osversion:$(TargetOsVersion) $(OutDir)$(TargetName)$(TargetExt) &gt; nul</Command>
@@ -159,6 +162,7 @@ if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
     </ResourceCompile>
     <Link>
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
+      <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">..\..\libgit2-1.0.1\build\Debug</AdditionalLibraryDirectories>
     </Link>
     <PostBuildEvent Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64'">
       <Command>$(OutDir)$(TargetName)$(TargetExt) /service:test</Command>

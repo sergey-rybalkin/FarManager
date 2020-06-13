@@ -111,6 +111,7 @@ CommandLine::CommandLine(window_ptr Owner):
 	CmdStr.SetMacroAreaAC(MACROAREA_SHELLAUTOCOMPLETION);
 	SetPersistentBlocks(Global->Opt->CmdLine.EditBlock);
 	SetDelRemovesBlocks(Global->Opt->CmdLine.DelRemovesBlocks);
+	m_GitCtxCache.dwRepoHash = 0;
 }
 
 CommandLine::~CommandLine() = default;
@@ -575,9 +576,121 @@ bool CommandLine::ProcessKey(const Manager::Key& Key)
 	}
 }
 
-
-void CommandLine::SetCurDir(string_view const CurDir)
+void CommandLine::PrepareGitPrompt()
 {
+	m_Prompt.clear();
+
+	auto PrefixColor = colors::PaletteColorToFarColor(COL_COMMANDLINEPREFIX);
+
+	m_Prompt.emplace_back(segment{ m_CurDir + L">", PrefixColor });
+
+	if (m_CurDir.length() < 6 || !os::fs::exists(m_CurDir))
+		return;
+
+	const char* branch = nullptr;
+	git_repository* repo = nullptr;
+	git_reference* head = nullptr;
+	git_reference* upstream = nullptr;
+	git_status_options opts;
+	git_status_list* status;
+	char mbBuf[MAX_PATH];
+	wchar_t wsBuf[MAX_PATH];
+	string promptPostfix;
+	WORD color = F_LIGHTGREEN;
+	int error = 0;
+
+	wcstombs(mbBuf, m_CurDir.c_str(), MAX_PATH);
+	error = git_repository_open_ext(&repo, mbBuf, 0, nullptr);
+
+	if (0 != error)
+		return;
+
+	if (m_GitCtxCache.IsValidForRepository(repo))
+	{
+		promptPostfix = m_GitCtxCache.promptPostfix;
+		color = m_GitCtxCache.color;
+	}
+	else
+	{
+		promptPostfix.append(L"(");
+
+		// Get branch name
+		error = git_repository_head(&head, repo);
+		if (0 == error)
+		{
+			branch = git_reference_shorthand(head);
+			mbstowcs(wsBuf, branch, MAX_PATH);
+			promptPostfix.append(wsBuf);
+
+			// Get upstream status - ahead or behind
+			error = git_branch_upstream(&upstream, head);
+			if (0 == error)
+			{
+				git_oid localOid, upstreamOid;
+				size_t ahead, behind;
+				git_oid_cpy(&localOid, git_reference_target(head));
+				git_oid_cpy(&upstreamOid, git_reference_target(upstream));
+				git_graph_ahead_behind(&ahead, &behind, repo, &localOid, &upstreamOid);
+
+				if (ahead > 0)
+				{
+					promptPostfix.append(L"+");
+					promptPostfix.append(std::to_wstring(ahead));
+				}
+				else if (behind > 0)
+				{
+					promptPostfix.append(L"-");
+					promptPostfix.append(std::to_wstring(behind));
+				}
+
+				git_reference_free(upstream);
+			}
+
+			git_reference_free(head);
+		}
+		else
+			promptPostfix.append(L"ERR");
+
+		// Get number of files changed
+		git_status_init_options(&opts, GIT_STATUS_OPTIONS_VERSION);
+		opts.show = GIT_STATUS_SHOW_INDEX_AND_WORKDIR;
+		opts.flags = GIT_STATUS_OPT_INCLUDE_UNTRACKED |
+			GIT_STATUS_OPT_RENAMES_HEAD_TO_INDEX;
+
+		error = git_status_list_new(&status, repo, &opts);
+
+		if (0 == error)
+		{
+			size_t nChanged = git_status_list_entrycount(status);
+			if (nChanged > 0)
+			{
+				color = F_YELLOW; // show in yellow if local changes exist
+				promptPostfix.append(L"~");
+				promptPostfix.append(std::to_wstring(nChanged));
+			}
+		}
+
+		promptPostfix.append(L")");
+
+		git_status_list_free(status);
+
+		m_GitCtxCache.CacheRepository(repo, promptPostfix, color);
+	}
+
+	git_repository_free(repo);
+
+	FarColor postfixColor = colors::ConsoleColorToFarColor(color);
+	m_Prompt.emplace_back(segment{ promptPostfix, postfixColor });
+}
+
+void CommandLine::SetCurDir(string_view const CurDir, bool redrawPrompt)
+{
+	if (redrawPrompt)
+	{
+		m_GitCtxCache.dwRepoHash = 0;
+		PrepareGitPrompt();
+	}
+
 	if (!equal_icase(m_CurDir, CurDir) || !equal_icase(os::fs::GetCurrentDirectory(), CurDir))
 	{
 		m_CurDir = CurDir;
@@ -585,6 +698,15 @@ void CommandLine::SetCurDir(string_view const CurDir)
 		//Mantis#2350 - тормоз, это и так делается выше
 		//if (Global->CtrlObject->Cp()->ActivePanel()->GetMode()!=PLUGIN_PANEL)
 			//PrepareDiskPath(strCurDir);
+			
+		if (Global->CtrlObject->Cp() == nullptr ||
+			Global->CtrlObject->Cp()->ActivePanel()->GetMode() != panel_mode::PLUGIN_PANEL)
+		{
+			// User switched to the new file system location, scan it and update prompt
+			PrepareGitPrompt();
+		}
+		else
+			m_Prompt.clear(); // We have moved away to the non-FS view, clear custom prompt
 	}
 }
 
@@ -617,6 +739,12 @@ bool CommandLine::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 
 std::list<CommandLine::segment> CommandLine::GetPrompt()
 {
+	if (!m_Prompt.empty())
+	{
+		SetPromptSize(DEFAULT_CMDLINE_WIDTH);
+		return m_Prompt;
+	}
+
 	FN_RETURN_TYPE(CommandLine::GetPrompt) Result;
 	size_t NewPromptSize = DEFAULT_CMDLINE_WIDTH;
 
@@ -1082,6 +1210,10 @@ void CommandLine::ExecString(execute_info& Info)
 	}
 
 	Execute(Info, false, Activator);
+
+	// If git command was executed we need to refresh prompt as repository status might have changed.
+	if (starts_with_icase(Info.Command, L"git "))
+		this->PrepareGitPrompt();
 
 	// BUGBUG do we really need to update panels at all?
 	IsUpdateNeeded = true;

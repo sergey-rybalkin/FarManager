@@ -82,6 +82,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/string_utils.hpp"
 
 // External:
+#include <git2.h>
 
 //----------------------------------------------------------------------------
 
@@ -781,9 +782,14 @@ static int wmain_seh(int Argc, const wchar_t* const Argv[])
 	SCOPED_ACTION(unhandled_exception_filter);
 	SCOPED_ACTION(new_handler);
 
+	git_libgit2_init();
+
 	try
 	{
-		return mainImpl({ Argv + 1, Argv + Argc });
+		int retVal = mainImpl({ Argv + 1, Argv + Argc });
+		git_libgit2_shutdown();
+
+		return retVal;
 	}
 	catch (const far_known_exception& e)
 	{
