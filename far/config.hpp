@@ -197,7 +197,7 @@ namespace option
 	{
 		return overload
 		{
-			[Callable =FWD(Callable)](validator_tag, const auto& Value){ return Callable(Value); },
+			[Callable = FWD(Callable)](validator_tag, const auto& Value){ return Callable(Value); },
 			[](notifier_tag, const auto&){}
 		};
 	}
@@ -227,7 +227,11 @@ namespace detail
 			void(option::notifier_tag, const base_type&)
 		>;
 
-		void SetCallback(const callback_type& Callback) { m_Callback = Callback; }
+		void SetCallback(const callback_type& Callback)
+		{
+			assert(!m_Callback);
+			m_Callback = Callback;
+		}
 
 		[[nodiscard]]
 		const auto& Get() const { return GetT<base_type>(); }
@@ -414,7 +418,7 @@ public:
 	bool AdvancedConfig(config_type Mode = config_type::roaming);
 	void LocalViewerConfig(ViewerOptions &ViOptRef) {return ViewerConfig(ViOptRef, true);}
 	void LocalEditorConfig(EditorOptions &EdOptRef) {return EditorConfig(EdOptRef, true);}
-	void SetSearchColumns(const string& Columns, const string& Widths);
+	void SetSearchColumns(string_view Columns, string_view Widths);
 
 	struct SortingOptions
 	{
@@ -1008,6 +1012,8 @@ public:
 	BoolOption WindowModeStickyX;
 	BoolOption WindowModeStickyY;
 
+	std::vector<std::vector<int>> PanelSortLayers;
+
 	const std::vector<PanelViewSettings>& ViewSettings;
 
 	class farconfig;
@@ -1041,6 +1047,8 @@ private:
 	void ReadPanelModes();
 	void SavePanelModes(bool always);
 	void SetDriveMenuHotkeys();
+	void ReadSortLayers();
+	void SaveSortLayers(bool Always);
 
 	std::vector<farconfig> m_Configs;
 	std::vector<PanelViewSettings> m_ViewSettings;

@@ -51,7 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-const auto DebugTests = false;
+constexpr auto DebugTests = false;
 
 std::optional<int> testing_main(int const Argc, wchar_t const* const Argv[])
 {
@@ -65,18 +65,20 @@ std::optional<int> testing_main(int const Argc, wchar_t const* const Argv[])
 
 		std::vector<const wchar_t*> Args;
 		Args.reserve(Argc - 1);
-		Args.push_back(Argv[0]);
+		Args.emplace_back(Argv[0]);
 		Args.insert(Args.end(), Argv + 2, Argv + Argc);
 
-		return Catch::Session().run(Argc - 1, Args.data());
+		return Catch::Session().run(static_cast<int>(Args.size()), Args.data());
 	}
 
 	if (DebugTests)
 	{
-		std::vector<const wchar_t*> Args(Argv, Argv + Argc);
+		std::vector<const wchar_t*> Args;
+		Args.reserve(Argc + 1);
+		Args.assign(Argv, Argv + Argc);
 		Args.emplace_back(L"--break");
 
-		return Catch::Session().run(Argc + 1, Args.data());
+		return Catch::Session().run(static_cast<int>(Args.size()), Args.data());
 	}
 
 	return {};
@@ -86,7 +88,7 @@ namespace
 {
 	SCOPED_ACTION(components::component)([]
 	{
-		return components::component::info{ L"Catch2"sv, format(FSTR(L"{0}.{1}.{2}"), CATCH_VERSION_MAJOR, CATCH_VERSION_MINOR, CATCH_VERSION_PATCH) };
+		return components::info{ L"Catch2"sv, format(FSTR(L"{0}.{1}.{2}"), CATCH_VERSION_MAJOR, CATCH_VERSION_MINOR, CATCH_VERSION_PATCH) };
 	});
 }
 

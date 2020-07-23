@@ -82,7 +82,90 @@ static string short_name_if_too_long(const string& LongName)
 	return LongName.size() >= MAX_PATH - 1? ConvertNameToShort(LongName) : LongName;
 }
 
-static bool GetImageType(const string& FileName, image_type& ImageType)
+static bool GetImageType(std::istream& Stream, image_type& ImageType)
+{
+	IMAGE_DOS_HEADER DOSHeader;
+	if (io::read(Stream, edit_bytes(DOSHeader)) != sizeof(DOSHeader))
+		return false;
+
+	if (DOSHeader.e_magic != IMAGE_DOS_SIGNATURE)
+		return false;
+
+	Stream.seekg(DOSHeader.e_lfanew);
+
+	union
+	{
+		struct
+		{
+			DWORD Signature;
+			IMAGE_FILE_HEADER FileHeader;
+			union
+			{
+				IMAGE_OPTIONAL_HEADER32 OptionalHeader32;
+				IMAGE_OPTIONAL_HEADER64 OptionalHeader64;
+			};
+		}
+		PeHeader;
+
+		IMAGE_OS2_HEADER Os2Header;
+	}
+	ImageHeader;
+
+	if (io::read(Stream, edit_bytes(ImageHeader)) != sizeof(ImageHeader))
+		return false;
+
+	auto Result = image_type::console;
+
+	if (ImageHeader.PeHeader.Signature == IMAGE_NT_SIGNATURE)
+	{
+		const auto& PeHeader = ImageHeader.PeHeader;
+
+		if (PeHeader.FileHeader.Characteristics & IMAGE_FILE_DLL)
+			return false;
+
+		auto ImageSubsystem = IMAGE_SUBSYSTEM_UNKNOWN;
+
+		switch (PeHeader.OptionalHeader32.Magic)
+		{
+		case IMAGE_NT_OPTIONAL_HDR32_MAGIC:
+			ImageSubsystem = PeHeader.OptionalHeader32.Subsystem;
+			break;
+
+		case IMAGE_NT_OPTIONAL_HDR64_MAGIC:
+			ImageSubsystem = PeHeader.OptionalHeader64.Subsystem;
+			break;
+		}
+
+		if (ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI)
+		{
+			Result = image_type::graphical;
+		}
+	}
+	else if (ImageHeader.Os2Header.ne_magic == IMAGE_OS2_SIGNATURE)
+	{
+		const auto& Os2Header = ImageHeader.Os2Header;
+
+		enum { DllOrDriverFlag = 7_bit };
+		if (HIBYTE(Os2Header.ne_flags) & DllOrDriverFlag)
+			return false;
+
+		enum
+		{
+			NE_WINDOWS = 1_bit,
+			NE_WIN386  = 2_bit,
+		};
+
+		if (Os2Header.ne_exetyp == NE_WINDOWS || Os2Header.ne_exetyp == NE_WIN386)
+		{
+			Result = image_type::graphical;
+		}
+	}
+
+	ImageType = Result;
+	return true;
+}
+
+static bool GetImageType(string_view const FileName, image_type& ImageType)
 {
 	const os::fs::file ModuleFile(FileName, GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING);
 	if (!ModuleFile)
@@ -93,86 +176,8 @@ static bool GetImageType(const string& FileName, image_type& ImageType)
 		os::fs::filebuf StreamBuffer(ModuleFile, std::ios::in);
 		std::istream Stream(&StreamBuffer);
 		Stream.exceptions(Stream.badbit | Stream.failbit);
+		return GetImageType(Stream, ImageType);
 
-		IMAGE_DOS_HEADER DOSHeader;
-		if (io::read(Stream, bytes::reference(DOSHeader)) != sizeof(DOSHeader))
-			return false;
-
-		if (DOSHeader.e_magic != IMAGE_DOS_SIGNATURE)
-			return false;
-
-		Stream.seekg(DOSHeader.e_lfanew);
-
-		union
-		{
-			struct
-			{
-				DWORD Signature;
-				IMAGE_FILE_HEADER FileHeader;
-				union
-				{
-					IMAGE_OPTIONAL_HEADER32 OptionalHeader32;
-					IMAGE_OPTIONAL_HEADER64 OptionalHeader64;
-				};
-			}
-			PeHeader;
-
-			IMAGE_OS2_HEADER Os2Header;
-		}
-		ImageHeader;
-
-		if (io::read(Stream, bytes::reference(ImageHeader)) != sizeof(ImageHeader))
-			return false;
-
-		auto Result = image_type::console;
-
-		if (ImageHeader.PeHeader.Signature == IMAGE_NT_SIGNATURE)
-		{
-			const auto& PeHeader = ImageHeader.PeHeader;
-
-			if (!(PeHeader.FileHeader.Characteristics & IMAGE_FILE_DLL))
-			{
-				auto ImageSubsystem = IMAGE_SUBSYSTEM_UNKNOWN;
-
-				switch (PeHeader.OptionalHeader32.Magic)
-				{
-				case IMAGE_NT_OPTIONAL_HDR32_MAGIC:
-					ImageSubsystem = PeHeader.OptionalHeader32.Subsystem;
-					break;
-
-				case IMAGE_NT_OPTIONAL_HDR64_MAGIC:
-					ImageSubsystem = PeHeader.OptionalHeader64.Subsystem;
-					break;
-				}
-
-				if (ImageSubsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI)
-				{
-					Result = image_type::graphical;
-				}
-			}
-		}
-		else if (ImageHeader.Os2Header.ne_magic == IMAGE_OS2_SIGNATURE)
-		{
-			const auto& Os2Header = ImageHeader.Os2Header;
-
-			enum { DllOrDriverFlag = 7_bit };
-			if (!(HIBYTE(Os2Header.ne_flags) & DllOrDriverFlag))
-			{
-				enum
-				{
-					NE_WINDOWS = 1_bit,
-					NE_WIN386  = 2_bit,
-				};
-
-				if (Os2Header.ne_exetyp == NE_WINDOWS || Os2Header.ne_exetyp == NE_WIN386)
-				{
-					Result = image_type::graphical;
-				}
-			}
-		}
-
-		ImageType = Result;
-		return true;
 	}
 	catch (const std::exception&)
 	{
@@ -180,7 +185,7 @@ static bool GetImageType(const string& FileName, image_type& ImageType)
 	}
 }
 
-static bool IsProperProgID(const string& ProgID)
+static bool IsProperProgID(string_view const ProgID)
 {
 	return !ProgID.empty() && os::reg::key::open(os::reg::key::classes_root, ProgID, KEY_QUERY_VALUE);
 }
@@ -190,17 +195,15 @@ static bool IsProperProgID(const string& ProgID)
 hExtKey - корневой ключ для поиска (ключ расширения)
 strType - сюда запишется результат, если будет найден
 */
-static bool SearchExtHandlerFromList(const os::reg::key& ExtKey, string& strType)
+static string SearchExtHandlerFromList(const os::reg::key& ExtKey)
 {
-	for (const auto& i: os::reg::enum_value(ExtKey, L"OpenWithProgIds"sv, KEY_ENUMERATE_SUB_KEYS))
+	const auto Enumerator = os::reg::enum_value(ExtKey, L"OpenWithProgIds"sv, KEY_ENUMERATE_SUB_KEYS);
+	const auto Iterator = std::find_if(ALL_CONST_RANGE(Enumerator), [](const os::reg::value& i)
 	{
-		if (i.type() == REG_SZ && IsProperProgID(i.name()))
-		{
-			strType = i.name();
-			return true;
-		}
-	}
-	return false;
+			return i.type() == REG_SZ && IsProperProgID(i.name());
+	});
+
+	return Iterator != Enumerator.cend()? Iterator->name() : L""s;
 }
 
 static bool FindObject(string_view const Module, string& strDest, bool* Internal)
@@ -208,7 +211,7 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 	if (Module.empty())
 		return false;
 
-	const auto ModuleExt = PointToExt(Module);
+	const auto ModuleExt = name_ext(Module).second;
 	const auto PathExtList = enum_tokens(lower(os::env::get_pathext()), L";"sv);
 
 	const auto TryWithExtOrPathExt = [&](string_view const Name, const auto& Predicate)
@@ -235,7 +238,7 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 		// If you really want to look for files w/o extension - add ";;" to the %PATHEXT%.
 		// return Predicate(Name);
 
-		return std::make_pair(false, L""s);
+		return std::pair(false, L""s);
 	};
 
 	if (IsAbsolutePath(Module))
@@ -244,7 +247,7 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 		// Just try all the extensions and we are done here:
 		const auto [Found, FoundName] = TryWithExtOrPathExt(Module, [](string_view const NameWithExt)
 		{
-			return std::make_pair(os::fs::is_file(NameWithExt), string(NameWithExt));
+			return std::pair(os::fs::is_file(NameWithExt), string(NameWithExt));
 		});
 
 		if (Found)
@@ -271,7 +274,7 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 		const auto FullName = ConvertNameToFull(Module);
 		const auto[Found, FoundName] = TryWithExtOrPathExt(FullName, [](string_view const NameWithExt)
 		{
-			return std::make_pair(os::fs::is_file(NameWithExt), string(NameWithExt));
+			return std::pair(os::fs::is_file(NameWithExt), string(NameWithExt));
 		});
 
 		if (Found)
@@ -293,7 +296,7 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 
 				const auto[Found, FoundName] = TryWithExtOrPathExt(path::join(Path, Module), [](string_view const NameWithExt)
 				{
-					return std::make_pair(os::fs::is_file(NameWithExt), string(NameWithExt));
+					return std::pair(os::fs::is_file(NameWithExt), string(NameWithExt));
 				});
 
 				if (Found)
@@ -310,7 +313,7 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 		const auto[Found, FoundName] = TryWithExtOrPathExt(Module, [](string_view const NameWithExt)
 		{
 			string Str;
-			return std::make_pair(os::fs::SearchPath(nullptr, NameWithExt, nullptr, Str), Str);
+			return std::pair(os::fs::SearchPath(nullptr, NameWithExt, nullptr, Str) && !os::fs::is_directory(Str), Str);
 		});
 
 		if (Found)
@@ -349,10 +352,10 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 					if (RootFindKey[i]->get(NameWithExt, {}, RealName, samDesired))
 					{
 						RealName = unquote(os::env::expand(RealName));
-						return std::make_pair(os::fs::is_file(RealName), RealName);
+						return std::pair(os::fs::is_file(RealName), RealName);
 					}
 
-					return std::make_pair(false, L""s);
+					return std::pair(false, L""s);
 				});
 
 				if (Found)
@@ -369,9 +372,9 @@ static bool FindObject(string_view const Module, string& strDest, bool* Internal
 
 /*
  true: ok, found command & arguments.
- false: it's too complex, let's comspec deal with it.
+ false: it's too complex, let comspec deal with it.
 */
-static bool PartCmdLine(const string& CmdStr, string& strNewCmdStr, string& strNewCmdPar)
+static bool PartCmdLine(string_view const CmdStr, string& strNewCmdStr, string& strNewCmdPar)
 {
 	auto UseDefaultCondition = true;
 
@@ -452,7 +455,7 @@ static bool PartCmdLine(const string& CmdStr, string& strNewCmdStr, string& strN
 
 static bool RunAsSupported(const wchar_t* Name)
 {
-	const auto Extension = PointToExt(Name);
+	const auto Extension = name_ext(Name).second;
 	string Type;
 	return !Extension.empty() &&
 		GetShellType(Extension, Type) &&
@@ -523,7 +526,7 @@ static string GetShellActionForType(string_view const TypeName, string& KeyName)
 
 static string GetShellTypeFromExtension(string_view const FileName)
 {
-	auto Ext = PointToExt(FileName);
+	auto Ext = name_ext(FileName).second;
 	if (Ext.empty())
 	{
 		// Yes, no matter how mad it looks - it is possible to specify actions for empty extension too
@@ -653,16 +656,16 @@ bool GetShellType(const string_view Ext, string& strType, const ASSOCIATIONTYPE 
 		}
 
 		if (strType.empty() && UserKey)
-			SearchExtHandlerFromList(UserKey, strType);
+			strType = SearchExtHandlerFromList(UserKey);
 
 		if (strType.empty() && CRKey)
-			SearchExtHandlerFromList(CRKey, strType);
+			strType = SearchExtHandlerFromList(CRKey);
 	}
 
 	return !strType.empty();
 }
 
-void OpenFolderInShell(const string& Folder)
+void OpenFolderInShell(string_view const Folder)
 {
 	execute_info Info;
 	Info.DisplayCommand = Folder;
@@ -724,7 +727,7 @@ static bool GetAssociatedImageType(string_view const FileName, image_type& Image
 
 static bool GetProtocolType(string_view const Str, image_type& ImageType)
 {
-	const auto Unquoted = unquote(string(Str));
+	const auto Unquoted = unquote(Str);
 	const auto SemicolonPos = Unquoted.find(L':');
 	if (!SemicolonPos || SemicolonPos == 1 || SemicolonPos == Str.npos)
 		return false;
@@ -1176,7 +1179,7 @@ void Execute(execute_info& Info, bool FolderRun, function_ref<void(bool)> const 
 		console.SetOutputCodepage(ConsoleOutputCP);
 	}
 
-	if (!Result)
+	if (!Result && ErrorState.Win32Error != ERROR_CANCELLED)
 	{
 		std::vector<string> Strings;
 		if (Info.ExecMode == execute_info::exec_mode::direct)
@@ -1291,7 +1294,7 @@ static string_view PrepareOSIfExist(string_view const CmdLine, predicate IsExist
 		if (Command.empty())
 			break;
 
-		if ((IsExistToken? IsExists : IsDefined)(unquote(string(ExpressionStart.substr(0, ExpressionStart.size() - Command.size())))) == IsNot)
+		if ((IsExistToken? IsExists : IsDefined)(unquote(ExpressionStart.substr(0, ExpressionStart.size() - Command.size()))) == IsNot)
 			return {};
 
 		SkippedSomethingValid = true;
@@ -1324,7 +1327,7 @@ bool ExtractIfExistCommand(string& strCommandText)
 
 bool IsExecutable(string_view const Filename)
 {
-	const auto Ext = PointToExt(Filename);
+	const auto Ext = name_ext(Filename).second;
 	if (Ext.empty())
 		return false;
 

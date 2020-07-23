@@ -285,7 +285,7 @@ DEFINES=\
 	/D "_HAS_AUTO_PTR_ETC=0"\
 	/D "_CRT_SECURE_NO_WARNINGS"
 
-DISABLED_WARNINGS=/FI disabled_warnings.hpp
+DISABLED_WARNINGS=/FI disabled_warnings.hpp /wd5045
 
 ADDINCLUDE=/I $(BOOTSTRAPDIR).. /I ..\..\libgit2-1.0.1\include
 
@@ -294,7 +294,7 @@ CPPFLAGS=\
 	/c\
 	/J\
 	/EHsc\
-	/std:c++17\
+	/std:c++latest\
 	/permissive-\
 	/Zc:__cplusplus,externConstexpr,inline,throwingNew\
 	/volatile:iso\
@@ -333,7 +333,18 @@ RFLAGS=/nologo /l 0x409 /fo"$(RES_FILE)" $(ADDINCLUDE) /d $(USEDEBUG)
 
 !ifdef CLANG
 CPP = clang-cl
-CPPFLAGS = $(CPPFLAGS) /clang:-fvisibility=hidden -Qunused-arguments -Werror=old-style-cast
+CPPFLAGS =\
+	$(CPPFLAGS)\
+	-Qunused-arguments\
+	/clang:-fvisibility=hidden\
+	-Werror=array-bounds\
+	-Werror=dangling\
+	-Werror=odr\
+	-Werror=old-style-cast\
+	-Werror=reorder\
+	-Werror=return-type\
+
+
 NOBATCH=1
 NO_RELEASE_LTCG=1
 !elseifdef ICL
@@ -504,7 +515,7 @@ $(INTDIR)\vc_crt_fix_ulink.obj: vc_crt_fix_ulink.cpp
 	$(MASM) /nologo /c $(MASM_DEFINES) /Fo$@ $<
 
 $(RES_FILE): far.rc $(BOOTSTRAPDIR)far.rc.inc $(BOOTSTRAPDIR)Far.exe.manifest Far.ico Far.red.ico Far.black.ico Far.hack.ico Far.mono.ico Far.msg.ico
-	@echo Compiling resource file
+	@echo far.rc
 	$(RC) $(RFLAGS) far.rc
 
 !ifdef USEDEPS

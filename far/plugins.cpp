@@ -66,6 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cvtname.hpp"
 #include "delete.hpp"
 #include "global.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -1270,7 +1271,7 @@ void PluginManager::Configure(int StartPos)
 			}
 
 			PluginList->AssignHighlights();
-			PluginList->SetBottomTitle(msg(lng::MPluginHotKeyBottom));
+			PluginList->SetBottomTitle(KeysToLocalizedText(KEY_SHIFTF1, KEY_F4, KEY_F3));
 			PluginList->SortItems(false, HotKeysPresent? 3 : 0);
 			PluginList->SetSelectPos(StartPos,1);
 			NeedUpdateItems = false;
@@ -1438,7 +1439,7 @@ int PluginManager::CommandsMenu(int ModalType,int StartPos,const wchar_t *Histor
 				}
 
 				PluginList->AssignHighlights();
-				PluginList->SetBottomTitle(msg(lng::MPluginHotKeyBottom));
+				PluginList->SetBottomTitle(KeysToLocalizedText(KEY_SHIFTF1, KEY_F4, KEY_F3));
 				PluginList->SortItems(false, HotKeysPresent? 3 : 0);
 				PluginList->SetSelectPos(StartPos,1);
 				NeedUpdateItems = false;
@@ -1841,28 +1842,25 @@ bool PluginManager::GetDiskMenuItem(Plugin *pPlugin, size_t PluginItem, bool &It
 	return true;
 }
 
-int PluginManager::UseFarCommand(const plugin_panel* const hPlugin, int const CommandType)
+bool PluginManager::UseInternalCommand(const plugin_panel* const hPlugin, int const CommandType, OpenPanelInfo const& Info)
 {
-	OpenPanelInfo Info;
-	GetOpenPanelInfo(hPlugin,&Info);
-
 	if (!(Info.Flags & OPIF_REALNAMES))
-		return FALSE;
+		return false;
 
 	switch (CommandType)
 	{
-		case PLUGIN_FARGETFILE:
-		case PLUGIN_FARGETFILES:
-			return !hPlugin->plugin()->has(iGetFiles) || (Info.Flags & OPIF_EXTERNALGET);
-		case PLUGIN_FARPUTFILES:
-			return !hPlugin->plugin()->has(iPutFiles) || (Info.Flags & OPIF_EXTERNALPUT);
-		case PLUGIN_FARDELETEFILES:
-			return !hPlugin->plugin()->has(iDeleteFiles) || (Info.Flags & OPIF_EXTERNALDELETE);
-		case PLUGIN_FARMAKEDIRECTORY:
-			return !hPlugin->plugin()->has(iMakeDirectory) || (Info.Flags & OPIF_EXTERNALMKDIR);
+	case PLUGIN_FARGETFILE:
+	case PLUGIN_FARGETFILES:
+		return !hPlugin->plugin()->has(iGetFiles) || (Info.Flags & OPIF_EXTERNALGET);
+	case PLUGIN_FARPUTFILES:
+		return !hPlugin->plugin()->has(iPutFiles) || (Info.Flags & OPIF_EXTERNALPUT);
+	case PLUGIN_FARDELETEFILES:
+		return !hPlugin->plugin()->has(iDeleteFiles) || (Info.Flags & OPIF_EXTERNALDELETE);
+	case PLUGIN_FARMAKEDIRECTORY:
+		return !hPlugin->plugin()->has(iMakeDirectory) || (Info.Flags & OPIF_EXTERNALMKDIR);
+	default:
+		return true;
 	}
-
-	return TRUE;
 }
 
 

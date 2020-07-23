@@ -55,7 +55,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "platform.env.hpp"
 
 // Common:
-#include "common/algorithm.hpp"
 
 // External:
 
@@ -1449,7 +1448,7 @@ bool Edit::InsertKey(wchar_t const Key)
 	return true;
 }
 
-void Edit::SetHiString(const string& Str)
+void Edit::SetHiString(string_view const Str)
 {
 	if (m_Flags.Check(FEDITLINE_READONLY))
 		return;
@@ -2063,7 +2062,7 @@ void Edit::AddColor(const ColorItem& col)
 
 void Edit::DeleteColor(delete_color_condition const Condition)
 {
-	erase_if(ColorList, Condition);
+	std::erase_if(ColorList, Condition);
 }
 
 bool Edit::GetColor(ColorItem& col, size_t Item) const

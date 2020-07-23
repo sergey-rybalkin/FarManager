@@ -49,8 +49,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-class bytes;
-class bytes_view;
 class RegExp;
 struct RegExpMatch;
 struct MatchHash;
@@ -149,12 +147,27 @@ namespace inplace
 
 [[nodiscard]]
 string truncate_left(string Str, size_t MaxLength);
+
+[[nodiscard]]
+string truncate_left(string_view Str, size_t MaxLength);
+
 [[nodiscard]]
 string truncate_right(string Str, size_t MaxLength);
+
+[[nodiscard]]
+string truncate_right(string_view Str, size_t MaxLength);
+
 [[nodiscard]]
 string truncate_center(string Str, size_t MaxLength);
+
+[[nodiscard]]
+string truncate_center(string_view Str, size_t MaxLength);
+
 [[nodiscard]]
 string truncate_path(string Str, size_t MaxLength);
+
+[[nodiscard]]
+string truncate_path(string_view Str, size_t MaxLength);
 
 [[nodiscard]]
 bool IsCaseMixed(string_view Str);
@@ -247,35 +260,21 @@ char IntToHex(int h);
 int HexToInt(char h);
 
 [[nodiscard]]
-std::string BlobToHexString(bytes_view Blob, char Separator = ',');
-
-[[nodiscard]]
-bytes HexStringToBlob(std::string_view Hex, char Separator = ',');
-
-[[nodiscard]]
-string BlobToHexWString(bytes_view Blob, wchar_t Separator = L',');
+string BlobToHexString(bytes_view Blob, wchar_t Separator = L',');
 
 [[nodiscard]]
 bytes HexStringToBlob(string_view Hex, wchar_t Separator = L',');
 
-template<class S, class T>
+template<class T>
 [[nodiscard]]
-auto to_hex_string_t(T Value)
+auto to_hex_wstring(T Value)
 {
 	static_assert(std::is_integral_v<T>);
-	S Result(sizeof(T) * 2, '0');
+	string Result(sizeof(T) * 2, '0');
 	for (int i = sizeof(T) * 2 - 1; i >= 0; --i, Value >>= 4)
 		Result[i] = IntToHex(Value & 0xF);
 	return Result;
 }
-
-template<class T>
-[[nodiscard]]
-auto to_hex_string(T Value) { return to_hex_string_t<std::string>(Value); }
-
-template<class T>
-[[nodiscard]]
-auto to_hex_wstring(T Value) { return to_hex_string_t<string>(Value); }
 
 [[nodiscard]]
 string ExtractHexString(string_view HexString);

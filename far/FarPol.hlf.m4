@@ -820,79 +820,74 @@ $ #Polecenia specjalne#
 
 
 @MsWheel
-$ #Mouse: wheel support#
- #Panels#
- Rotating the wheel scrolls the file list without changing the cursor position on the screen.
-Pressing the #middle button# has the same effect as pressing #Enter#.
+$ #Myszka: obsługa rolki#
+ #Panele#
+ Obracanie rolki przewija listę plików bez zmiany pozycji kursora na ekranie.
+ Wciśnięcie #środkowego przycisku# działa tak samo jak klawisz #Enter#.
 
- #Editor#
- Rotating the wheel scrolls the text without changing the cursor position on the screen
-(similar to #Ctrl+Up#/#Ctrl+Down#).
+ #Edytor#
+ Obracanie rolki przewija tekst bez zmiany pozycji kursora na ekranie
+(podobnie do #Ctrl+Up#/#Ctrl+Down#).
 
- #Viewer#
- Rotating the wheel scrolls the text.
+ #Podgląd#
+ Obracanie rolki przewija tekst.
 
- #Help#
- Rotating the wheel scrolls the text.
+ #Pomoc#
+ Obracanie rolki przewija tekst.
 
- #Menus#
- Wheel scrolling works as #Up#/#Down# keys. Pressing the #middle button# has the same effect as
-pressing #Enter#. It is possible to choose items without moving the cursor.
+ #Menu#
+ Obracanie rolki działa tak samo jak klawisze #Góra#/#Dół#. Wciśnięcie #środkowego przycisku# działa tak samo
+jak klawisz #Enter#. Można wybrać pozycję menu bez przesuwania kursora.
 
- #Dialogs#
- In dialogs, when the wheel is rotated at an edit line with a history list or a combo box,
-the drop-down list is opened. In the drop-down list scrolling works the same as in menus.
+ #Dialogi#
+ W oknach dialogowych, przy obracaniu folki w polu edycji z listą historii lub listą wyboru - otwierana jest
+lista opcji. W liście rozwijanej - obracanie działa tak samo jak w menu.
 
- You can specify the number of lines to scroll at a time in the panels,
-editor and viewer (see ~System.MsWheelDelta~@System.MsWheelDelta@).
+ Można ustawić ilość linii do przewijania w panelach, edytorze i przeglądarce (szczegóły ~System.MsWheelDelta~@System.MsWheelDelta@).
 
 
 @Plugins
-$ #Plugins support#
- Plugins can be used to implement new Far commands and emulate file systems.
-For example, archives support, FTP client, temporary panel and network browser
-are plugins that emulate file systems.
+$ #Obsługa wtyczek#
+ Wtyczki mogą być używane do rozszerzenia poleceń Far i emulowania systemu plików.
+Np. obsługa archiwów, klient FTP, panel tymczasowy, przeglądarka sieci - są wtyczkami
+emulującymi system plików.
 
- All plugins are stored in separate folders within the 'Plugins' folder,
-which is in the same folder as Far.exe, and the 'Plugins' folder, which is in the
-user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
-When detecting a new plugin Far saves information about it and later loads the
-plugin only when necessary, so unused plugins do not require additional memory.
-But if you are sure that some plugins are useless for you, you can remove them
-to save disk space.
+ Wszystkie wtyczki są zapisywane w osobnych podfolderach folderu 'Plugins', który znajduje
+się w tym samym miejscu co plik Far.exe, lub w folderze 'Plugins' znajdującym się w profilu
+użytkownika (domyślnie #%APPDATA%\\Far Manager\\Profile#).
+Po wykryciu nowej wtyczki Far zapisuje informację o niej, a później wczytuje ją tylko wtedy,
+gdy jest potrzebna - nie używane wtyczki nie zajmują dodatkowej pamięci.
+Ale jeżeli któraś wtyczka nie będzie już potrzebna, można ją usunąć oszczędzając miejsce na dysku.
 
- Plugins can be called either from ~Change drive menu~@DriveDlg@ or from
-#Plugin commands# menu, activated by #F11# or by corresponding item of
-~Commands menu~@CmdMenu@. #F4# in ~"Plugin commands"~@PluginCommands@ menu allows to assign hot
-keys to menu items (this makes easier to call them from ~keyboard macros~@KeyMacro@).
-This menu is accessible from file panels, dialogs and (only by #F11#) from the
-internal viewer and editor. Only specially designed plugins will be shown when
-calling the menu from dialogs, the viewer or the editor.
+ Wtyczki mogą być wywołane z menu ~Zmienń dysk~@DriveDlg@ lub #Listy wtyczek# włączanej klawiszem
+#F11# lub odpowiadającemgo menu ~Polecenia~@CmdMenu@. Wciśnięcie #F4# na ~"Liście wtyczek"~@PluginCommands@
+pozwala przypisać klawisz skrótu do menu (ułatwia to wywoływanie wtyczek w ~makrach klawiatury~@KeyMacro@).
+Menu to jest dostępne w panelu plików, oknach dialogowych oraz (tylko po wciśnięciu klawisza #F11#)
+w oknie podglądu i edycji. Tylko specjalnie przygotowane wtyczki będą pokazywane w oknach dialogowych,
+przeglądarce lub edytorze.
 
- You can set plugin parameters using ~Plugin configuration~@PluginsConfig@
-command from ~Options menu~@OptMenu@.
+ Można ustawić parametry wtyczek używając polecenia ~Konfiguracja wtyczek~@PluginsConfig@
+w menu ~Opcje~@OptMenu@.
 
- File processing operations like copy, move, delete, edit or ~Find file~@FindFile@
-work with plugins, which emulate file systems, if these plugins provide
-necessary functionality. Search from the current folder in the "Find file"
-command requires less functionality than search from the root folder, so try to
-use it if search from the root folder does not work correctly.
+ Operacje przetwarzania plików takie jak kopiowanie, przenoszenie, usuwanie, edycja lub
+~wyszukiwanie plików~@FindFile@ współpracują z wtyczkami emulującymi system plików, jeżeli wtyczki
+posiadają odpowiednią funkcjonalność. Wyszukiwanie w bieżącym folderze poleceniem "Znajdź plik"
+wymaga mniejszej funkcjonalności niż wyszukiwanie w głównym folderze, więc można ją wykorzystać
+jeżeli wyszukiwanie z głównego foldera będzie nieskuteczne.
 
- Plugins have their own message and help files. You can get a list of
-available help on the plugins by pressing
+ Wtyczki mają własne komunikaty i pliki pomocy. Można odczytać pomoc po wcisnięciu
 
- #Shift+F2# - anywhere in the Far help system
+ #Shift+F2# - w każdym miejscu pomocy Far
 
- #Shift+F1# - in the list of plugins (context-dependent help).
+ #Shift+F1# - na liście wtyczek (pomoc kontekstowa).
 
- If the plugin has no help file, then context-dependent help will not pop out.
+ Jeżeli wtyczka nie zawiera pliku pomocy, pomoc kontekstowa nie zostanie wyświetlona.
 
- If the active panel shows a plugin emulated file system, the command "CD"
-in the command line can be used to change the plugin file system folder. Unlike
-"CD", "CHDIR" command always treats the specified parameter as a real folder
-name regardless a file panel type.
+ Jeżeli aktywny panel pokazuje wtyczkę emulującą system plkików, polecenie "CD"
+w linii poleceń może być użyte do zmiany folderu wtyczki. Inaczej niż polecenia "CD", "CHDIR"
+podany parametr zawsze jest traktowany jak rzeczywisty folder bez względu na typ panelu plików.
 
- Use #Alt+Shift+F9# to ~configure plugins~@PluginsConfig@.
+ Użyj klawiszy #Alt+Shift+F9# aby ~skonfigurować wtyczki~@PluginsConfig@.
 
 
 @PluginCommands
@@ -6425,144 +6420,220 @@ or the search starting point.
 
 @XLat.Layouts
 $ #far:config XLat.Layouts#
- Параметр "XLat.Layouts" позволяет задавать номера раскладок клавиатуры (через ‘;’), которые будут переключаться,
-независимо от количества установленных в системе раскладок.
+ This string parameter defines the input locales (keyboard layouts)
+which Far will cycle through. If this parameter is specified, system
+input locales will be ignored.
 
- Например, "04090409;04190419" (или "0409;0419").
+ This parameter contains semicolon (#;#) separated list of hexadecimal
+input locale identifiers. For example, value #0409;0419# (or
+#04090409;04190419#) can be used to switch between input locales
+“en-US” and “ru-RU”.
 
- Если указано меньше двух, то механизм "отключается" и раскладки переключаются по кругу.
+ If less than two input locale identifiers are specified, Far will use
+input locales installed in the system.
 
- Far для "Layouts" считывает первые 10 значений, остальные, если есть, игнорируются.
+ Only first 10 locales are used, the rest of the list is ignored.
 
- По умолчанию значение отсутствует.
+ Default value: empty string (use system input locales).
 
- Изменение этого параметра возможно через ~far:config~@FarConfig@
+ See also Addons\XLat\Russian\Qwerty.farconfig.
+
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
 @XLat.Flags
 $ #far:config XLat.Flags#
- Параметр "XLat.Flags" определяет поведение функции Xlat:
+ This numeric parameter controls the behavior of Far API function XLat
+(string transcoding based on keyboard layout).
 
- Биты:
- 0  - ^<wrap>Автоматическое переключение раскладки клавиатуры после перекодирования
-      ^<wrap>Переключение происходит по кругу: RU->EN->RU->…
-      ^<wrap>В семействе Windows NT позволяет переключить раскладку клавиатуры на следующую доступную (см. также описание бита 2).
- 1  - ^<wrap>При переключении раскладки выдать звуковой сигнал.
- 2  - ^<wrap>Использовать предопределённые именованные правила для "двойных" клавиш.
-      ^<wrap>Также, если задано автоматическое переключение, то переключение раскладок происходит только
-по списку значений, перечисленных в ~XLat.Layouts~@XLat.Layouts@, независимо от количества установленных в системе раскладок.
-      ^<wrap>Пример см. в Addons\XLat\Russian\Qwerty.farconfig (name="00000409" и name="00000419")
-Такие правила возможно поменять только из ~командной строки~@CmdLine@ (параметр /import)
- 16 - ^<wrap>Конвертировать всю командную строку при отсутствии выделенного блока.
+ Bit numbers:
+ 0  - ^<wrap>Automatically switch keyboard layout after transcoding
+operation. Far cycles through all system keyboard layouts or layouts
+defined in ~XLat.Layouts~@XLat.Layouts@ config parameter.
+ 1  - Sound beep after switching keyboard layout.
+ 2  - When a character could not be transcoded using
+~XLat.Tables~@XLat.Tables@, Far will attempt to apply special
+~XLat.Rules~@XLat.Rules@. If this bit is set and there is a named rule
+corresponding to the current keyboard layout, this rule will be used;
+otherwise, one of the three numbered rules will be used.
+ 16 - Transcode the entire command line if nothing is selected.
 
- По умолчанию значение = 0x00010001 (переключить раскладку и конвертировать всю командную строку при отсутствии выделенного блока)
+ Default value: 0x00010001 (switch keyboard layout and transcode the
+entire command line if no selection).
 
- Изменение этого параметра возможно через ~far:config~@FarConfig@
+ See also Addons\XLat\Russian\Qwerty.farconfig.
+
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
 @XLat.Tables
 $ #far:config XLat.Tables#
- Параметры "XLat.Table*" и "XLat.Rules*" задают перекодировочные таблицы и особые правила конвертации строк.
+ These string parameters define two-way transcoding table which is used
+by Far API function XLat (string transcoding based on keyboard layout).
 
- Перекодировочная таблица #XLat.Table1# содержит набор символов национальной кодировки.
+ #XLat.Table1# ^<wrap>is the list of characters from the national
+alphabet which will be replaced with their Latin counterparts defined
+in #XLat.Table2#.
+ #XLat.Table2# is the list of Latin characters which will be replaced
+with their national counterparts defined in #XLat.Table1#.
 
- Перекодировочная таблица #XLat.Table2# содержит набор латинских символов, соответствующих символам национальной кодировки на клавиатуре (см. свою клавиатуру).
+ Default value: empty string (transcoding table is not defined).
 
- Значение #XLat.Rules1# содержит пары правил для случая "если предыдущий символ русский". Первый символ - что меняем, второй - на что меняем. Допускается
+ If a character cannot be transcoded using the table, Far will attempt
+to apply special ~XLat.Rules~@XLat.Rules@.
 
- Значение #XLat.Rules2# содержит пары правил для случая "если предыдущий символ латинский". Первый символ - что меняем, второй - на что меняем.
+ See also Addons\XLat\Russian\Qwerty.farconfig.
 
- Значение #XLat.Rules3# содержит пары правил для случая "если предыдущий символ не буква". Первый символ - что меняем, второй - на что меняем - крутим по кругу.
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
- По умолчанию параметры не содержат значений. Если в системе установлена русская раскладка (0x0419) и значение параметра XLat.Table1
-пусто, то Far Manager выставляет следующие умолчания:
- Table1=№АВГДЕЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЯавгдезийклмнопрстуфхцчшщъыьэяёЁБЮ
- Table2=##FDULTPBQRKVYJGHCNEA{WXIO}SMZfdultpbqrkvyjghcnea[wxio]sm'z`~~<>
- Rules1=,??&./б,ю.:^Ж:ж;;$"@@Э"
- Rules2=?,&?/.,б.ю^::Ж;ж$;@@""Э
- Rules3=^::ЖЖ^$;;жж$@""ЭЭ@@&??,,бб&/..юю/
 
- Изменить эти параметры можно через ~far:config~@FarConfig@
+@XLat.Rules
+$ #far:config XLat.Rules#
+ These string parameters define special transcoding rules used by Far
+API function XLat (string transcoding based on keyboard layout).
+
+ Far will attempt to apply special rules if a character could not be
+transcoded using the ~XLat.Tables~@XLat.Tables@.
+
+ Each rule contains the sequence of character pairs. If a character
+in the transcoded string matches the first character in the pair,
+it will be replaced with the second character in the pair.
+
+ One of the three numbered rules is used if the bit 2 (0x04)
+in ~XLat.Flags~@XLat.Flags@ is zero or there is no named rule
+corresponding to the current keyboard layout.
+
+ #XLat.Rules1# ^<wrap>is applied if the previous character in the
+transcoded string is from the national alphabet.
+ #XLat.Rules2# is applied if the previous character in the transcoded
+string is a Latin character.
+ #XLat.Rules3# is applied if the previous character in the transcoded
+string is neither from the national alphabet, nor a Latin character.
+
+ A named special rule is applied if the bit 2 (0x04)
+in ~XLat.Flags~@XLat.Flags@ is set to one. Far uses hexadecimal value
+of the current input locale identifier (keyboard layout) to find the
+corresponding rule. For example, if current keyboard layout is “en-US”,
+Far will look up the rule named #XLat.00000409# and use it if it
+exists. Otherwise, Far will fall back to the numbered rules.
+
+ Default value: empty string for all rules (special rules are not
+defined).
+
+ See also Addons\XLat\Russian\Qwerty.farconfig.
+
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
 @Interface.DelHighlightSelected
 $ #far:config Interface.DelHighlightSelected#
+ This Boolean parameter controls how the items which will be deleted are
+displayed in the file / folder #Delete# confirmation dialog.
+
+ False - ^<wrap>The items to be deleted are always displayed in plain
+text, without highlighting.
+ True  - If more than one item is to be deleted or the deleted item
+is not the item under cursor, the deleted item(s) will be highlighted
+in the dialog.
+
+ Default value: True (highlight the list if it does not match the item
+under cursor).
+
+ Note: This parameter does not affect which items will be deleted;
+it only controls how the deleted items are shown in the dialog.
+
+ This parameter can be changed via ~far:config~@FarConfig@ only.
+
+
+@Interface.DelShowSelected
 $ #far:config Interface.DelShowSelected#
+ This numeric parameter controls the number of items which are displayed
+in the file / folder #Delete# confirmation dialog.
 
- Interface.DelHighlightSelected -- bool, default = true.
+ The maximum number of displayed items is either this parameter’s value
+or half of Far window height, whichever is less. The minimum number
+of items is one.
 
- true -- выделяем случай, когда список удаляемых объектов отличается от объекта под курсором.
+ Default value: 10.
 
- Interface.DelShowSelected -- int, default = 10.
- При множественном удалении показываем имена удаляемых объектов. Не более чем заданное число,
-приведённое к диапазону 1…высота_окна/2
-
- Старое поведение = (false, 1)
-
- Изменить эти параметры можно через ~far:config~@FarConfig@
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
 @History.Config
 $ #far:config History.*#
- Данный блок параметров позволяет ограничить размеры списков и время жизни элементов следующих историй:
+ These parameters limit the number and the lifetime of the items of the
+following histories:
 
- - история ~команд~@History@ в командной строке:
+ - History of command line ~commands~@History@:
    #History.CommandHistory.Count#
    #History.CommandHistory.Lifetime#
 
- - история строк ввода в диалогах:
+ - History of entries in dialog edit controls:
    #History.DialogHistory.Count#
    #History.DialogHistory.Lifetime#
 
- - история ~посещения папок~@HistoryFolders@:
+ - History of recently ~visited folders~@HistoryFolders@:
    #History.FolderHistory.Count#
    #History.FolderHistory.Lifetime#
 
- - история ~просмотра и редактирования~@HistoryViews@:
+ - History of recently ~viewed and edited files~@HistoryViews@:
    #History.ViewEditHistory.Count#
    #History.ViewEditHistory.Lifetime#
 
- По умолчанию:
- - максимальный размер списка (.Count) = 1000 элементов
- - время жизни элемента (.Lifetime) = 90 дней
+ Default values:
+ - Maximum history size (*.Count): 1000 items
+ - Lifetime of an item (*.Lifetime): 90 days
 
- Изменить эти параметры можно через ~far:config~@FarConfig@
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
 @Editor.F8CPs
 $ #far:config Editor.F8CPs#
 $ #far:config Viewer.F8CPs#
- Строка позволяющая задавать список кодовых страниц используемых при переключении
-кодировки клавишей #F8# в редакторе или просмотрщике.
+ These string parameters define code pages which are cycled through when
+#F8# key is pressed in ~Editor~@Editor@ or ~Viewer~@Viewer@.
 
- Умолчательное значение - #""#, в этом случае используются только кодовые
-страницы ANSI и OEM.
+ The value of each parameter is a list of code page numbers or symbolic
+names listed below. Symbolic names are case insensitive. Duplicated
+code pages, as well as unsupported code pages, are ignored.
 
- Если задать строку #"-1"#, то кроме ANSI и OEM в список переключения добавляется
-умолчательная кодовая страница редактора/просмотрщика (если отличается).
+ - #ANSI#    ^<wrap>variants #ACP#, #WIN#
+ - #OEM#     variants #OEMCP#, #DOS#
+ - #UTF8#    variant #UTF-8#
+ - #DEFAULT# stands for the default code page defined in
+~Editor~@EditorSettings@ or ~Viewer~@ViewerSettings@ settings dialog.
 
- В противном случае строка должна быть списком номеров кодовых страниц.
-Кроме номеров можно использовать также имена - ANSI/OEM/UTF8/DEFAULT.
-Дубликаты и неподдерживаемые кодовые страницы удаляются.
-Пример: #"ANSI,OEM,65001"#.
+ If the string is empty or does not contain any supported code pages,
+ANSI and OEM code pages are used.
 
- Изменение этого параметра возможно через ~far:config~@FarConfig@
+ Special parameter value of #-1# stands for #ANSI;OEM;Default#.
+
+ Example: #ANSI,OEM,65001#.
+
+ Default value: empty string (ANSI and OEM code pages).
+
+ This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
 @Panel.Tree.TurnOffCompletely
 $ #far:config Panel.Tree.TurnOffCompletely#
- If “true”, all folder tree operations are unavailable:
+ This Boolean parameter enables or disables all folder tree operations:
 
- - ~Tree panel~@TreePanel@ mode in ~left and right menus~@LeftRightMenu@,
-as well as toggle tree panel shortcut key #Ctrl+T#.
- - ~Find folder~@FindFolder@ panel command (#Alt+F10#).
+ - ^<wrap>~Tree panel~@TreePanel@ mode in
+~left and right menus~@LeftRightMenu@;
+ - The toggle tree panel shortcut key (#Ctrl+T#);
+ - ~Find folder~@FindFolder@ panel command (#Alt+F10#);
  - Folder tree operations in ~copy, move and rename~@CopyFiles@
-dialog (#F10# #Alt+F10# #Shift+F10#).
+dialog (#F10#, #Alt+F10#, and #Shift+F10#).
 
- Also, folder tree cache files, even if already exist, are not updated
-during folder create / delete / rename operations.
+ False - ^<wrap>Folder tree operations are #enabled#.
+ True  - All folder tree operations are #disabled#.
 
- Default value: True
+ Note: If folder tree operations are disabled, folder tree cache files,
+even if already exist, are not updated when folders are created,
+deleted, or renamed.
+
+ Default value: True (all folder tree operations are disabled).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 

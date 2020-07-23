@@ -324,21 +324,21 @@ static bool CheckNulOrCon(string_view Src)
 	return (starts_with_icase(Src, L"nul"sv) || starts_with_icase(Src, L"con"sv)) && (Src.size() == 3 || (Src.size() > 3 && IsSlash(Src[3])));
 }
 
-static void GenerateName(string &strName, const string& Path)
+static string GenerateName(string_view const Name, string_view const Path)
 {
-	if (!Path.empty())
-		strName = path::join(Path, PointToName(strName));
+	auto Result = Path.empty()? string(Name) : path::join(Path, PointToName(Name));
 
-	// The source string will be altered below so the view must be copied
-	const string Ext(PointToExt(strName));
-	const auto NameLength = strName.size() - Ext.size();
+	const auto BaseSize = Result.size() - Name.size();
+	const auto NameExt = name_ext(Name);
 
 	// file (2).ext, file (3).ext and so on
-	for (int i = 2; os::fs::exists(strName); ++i)
+	for (int i = 2; os::fs::exists(Result); ++i)
 	{
-		strName.resize(NameLength);
-		append(strName, L" ("sv, str(i), L')', Ext);
+		Result.resize(BaseSize);
+		append(Result, NameExt.first, L" ("sv, str(i), L')', NameExt.second);
 	}
+
+	return Result;
 }
 
 static void CheckAndUpdateConsole()
@@ -662,6 +662,7 @@ ShellCopy::ShellCopy(
 		CopyDlg[ID_SC_COMBOTEXT].strData=msg(lng::MLinkType);
 		CopyDlg[ID_SC_COPYSYMLINK].Selected=0;
 		CopyDlg[ID_SC_COPYSYMLINK].Flags|=DIF_DISABLE|DIF_HIDDEN;
+		CopyDlg[IS_SC_PRESERVETIMESTAMPS].Flags |= DIF_DISABLE | DIF_HIDDEN;
 	}
 	else
 	{
@@ -839,7 +840,7 @@ ShellCopy::ShellCopy(
 
 	for (const auto& i: SrcPanel->enum_selected())
 	{
-		if (m_UseFilter && !m_Filter->FileInFilter(i, nullptr, &i.FileName))
+		if (m_UseFilter && !m_Filter->FileInFilter(i, {}, i.FileName))
 			continue;
 
 		if (i.Attributes & FILE_ATTRIBUTE_DIRECTORY)
@@ -1617,7 +1618,7 @@ void ShellCopy::CopyFileTree(const string& Dest)
 					// Просто пропустить каталог недостаточно - если каталог помечен в
 					// фильтре как некопируемый, то следует пропускать и его и всё его
 					// содержимое.
-					if (!m_Filter->FileInFilter(SrcData, nullptr, &strFullName))
+					if (!m_Filter->FileInFilter(SrcData, {}, strFullName))
 					{
 						ScTree.SkipDir();
 						continue;
@@ -1741,7 +1742,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 
 	if (m_UseFilter)
 	{
-		if (!m_Filter->FileInFilter(SrcData, nullptr, &Src))
+		if (!m_Filter->FileInFilter(SrcData, {}, Src))
 			return COPY_NOFILTER;
 	}
 
@@ -1858,7 +1859,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 				{
 					DWORD SetAttr=SrcData.Attributes;
 
-					if (IsDriveTypeCDROM(SrcDriveType) && (SetAttr & FILE_ATTRIBUTE_READONLY))
+					if (SrcDriveType == DRIVE_CDROM && (SetAttr & FILE_ATTRIBUTE_READONLY))
 						SetAttr&=~FILE_ATTRIBUTE_READONLY;
 
 					if (SetAttr!=DestAttr)
@@ -1978,7 +1979,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 
 				DWORD SetAttr=SrcData.Attributes;
 
-				if (IsDriveTypeCDROM(SrcDriveType) && (SetAttr & FILE_ATTRIBUTE_READONLY))
+				if (SrcDriveType == DRIVE_CDROM && (SetAttr & FILE_ATTRIBUTE_READONLY))
 					SetAttr&=~FILE_ATTRIBUTE_READONLY;
 
 				ShellSetAttr(strDestPath, SetAttr);
@@ -2152,7 +2153,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 							strCopiedName = NamePart;
 					}
 
-					if (IsDriveTypeCDROM(SrcDriveType) && (SrcData.Attributes & FILE_ATTRIBUTE_READONLY))
+					if (SrcDriveType == DRIVE_CDROM && (SrcData.Attributes & FILE_ATTRIBUTE_READONLY))
 						ShellSetAttr(strDestPath,SrcData.Attributes & (~FILE_ATTRIBUTE_READONLY));
 
 					++CP->m_Files.Copied;
@@ -2184,7 +2185,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 
 					if (!(Flags&FCOPY_COPYTONUL))
 					{
-						if (IsDriveTypeCDROM(SrcDriveType) && (SrcData.Attributes & FILE_ATTRIBUTE_READONLY))
+						if (SrcDriveType == DRIVE_CDROM && (SrcData.Attributes & FILE_ATTRIBUTE_READONLY))
 							ShellSetAttr(strDestPath,SrcData.Attributes & ~FILE_ATTRIBUTE_READONLY);
 
 						if (DestAttr!=INVALID_FILE_ATTRIBUTES && equal_icase(strCopiedName, DestData.FileName) && strCopiedName != DestData.FileName)
@@ -2739,7 +2740,7 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const os::fs::find_data &SrcD
 
 		if (!IsWindowsVistaOrGreater() && IsWindowsServer()) // M#1607 WS2003-Share SetFileTime BUG
 		{
-			if (FAR_GetDriveType(GetPathRoot(strDestName), 0) == DRIVE_REMOTE)
+			if (FAR_GetDriveType(GetPathRoot(strDestName)) == DRIVE_REMOTE)
 			{
 				if (DestFile.Open(strDestName, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT))
 				{
@@ -2862,8 +2863,7 @@ intptr_t ShellCopy::WarnDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 				case WDLG_RENAME:
 				{
 					const auto WFN = reinterpret_cast<const file_names_for_overwrite_dialog*>(Dlg->SendMessage(DM_GETDLGDATA, 0, nullptr));
-					string strDestName = *WFN->Dest;
-					GenerateName(strDestName, *WFN->DestPath);
+					const auto strDestName = GenerateName(*WFN->Dest, *WFN->DestPath);
 
 					if (Dlg->SendMessage(DM_GETCHECK, WDLG_CHECKBOX, nullptr) == BSTATE_UNCHECKED)
 					{
@@ -3075,7 +3075,7 @@ bool ShellCopy::AskOverwrite(
 
 		case 5:
 			OvrMode = 5;
-			GenerateName(strDestName, strRenamedFilesPath);
+			strDestName = GenerateName(strDestName, strRenamedFilesPath);
 			[[fallthrough]];
 		case 4:
 			RetCode = COPY_RETRY;
@@ -3445,7 +3445,7 @@ void ShellCopy::CalcTotalSize() const
 		else
 		{
 			//  Подсчитаем количество файлов
-			if (m_UseFilter && !m_Filter->FileInFilter(i, nullptr, &i.FileName))
+			if (m_UseFilter && !m_Filter->FileInFilter(i, {}, i.FileName))
 				continue;
 
 			CP->m_Bytes.Total += i.FileSize;

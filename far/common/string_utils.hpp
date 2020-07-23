@@ -435,10 +435,22 @@ inline auto unquote(string Str)
 }
 
 [[nodiscard]]
+inline auto unquote(string_view const Str)
+{
+	return unquote(string(Str));
+}
+
+[[nodiscard]]
 inline auto quote(string Str)
 {
 	inplace::quote(Str);
 	return Str;
+}
+
+[[nodiscard]]
+inline auto quote(string_view const Str)
+{
+	return quote(string(Str));
 }
 
 [[nodiscard]]
@@ -449,6 +461,12 @@ inline auto quote_unconditional(string Str)
 }
 
 [[nodiscard]]
+inline auto quote_unconditional(string_view const Str)
+{
+	return quote_unconditional(string(Str));
+}
+
+[[nodiscard]]
 inline auto quote_normalise(string Str)
 {
 	inplace::quote_normalise(Str);
@@ -456,10 +474,22 @@ inline auto quote_normalise(string Str)
 }
 
 [[nodiscard]]
+inline auto quote_normalise(string_view const Str)
+{
+	return quote_normalise(string(Str));
+}
+
+[[nodiscard]]
 inline auto quote_space(string Str)
 {
 	inplace::quote_space(Str);
 	return Str;
+}
+
+[[nodiscard]]
+inline auto quote_space(string_view const Str)
+{
+	return quote_space(string(Str));
 }
 
 [[nodiscard]]

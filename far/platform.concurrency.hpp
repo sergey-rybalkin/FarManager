@@ -90,7 +90,7 @@ namespace os::concurrency
 		template<typename callable, typename... args>
 		thread(mode Mode, callable&& Callable, args&&... Args): m_Mode(Mode)
 		{
-			starter([Callable = FWD(Callable), Args = std::make_tuple(FWD(Args)...)]() mutable
+			starter([Callable = FWD(Callable), Args = std::make_tuple(FWD(Args)...)]() mutable // make_tuple for GCC 8.1
 			{
 				std::apply(FWD(Callable), FWD(Args));
 			});
@@ -294,27 +294,6 @@ namespace os::concurrency
 		std::queue<T> m_Queue;
 		mutable critical_section m_QueueCS;
 	};
-
-	class multi_waiter: noncopyable
-	{
-	public:
-		enum class mode
-		{
-			any,
-			all
-		};
-
-		multi_waiter();
-
-		void add(const handle& Object);
-		void add(HANDLE handle);
-		DWORD wait(mode Mode, std::chrono::milliseconds Timeout) const;
-		DWORD wait(mode Mode = mode::all) const;
-		void clear();
-
-	private:
-		std::vector<HANDLE> m_Objects;
-	};
 }
 
 namespace os
@@ -326,7 +305,6 @@ namespace os
 	using concurrency::shared_mutex;
 	using concurrency::event;
 	using concurrency::synced_queue;
-	using concurrency::multi_waiter;
 }
 
 #endif // PLATFORM_CONCURRENCY_HPP_ED4F0813_C518_409B_8576_F2E7CF4166CC

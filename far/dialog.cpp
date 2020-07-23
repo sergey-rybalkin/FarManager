@@ -1948,25 +1948,23 @@ void Dialog::ShowDialog(size_t ID)
 
 				if (Item.Type==DI_CHECKBOX)
 				{
-					const wchar_t Check[]{ L'[', (Item.Selected ? (((Item.Flags & DIF_3STATE) && Item.Selected == 2) ? msg(lng::MCheckBox2State).front() : L'x') : L' '), L']', {} };
-					strStr=Check;
+					const auto Check = Item.Selected? (Item.Flags & DIF_3STATE) && Item.Selected == 2? L'?' : L'x' : L' ';
+					strStr = concat(L'[', Check, L']');
 
 					if (!Item.strData.empty())
 						strStr += L' ';
 				}
 				else
 				{
-					wchar_t Dot[]{ L' ', Item.Selected ? L'\x2022' : L' ', L' ', {} };
+					const auto Dot = Item.Selected? L'\x2022' : L' ';
 
 					if (Item.Flags&DIF_MOVESELECT)
 					{
-						strStr=Dot;
+						strStr = concat(L' ', Dot, L' ');
 					}
 					else
 					{
-						Dot[0]=L'(';
-						Dot[2]=L')';
-						strStr=Dot;
+						strStr = concat(L'(', Dot, L')');
 
 						if (!Item.strData.empty())
 							strStr += L' ';
@@ -2148,7 +2146,7 @@ int Dialog::LenStrItem(size_t ID)
 	return LenStrItem(Items[ID]);
 }
 
-int Dialog::LenStrItem(size_t ID, const string& Str) const
+int Dialog::LenStrItem(size_t ID, string_view const Str) const
 {
 	return static_cast<int>((Items[ID].Flags & DIF_SHOWAMPERSAND)? Str.size() : HiStrlen(Str));
 }
@@ -3967,9 +3965,7 @@ int Dialog::SelectFromComboBox(
 /* Private:
    Заполняем выпадающий список из истории
 */
-bool Dialog::SelectFromEditHistory(const DialogItemEx *CurItem,
-                                   DlgEdit *EditLine,
-                                   const string& HistoryName)
+bool Dialog::SelectFromEditHistory(DialogItemEx const* const CurItem, DlgEdit* const EditLine, string_view const HistoryName)
 {
 	_DIALOG(CleverSysLog CL(L"Dialog::SelectFromEditHistory()"));
 
@@ -4019,7 +4015,7 @@ bool Dialog::SelectFromEditHistory(const DialogItemEx *CurItem,
 /* Private:
    Работа с историей - добавление и reorder списка
 */
-bool Dialog::AddToEditHistory(const DialogItemEx* CurItem, const string& AddStr) const
+bool Dialog::AddToEditHistory(DialogItemEx const* const CurItem, string_view const AddStr) const
 {
 	if (!CurItem->ObjPtr)
 	{

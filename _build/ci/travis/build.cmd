@@ -2,10 +2,7 @@
 @set throw=@goto :eof
 @set exit=@goto :eof
 
-call :%COMPILER%
-
-@endlocal
-@goto :eof
+goto :main
 
 :MSVC_PROJ
 set PATH=C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin;%PATH%
@@ -66,3 +63,25 @@ mingw32-make -j4 -f makefile_all_gcc %ADD_MAKE% || %throw%
 cd ..
 
 %exit%
+
+
+:CLANG_MAKE
+set PATH=C:\ProgramData\chocolatey\lib\mingw\tools\install\mingw%PLATFORM:~-2%\bin;C:\Program Files\LLVM\bin;%PATH%
+if %CONFIG%==Debug set DEBUG=1
+
+rem print version
+clang --version
+
+cd far
+mingw32-make -j4 CLANG=1 DISABLE_TESTS=1 -f makefile_gcc %ADD_MAKE% || %throw%
+cd ..
+
+cd plugins
+rem mingw32-make -j4 CLANG=1 -f makefile_all_gcc %ADD_MAKE% || %throw%
+cd ..
+
+%exit%
+
+
+:main
+call :%COMPILER%

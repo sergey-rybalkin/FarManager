@@ -189,9 +189,6 @@ private:
 		numbered_iterator_t& operator++() { ++base(); ++m_Number; return *this; }
 		numbered_iterator_t& operator--() { --base(); --m_Number; return *this; }
 
-		bool operator==(const numbered_iterator_t& rhs) const { return base() == rhs.base(); }
-		bool operator==(const T& rhs) const { return rhs == *this; }
-
 		T& base() { return *this; }
 		const std::conditional_t<std::is_base_of_v<ConstT, T>, ConstT, T>& base() const { return *this; }
 		std::conditional_t<std::is_base_of_v<ConstT, T>, const ConstT&, ConstT> cbase() const { return *this; }
@@ -231,14 +228,14 @@ private:
 	void UnmarkEmptyBlock();
 	void UnmarkMacroBlock();
 	void AddUndoData(int Type) { return AddUndoData(Type, {}, eol::none, 0, 0); }
-	void AddUndoData(int Type, const string& Str, eol Eol, int StrNum, int StrPos);
+	void AddUndoData(int Type, string_view Str, eol Eol, int StrNum, int StrPos);
 	void Undo(int redo);
 	void SelectAll();
 	void BlockLeft();
 	void BlockRight();
 	void DeleteVBlock();
 	void VCopy(int Append);
-	void VPaste(const string& Data);
+	void VPaste(string_view Data);
 	void VBlockShift(int Left);
 	numbered_iterator GetStringByNumber(int DestLine);
 	// Set the numbered bookmark (CtrlShift-0..9)
@@ -310,7 +307,7 @@ private:
 	bool IsLastLine(const iterator& Line) const;
 
 	static bool InitSessionBookmarksForPlugin(EditorBookmarks *Param, size_t Count, size_t& Size);
-	static void EditorShowMsg(const string& Title, const string& Msg, const string& Name, size_t Percent);
+	static void EditorShowMsg(string_view Title, const string& Msg, const string& Name, size_t Percent);
 
 	bool IsAnySelection() const { assert(Lines.end() == m_it_AnyBlockStart || m_BlockType != BTYPE_NONE); return Lines.end() != m_it_AnyBlockStart; }
 	bool IsStreamSelection() const { return IsAnySelection() && m_BlockType == BTYPE_STREAM; }

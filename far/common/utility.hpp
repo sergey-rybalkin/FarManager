@@ -58,7 +58,7 @@ void reserve_exp_noshrink(container& Container, size_t Capacity)
 
 	// For vector reserve typically allocates exactly the requested amount instead of exponential growth.
 	// This can be really bad if called in a loop.
-	Capacity = std::max(static_cast<size_t>(CurrentCapacity * 1.5), Capacity);
+	Capacity = std::max(CurrentCapacity + CurrentCapacity / 2, Capacity);
 
 	Container.reserve(Capacity);
 }
@@ -104,6 +104,15 @@ void hash_combine(size_t& Seed, const type& Value)
 
 	Seed ^= make_hash(Value) + MagicValue + (Seed << 6) + (Seed >> 2);
 }
+
+template<typename... args>
+size_t hash_combine_all(const args&... Args)
+{
+	size_t Seed = 0;
+	(..., hash_combine(Seed, Args));
+	return Seed;
+}
+
 
 template<typename iterator>
 [[nodiscard]]
@@ -231,23 +240,6 @@ struct [[nodiscard]] overload: args...
 
 template<typename... args> overload(args&&...) -> overload<args...>;
 
-template<typename callable, typename variant>
-constexpr decltype(auto) visit_if(callable&& Callable, variant&& Variant)
-{
-	{
-		using arg = typename function_traits<callable>::template arg<0>;
-		using get_arg = decltype(std::get<std::decay_t<arg>>(Variant));
-		// This will fail if callable's arg type is not compatible with the variant:
-		using try_call [[maybe_unused]] = decltype(Callable(std::declval<get_arg>()));
-	}
-
-	return std::visit(overload
-	{
-		FWD(Callable),
-		[](const auto&...){}
-	},
-	FWD(Variant));
-}
 
 namespace detail
 {
@@ -265,6 +257,29 @@ void copy_memory(const src_type* Source, dst_type* Destination, size_t const Siz
 
 	if (Size) // paranoid gcc null checks are paranoid
 		std::memmove(Destination, Source, Size);
+}
+
+template<typename T>
+decltype(auto) view_as(void const* const BaseAddress, size_t const Offset = 0)
+{
+	static_assert(std::is_trivially_copyable_v<T>);
+
+	const auto Ptr = static_cast<void const*>(static_cast<char const*>(BaseAddress) + Offset);
+
+	if constexpr (std::is_pointer_v<T>)
+	{
+		return static_cast<T>(Ptr);
+	}
+	else
+	{
+		return *static_cast<T const*>(Ptr);
+	}
+}
+
+template<typename T>
+decltype(auto) view_as(unsigned long long const Address)
+{
+	return view_as<T>(reinterpret_cast<void const*>(Address));
 }
 
 #endif // UTILITY_HPP_D8E934C7_BF30_4CEB_B80C_6E508DF7A1BC

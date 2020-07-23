@@ -1938,7 +1938,7 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 
 			if (SelPanel  && SelPanel->GetMode() != panel_mode::PLUGIN_PANEL)
 			{
-				return FAR_GetDriveType(GetPathRoot(SelPanel->GetCurDir()), 0);
+				return FAR_GetDriveType(GetPathRoot(SelPanel->GetCurDir()));
 			}
 
 			return -1;
@@ -2581,10 +2581,9 @@ static void SplitPath(string_view const FullPath, string& Dest, int Flags)
 	const auto RootType = ParsePath(FullPath, &DirOffset);
 	const auto Root = DeleteEndSlash(FullPath.substr(0, RootType == root_type::unknown? 0 : DirOffset));
 	auto Path = FullPath.substr(Root.size());
-	auto Name = PointToName(Path);
-	Path.remove_suffix(Name.size());
-	auto Ext = PointToExt(Name);
-	Name.remove_suffix(Ext.size());
+	const auto FileName = PointToName(Path);
+	Path.remove_suffix(FileName.size());
+	const auto& [Name, Ext] = name_ext(FileName);
 
 	const std::pair<int, string_view> Mappings[] =
 	{
@@ -2984,7 +2983,10 @@ int FarMacroApi::kbdLayoutFunc()
 		if (static_cast<long>(dwLayout) == -1)
 		{
 			wParam=INPUTLANGCHANGE_BACKWARD;
+WARNING_PUSH()
+WARNING_DISABLE_GCC("-Wzero-as-null-pointer-constant")
 			Layout = static_cast<HKL>(HKL_PREV);
+WARNING_POP()
 		}
 		else if (dwLayout == 1)
 		{
@@ -4683,8 +4685,8 @@ int FarMacroApi::chrFunc()
 
 	if (tmpVar.isNumber())
 	{
-		const wchar_t tmp[]{ static_cast<wchar_t>(tmpVar.asInteger()), {} };
-		tmpVar = tmp;
+		const auto Char = static_cast<wchar_t>(tmpVar.asInteger());
+		tmpVar = string_view{ &Char, 1 };
 	}
 
 	PassValue(tmpVar);
@@ -5061,7 +5063,7 @@ M1:
 			// общие макросы учитываем только при удалении.
 			if (m_RecCode.empty() || Data.Area!=MACROAREA_COMMON)
 			{
-				auto strBufKey = quote_unconditional(Data.Code);
+				auto strBufKey = quote_unconditional(string(Data.Code));
 				const auto SetChange = m_RecCode.empty();
 				lng MessageTemplate;
 				if (Data.Area==MACROAREA_COMMON)

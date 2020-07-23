@@ -72,26 +72,29 @@ const auto support_unpaired_surrogates_in_utf8 = true;
 class installed_codepages
 {
 public:
-	installed_codepages();
-	const auto& get() const { return m_InstalledCp; }
+	installed_codepages()
+	{
+		Context = this;
+		EnumSystemCodePages(callback, CP_INSTALLED);
+		Context = {};
+
+		rethrow_if(m_ExceptionPtr);
+	}
+
+	const auto& get() const
+	{
+		return m_InstalledCp;
+	}
 
 private:
-	void insert(UINT Codepage, UINT MaxCharSize, const string& Name)
+	static inline installed_codepages* Context;
+
+	static BOOL WINAPI callback(wchar_t* const cpNum)
 	{
-		m_InstalledCp.emplace(Codepage, std::pair(MaxCharSize, Name));
+		return Context->enum_cp_callback(cpNum);
 	}
-	friend class system_codepages_enumerator;
 
-	cp_map m_InstalledCp;
-	std::exception_ptr m_ExceptionPtr;
-};
-
-class system_codepages_enumerator
-{
-public:
-	static installed_codepages* context;
-
-	static BOOL CALLBACK enum_cp(wchar_t *cpNum)
+	BOOL enum_cp_callback(wchar_t const* cpNum)
 	{
 		try
 		{
@@ -109,40 +112,32 @@ public:
 				cpix.MaxCharSize = cpi.MaxCharSize;
 				xwcsncpy(cpix.CodePageName, cpNum, std::size(cpix.CodePageName));
 			}
-			if (cpix.MaxCharSize > 0)
+
+			if (cpix.MaxCharSize < 1)
+				return TRUE;
+
+			string_view cp_data = cpix.CodePageName;
+			// Windows: "XXXX (Name)", Wine: "Name"
+			const auto OpenBracketPos = cp_data.find(L'(');
+			if (OpenBracketPos != string::npos)
 			{
-				string cp_data(cpix.CodePageName);
-				// Windows: "XXXX (Name)", Wine: "Name"
-				const auto OpenBracketPos = cp_data.find(L'(');
-				if (OpenBracketPos != string::npos)
+				const auto CloseBracketPos = cp_data.rfind(L')');
+				if (CloseBracketPos != string::npos && CloseBracketPos > OpenBracketPos)
 				{
-					const auto CloseBracketPos = cp_data.rfind(L')');
-					if (CloseBracketPos != string::npos && CloseBracketPos > OpenBracketPos)
-					{
-						cp_data.resize(CloseBracketPos);
-						cp_data.erase(0, OpenBracketPos + 1);
-					}
+					cp_data = cp_data.substr(OpenBracketPos + 1, CloseBracketPos - OpenBracketPos - 1);
 				}
-				context->insert(cp, cpix.MaxCharSize, cp_data);
 			}
 
+			m_InstalledCp.try_emplace(cp, cpix.MaxCharSize, cp_data);
 			return TRUE;
 		}
-		CATCH_AND_SAVE_EXCEPTION_TO(context->m_ExceptionPtr)
-
+		CATCH_AND_SAVE_EXCEPTION_TO(m_ExceptionPtr)
 		return FALSE;
 	}
+
+	cp_map m_InstalledCp;
+	std::exception_ptr m_ExceptionPtr;
 };
-
-installed_codepages* system_codepages_enumerator::context;
-
-installed_codepages::installed_codepages()
-{
-	system_codepages_enumerator::context = this;
-	EnumSystemCodePages(system_codepages_enumerator::enum_cp, CP_INSTALLED);
-	system_codepages_enumerator::context = nullptr;
-	rethrow_if(m_ExceptionPtr);
-}
 
 const cp_map& InstalledCodepages()
 {
@@ -154,11 +149,11 @@ cp_map::value_type::second_type GetCodePageInfo(UINT cp)
 {
 	// Standard unicode CPs (1200, 1201, 65001) are NOT in the list.
 	const auto& InstalledCp = InstalledCodepages();
-	const auto found = InstalledCp.find(cp);
-	if (InstalledCp.end() == found)
-		return {};
 
-	return found->second;
+	if (const auto found = InstalledCp.find(cp); found != InstalledCp.cend())
+		return found->second;
+
+	return {};
 }
 
 static bool IsValid(UINT cp)
@@ -359,6 +354,11 @@ std::string encoding::get_bytes(uintptr_t const Codepage, string_view const Str,
 	return Buffer;
 }
 
+size_t encoding::get_bytes_count(uintptr_t const Codepage, string_view const Str)
+{
+	return get_bytes(Codepage, Str, span<char>{});
+}
+
 namespace Utf7
 {
 	size_t get_chars(std::string_view Str, span<wchar_t> Buffer, Utf::errors *Errors);
@@ -397,6 +397,11 @@ size_t encoding::get_chars(uintptr_t const Codepage, std::string_view const Str,
 	return Result;
 }
 
+size_t encoding::get_chars(uintptr_t const Codepage, bytes_view const Str, span<wchar_t> Buffer)
+{
+	return get_chars(Codepage, to_string_view(Str), Buffer);
+}
+
 string encoding::get_chars(uintptr_t const Codepage, std::string_view const Str)
 {
 	if (Str.empty())
@@ -430,6 +435,21 @@ string encoding::get_chars(uintptr_t const Codepage, std::string_view const Str)
 	}
 
 	return Buffer;
+}
+
+string encoding::get_chars(uintptr_t const Codepage, bytes_view const Str)
+{
+	return get_chars(Codepage, to_string_view(Str));
+}
+
+size_t encoding::get_chars_count(uintptr_t const Codepage, std::string_view const Str)
+{
+	return get_chars(Codepage, Str, {});
+}
+
+size_t encoding::get_chars_count(uintptr_t const Codepage, bytes_view const Str)
+{
+	return get_chars(Codepage, Str, {});
 }
 
 std::string_view encoding::get_signature_bytes(uintptr_t Cp)
@@ -1001,7 +1021,7 @@ size_t Utf8::get_chars(std::string_view const Str, span<wchar_t> const Buffer, U
 	return BytesToUnicode(Str, Buffer, [](std::string_view::const_iterator const Iterator, std::string_view::const_iterator const End, wchar_t* CharBuffer, bool&, int&)
 	{
 		auto NextIterator = Iterator;
-		get_char(NextIterator, End, CharBuffer[0], CharBuffer[1]);
+		(void)get_char(NextIterator, End, CharBuffer[0], CharBuffer[1]);
 		return static_cast<size_t>(NextIterator - Iterator);
 	}, Errors);
 }
@@ -1248,11 +1268,21 @@ bool encoding::is_valid_utf8(std::string_view const Str, bool const PartialConte
 
 #include "testing.hpp"
 
+// http://www.open-std.org/jtc1/sc22/wg21/docs/papers/2018/p0482r6.html#design_compat
+// "This proposal does not specify any backward compatibility features other than to retain interfaces that it deprecates.
+// The author believes such features are necessary, but that a single set of such features would unnecessarily compromise the goals of this proposal.
+// Rather, the expectation is that implementations will provide options to enable more fine grained compatibility features."
+
+// *facepalm*
+
+template<typename char_type, REQUIRES(sizeof(char_type) == 1)>
+std::string_view sane_sv(std::basic_string_view<char_type> const Str)
+{
+	return { static_cast<const char*>(static_cast<const void*>(Str.data())), Str.size() };
+}
+
 TEST_CASE("encoding.utf8")
 {
-WARNING_PUSH()
-WARNING_DISABLE_CLANG("-Wc++2a-compat")
-
 	static const struct
 	{
 		bool Utf8;
@@ -1261,27 +1291,27 @@ WARNING_DISABLE_CLANG("-Wc++2a-compat")
 	}
 	Tests[]
 	{
-		{ true, false, u8R"(
+		{ true, false, sane_sv(u8R"(
 ᚠᛇᚻ᛫ᛒᛦᚦ᛫ᚠᚱᚩᚠᚢᚱ᛫ᚠᛁᚱᚪ᛫ᚷᛖᚻᚹᛦᛚᚳᚢᛗ
 ᛋᚳᛖᚪᛚ᛫ᚦᛖᚪᚻ᛫ᛗᚪᚾᚾᚪ᛫ᚷᛖᚻᚹᛦᛚᚳ᛫ᛗᛁᚳᛚᚢᚾ᛫ᚻᛦᛏ᛫ᛞᚫᛚᚪᚾ
 ᚷᛁᚠ᛫ᚻᛖ᛫ᚹᛁᛚᛖ᛫ᚠᚩᚱ᛫ᛞᚱᛁᚻᛏᚾᛖ᛫ᛞᚩᛗᛖᛋ᛫ᚻᛚᛇᛏᚪᚾ᛬
-)"sv },
+)"sv) },
 
-		{ true, false, u8R"(
+		{ true, false, sane_sv(u8R"(
 𠜎 𠜱 𠝹 𠱓 𠱸 𠲖 𠳏 𠳕 𠴕 𠵼 𠵿 𠸎
 𠸏 𠹷 𠺝 𠺢 𠻗 𠻹 𠻺 𠼭 𠼮 𠽌 𠾴 𠾼
 𠿪 𡁜 𡁯 𡁵 𡁶 𡁻 𡃁 𡃉 𡇙 𢃇 𢞵 𢫕
 𢭃 𢯊 𢱑 𢱕 𢳂 𢴈 𢵌 𢵧 𢺳 𣲷 𤓓 𤶸
 𤷪 𥄫 𦉘 𦟌 𦧲 𦧺 𧨾 𨅝 𨈇 𨋢 𨳊 𨳍
-)"sv },
+)"sv) },
 
-		{ true, true, u8R"(
+		{ true, true, sane_sv(u8R"(
 Lorem ipsum dolor sit amet,
 consectetur adipiscing elit,
 sed do eiusmod tempor incididunt
 ut labore et dolore magna aliqua.
-)"sv },
-		{ true,  false, u8"φ"sv },
+)"sv) },
+		{ true,  false, sane_sv(u8"φ"sv) },
 		{ false, false, "\x80"sv },
 		{ false, false, "\xFF"sv },
 		{ false, false, "\xC0"sv },
@@ -1295,8 +1325,6 @@ ut labore et dolore magna aliqua.
 		{ false, false, "\xF4\xBF\xBF\xBF"sv },
 		{ false, false, "\xF0\xA0\xA0\x20"sv },
 	};
-
-WARNING_POP()
 
 	for (const auto& i: Tests)
 	{

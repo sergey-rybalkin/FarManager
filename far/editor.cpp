@@ -121,6 +121,7 @@ eol Editor::GetDefaultEOL()
 
 Editor::Editor(window_ptr Owner, bool DialogUsed):
 	SimpleScreenObject(std::move(Owner)),
+	GlobalEOL(GetDefaultEOL()),
 	EdOpt(Global->Opt->EdOpt),
 	LastSearchCase(Global->GlobalSearchCase),
 	LastSearchWholeWords(Global->GlobalSearchWholeWords),
@@ -139,15 +140,13 @@ Editor::Editor(window_ptr Owner, bool DialogUsed):
 	if (Global->GetSearchHex())
 	{
 		const auto Blob = HexStringToBlob(Global->GetSearchString(), 0);
-		strLastSearchStr.assign(ALL_CONST_RANGE(Blob));
+		strLastSearchStr.assign(view_as<char const*>(Blob.data()), view_as<char const*>(Blob.data() + Blob.size()));
 	}
 	else
 	{
 		strLastSearchStr = Global->GetSearchString();
 	}
 	UnmarkMacroBlock();
-
-	GlobalEOL = GetDefaultEOL();
 	PushString({});
 }
 
@@ -217,7 +216,7 @@ void Editor::KeepInitParameters() const
 	{
 		// BUGBUG, it's unclear how to represent unicode in hex
 		const auto AnsiStr = encoding::get_bytes(m_codepage, strLastSearchStr);
-		Global->StoreSearchString(BlobToHexWString({ AnsiStr.data(), AnsiStr.size() }, 0), true);
+		Global->StoreSearchString(BlobToHexString(view_bytes(AnsiStr), 0), true);
 	}
 	else
 	{
@@ -3830,7 +3829,7 @@ bool Editor::Search(bool Next)
 		FindAllList->SetMenuFlags(VMENU_WRAPMODE | VMENU_SHOWAMPERSAND);
 		FindAllList->SetPosition({ -1, MenuY1, 0, MenuY2 });
 		FindAllList->SetTitle(format(msg(lng::MEditSearchStatistics), FindAllList->size(), AllRefLines));
-		FindAllList->SetBottomTitle(msg(lng::MEditFindAllMenuFooter));
+		FindAllList->SetBottomTitle(KeysToLocalizedText(KEY_CTRLENTER, KEY_F5, KEY_ADD, KEY_CTRLUP, KEY_CTRLDOWN));
 		FindAllList->SetHelp(L"FindAllMenu"sv);
 		FindAllList->SetId(EditorFindAllListId);
 
@@ -4520,7 +4519,7 @@ private:
 public:
 	static size_t GetUndoDataSize() { return UndoDataSize; }
 
-	EditorUndoData(int Type, const string& Str, eol Eol, int StrNum, int StrPos):
+	EditorUndoData(int Type, string_view const Str, eol Eol, int StrNum, int StrPos):
 		m_Type(),
 		m_StrPos(),
 		m_StrNum(),
@@ -4534,7 +4533,7 @@ public:
 		UndoDataSize -= m_Str.size();
 	}
 
-	void SetData(int Type, const string& Str, eol Eol, int StrNum, int StrPos)
+	void SetData(int Type, string_view const Str, eol Eol, int StrNum, int StrPos)
 	{
 		m_Type = Type;
 		m_StrPos = StrPos;
@@ -4557,7 +4556,7 @@ public:
 
 size_t Editor::EditorUndoData::UndoDataSize = 0;
 
-void Editor::AddUndoData(int Type, const string& Str, eol Eol, int StrNum, int StrPos)
+void Editor::AddUndoData(int Type, string_view const Str, eol Eol, int StrNum, int StrPos)
 {
 	if (m_Flags.Check(FEDITOR_DISABLEUNDO))
 		return;
@@ -5117,7 +5116,7 @@ string Editor::VBlock2Text()
 	return CopyData;
 }
 
-void Editor::VPaste(const string& Data)
+void Editor::VPaste(string_view const Data)
 {
 	if (m_Flags.Check(FEDITOR_LOCKMODE))
 		return;
@@ -6739,7 +6738,7 @@ void Editor::SetSavePosMode(int SavePos, int SaveShortPos)
 		EdOpt.SaveShortPos = (0 != SaveShortPos);
 }
 
-static void EditorShowMsgImpl(const string& Title, const string& Msg, const string& Name, size_t Percent)
+static void EditorShowMsgImpl(string_view const Title, const string& Msg, const string& Name, size_t Percent)
 {
 	const auto strMsg = concat(Msg, L' ', Name);
 	const size_t Length = std::max(std::min(ScrX - 1 - 10, static_cast<int>(strMsg.size())), 40);
@@ -6755,7 +6754,7 @@ static void EditorShowMsgImpl(const string& Title, const string& Msg, const stri
 		{});
 }
 
-void Editor::EditorShowMsg(const string& Title, const string& Msg, const string& Name, size_t Percent)
+void Editor::EditorShowMsg(string_view const Title, const string& Msg, const string& Name, size_t Percent)
 {
 	EditorShowMsgImpl(Title, Msg, Name, Percent);
 

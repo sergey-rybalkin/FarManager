@@ -115,9 +115,6 @@ enum saved_modes
 };
 
 
-static void PR_ViewerSearchMsg();
-static void ViewerSearchMsg(const string& MsgStr, int Percent, int SearchHex);
-
 static int ViewerID=0;
 
 static bool IsCodePageSupported(uintptr_t cp)
@@ -274,7 +271,7 @@ void Viewer::KeepInitParameters() const
 	Global->Opt->ViOpt.SearchRegexp=LastSearchRegexp;
 }
 
-bool Viewer::OpenFile(const string& Name, bool const Warn)
+bool Viewer::OpenFile(string_view const Name, bool const Warn)
 {
 	m_Codepage=m_DefCodepage;
 	m_DefCodepage=CP_DEFAULT;
@@ -423,15 +420,15 @@ bool Viewer::OpenFile(const string& Name, bool const Warn)
 	const auto update_check_period = [&]
 	{
 		// media inserted here
-		switch (FAR_GetDriveType(GetPathRoot(strFullFileName), 2)) //??? make it configurable
+		const auto PathRoot = GetPathRoot(strFullFileName);
+		switch (FAR_GetDriveType(PathRoot)) //??? make it configurable
 		{
-			case DRIVE_REMOVABLE: return 0ms;
-			case DRIVE_USBDRIVE:  return 500ms;
-			case DRIVE_FIXED:     return 1ms;
-			case DRIVE_REMOTE:    return 500ms;
-			case DRIVE_CDROM:     return 0ms;
-			case DRIVE_RAMDISK:   return 1ms;
-			default:              return 0ms;
+		case DRIVE_REMOVABLE: return is_removable_usb(PathRoot)? 500ms : 0ms;
+		case DRIVE_FIXED:     return 1ms;
+		case DRIVE_REMOTE:    return 500ms;
+		case DRIVE_CDROM:     return 0ms;
+		case DRIVE_RAMDISK:   return 1ms;
+		default:              return 0ms;
 		}
 	}();
 
@@ -1570,13 +1567,12 @@ bool Viewer::process_key(const Manager::Key& Key)
 		{
 			if (!ViewNamesList.empty())
 			{
-				string strName;
-				if (LocalKey == KEY_ADD? ViewNamesList.GetNextName(strName) : ViewNamesList.GetPrevName(strName))
+				if (const auto Name = LocalKey == KEY_ADD? ViewNamesList.GetNextName() : ViewNamesList.GetPrevName())
 				{
 					SavePosition();
 					BMSavePos.Clear(); //Prepare for new file loading
 
-					if (OpenFile(strName, true))
+					if (OpenFile(*Name, true))
 					{
 						SecondPos=0;
 						Show();
@@ -2626,6 +2622,8 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 	return Dlg->DefProc(Msg,Param1,Param2);
 }
 
+static void PR_ViewerSearchMsg();
+
 struct ViewerPreRedrawItem : public PreRedrawItem
 {
 	ViewerPreRedrawItem():
@@ -2639,7 +2637,7 @@ struct ViewerPreRedrawItem : public PreRedrawItem
 	int hex;
 };
 
-static void ViewerSearchMsgImpl(const string& MsgStr, int Percent, int SearchHex)
+static void ViewerSearchMsgImpl(string_view const MsgStr, int Percent, int SearchHex)
 {
 	string strProgress;
 	const auto strMsg = concat(msg(SearchHex? lng::MViewSearchingHex : lng::MViewSearchingFor), L' ', MsgStr);
@@ -2661,7 +2659,7 @@ static void ViewerSearchMsgImpl(const string& MsgStr, int Percent, int SearchHex
 	}
 }
 
-static void ViewerSearchMsg(const string& MsgStr, int Percent, int SearchHex)
+static void ViewerSearchMsg(string_view const MsgStr, int Percent, int SearchHex)
 {
 	ViewerSearchMsgImpl(MsgStr, Percent, SearchHex);
 
@@ -2692,7 +2690,7 @@ struct Viewer::search_data
 {
 	long long CurPos{-1};
 	long long MatchPos{-1};
-	std::string_view search_bytes;
+	bytes_view search_bytes;
 	string_view search_text;
 	int search_len{};
 	int  ch_size{};
@@ -2718,16 +2716,14 @@ enum SEARCHER_RESULT: int
 	Search_Found     = 5,
 };
 
-enum SEARCH_WRAP_MODE
-{
-	SearchWrap_NO    = 0,
-	SearchWrap_END   = 1,
-	SearchWrap_CYCLE = 2,
-};
+constexpr auto
+	SearchWrap_NO    = BSTATE_UNCHECKED,
+	SearchWrap_END   = BSTATE_CHECKED,
+	SearchWrap_CYCLE = BSTATE_3STATE;
 
 SEARCHER_RESULT Viewer::search_hex_forward(search_data* sd)
 {
-	const auto buff = reinterpret_cast<char *>(Search_buffer.data());
+	const auto buff = reinterpret_cast<std::byte*>(Search_buffer.data());
 	const auto bsize = static_cast<int>(Search_buffer.size() * sizeof(wchar_t)), slen = sd->search_len;
 	long long to;
 	const auto cpos = sd->CurPos;
@@ -2756,7 +2752,7 @@ SEARCHER_RESULT Viewer::search_hex_forward(search_data* sd)
 	if ( n1 != nb )
 		SetFileSize();
 
-	char *ps = buff;
+	auto ps = buff;
 	while (n1 >= slen)
 	{
 		const auto ps_end = ps + n1 - slen + 1;
@@ -2784,7 +2780,7 @@ SEARCHER_RESULT Viewer::search_hex_forward(search_data* sd)
 			return Search_Cycle;
 		else if (swrap == SearchWrap_END)
 			return Search_Eof;
-		else
+		else if (swrap == SearchWrap_NO)
 			return Search_Continue;
 	}
 	if (swrap == SearchWrap_CYCLE && !tail_part && sd->CurPos >= StartSearchPos)
@@ -2795,7 +2791,7 @@ SEARCHER_RESULT Viewer::search_hex_forward(search_data* sd)
 
 SEARCHER_RESULT Viewer::search_hex_backward(search_data* sd)
 {
-	const auto buff = reinterpret_cast<char *>(Search_buffer.data());
+	const auto buff = reinterpret_cast<std::byte*>(Search_buffer.data());
 	const auto bsize = static_cast<int>(Search_buffer.size() * sizeof(wchar_t)), slen = sd->search_len;
 	long long to, cpos = sd->CurPos;
 	const auto swrap = ViOpt.SearchWrapStop;
@@ -3572,7 +3568,7 @@ void Viewer::SetWrapType(bool TypeWrap)
 	Viewer::m_WordWrap=TypeWrap;
 }
 
-void Viewer::SetTempViewName(const string& Name, bool DeleteFolder)
+void Viewer::SetTempViewName(string_view const Name, bool DeleteFolder)
 {
 	if (!Name.empty())
 		strTempViewName = ConvertNameToFull(Name);
@@ -3585,7 +3581,7 @@ void Viewer::SetTempViewName(const string& Name, bool DeleteFolder)
 	m_DeleteFolder=DeleteFolder;
 }
 
-void Viewer::SetTitle(const string& Title)
+void Viewer::SetTitle(string_view const Title)
 {
 	strTitle = Title;
 }
@@ -3825,7 +3821,8 @@ bool Viewer::vgetc(wchar_t* pCh)
 		else
 		{
 			const auto Ch = VgetcCache.pop();
-			encoding::get_chars(m_Codepage, { &Ch, 1 }, { pCh, 1 });
+			// BUGBUG, error checking
+			(void)encoding::get_chars(m_Codepage, { &Ch, 1 }, { pCh, 1 });
 		}
 
 		break;
@@ -3891,7 +3888,8 @@ wchar_t Viewer::vgetc_prev()
 		default:
 			if (CharSize == 1)
 			{
-				encoding::get_chars(m_Codepage, { RawBuffer, 1 }, { &Result, 1 });
+				// BUGBUG, error checking
+				(void)encoding::get_chars(m_Codepage, { RawBuffer, 1 }, { &Result, 1 });
 			}
 			else
 			{

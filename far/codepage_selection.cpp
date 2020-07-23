@@ -46,6 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "vmenu.hpp"
 #include "global.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 
@@ -389,9 +390,7 @@ void codepages::AddCodePages(DWORD codePages)
 		if (!len || (len > 2 && (codePages & ::VOnly)))
 			continue;
 
-		bool IsCodePageNameCustom = false;
-		FormatCodePageName(cp, CodepageName, IsCodePageNameCustom);
-
+		const auto IsCodePageNameCustom = GetCodePageCustomName(cp, CodepageName);
 		const auto selectType = GetFavorite(cp);
 
 		// Добавляем таблицу символов либо в нормальные, либо в выбранные таблицы символов
@@ -562,33 +561,19 @@ void codepages::FillCodePagesVMenu(bool bShowUnicode, bool bViewOnly, bool bShow
 	// Показываем меню
 }
 
-// Форматируем имя таблицы символов
-void codepages::FormatCodePageName(uintptr_t CodePage, string& CodePageName)
+bool codepages::GetCodePageCustomName(uintptr_t const CodePage, string& CodePageName)
 {
-	bool IsCodePageNameCustom;
-	FormatCodePageName(CodePage, CodePageName, IsCodePageNameCustom);
-}
-
-// Форматируем имя таблицы символов
-void codepages::FormatCodePageName(uintptr_t CodePage, string& CodePageName, bool &IsCodePageNameCustom)
-{
-	IsCodePageNameCustom = false;
 	const auto strCodePage = str(CodePage);
 	string StoredName;
 
-	// Пытаемся получить заданное пользователем имя таблицы символов
 	if (!ConfigProvider().GeneralCfg()->GetValue(NamesOfCodePagesKey, strCodePage, StoredName))
-		return;
+		return false;
 
-	if (StoredName == CodePageName)
-	{
-		ConfigProvider().GeneralCfg()->DeleteValue(NamesOfCodePagesKey, strCodePage);
-	}
-	else
-	{
-		CodePageName = StoredName;
-		IsCodePageNameCustom = true;
-	}
+	if (CodePageName == StoredName)
+		return false;
+
+	CodePageName = std::move(StoredName);
+	return true;
 }
 
 // Номера контролов диалога редактирования имени кодовой страницы
@@ -628,10 +613,7 @@ intptr_t codepages::EditDialogProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, v
 			auto [len, CodepageName] = GetCodePageInfo(static_cast<UINT>(CodePage));
 			if (len)
 			{
-				// Формируем имя таблиц символов
-				bool IsCodePageNameCustom = false;
-				FormatCodePageName(CodePage, CodepageName, IsCodePageNameCustom);
-				// Обновляем имя кодовой страницы
+				const auto IsCodePageNameCustom = GetCodePageCustomName(CodePage, CodepageName);
 				const auto Position = CodePagesMenu->GetSelectPos();
 				CodePagesMenu->DeleteItem(Position);
 				MenuItemEx NewItem(FormatCodePageString(CodePage, CodepageName, IsCodePageNameCustom));
@@ -679,12 +661,17 @@ bool codepages::SelectCodePage(uintptr_t& CodePage, bool bShowUnicode, bool View
 	bool Result = false;
 	CallbackCallSource = CodePageSelect;
 	currentCodePage = CodePage;
+
+	const auto BottomTitle = KeysToLocalizedText(KEY_CTRLH, KEY_INS, KEY_DEL, KEY_F4);
+	const auto BottomTitleShort = KeysToLocalizedText(KEY_CTRLH, KEY_DEL, KEY_F4);
+
 	// Создаём меню
 	CodePagesMenu = VMenu2::create({}, {}, ScrY - 4);
-	CodePagesMenu->SetBottomTitle(msg(!Global->Opt->CPMenuMode? lng::MGetCodePageBottomTitle : lng::MGetCodePageBottomShortTitle));
 	CodePagesMenu->SetMenuFlags(VMENU_WRAPMODE | VMENU_AUTOHIGHLIGHT);
 	CodePagesMenu->SetHelp(L"CodePagesMenu"sv);
 	CodePagesMenu->SetId(CodePagesMenuId);
+	CodePagesMenu->SetBottomTitle(Global->Opt->CPMenuMode? BottomTitleShort : BottomTitle);
+
 	// Добавляем таблицы символов
 	FillCodePagesVMenu(bShowUnicode, ViewOnly, bShowAutoDetect);
 	// Показываем меню
@@ -700,7 +687,7 @@ bool codepages::SelectCodePage(uintptr_t& CodePage, bool bShowUnicode, bool View
 		case KEY_CTRLH:
 		case KEY_RCTRLH:
 			Global->Opt->CPMenuMode = !Global->Opt->CPMenuMode;
-			CodePagesMenu->SetBottomTitle(msg(Global->Opt->CPMenuMode? lng::MGetCodePageBottomShortTitle : lng::MGetCodePageBottomTitle));
+			CodePagesMenu->SetBottomTitle(Global->Opt->CPMenuMode? BottomTitleShort : BottomTitle);
 			FillCodePagesVMenu(bShowUnicode, ViewOnly, bShowAutoDetect);
 			break;
 			// Обработка удаления таблицы символов из списка выбранных
@@ -803,6 +790,17 @@ bool codepages::IsCodePageSupported(uintptr_t CodePage, size_t MaxCharSize)
 
 	const auto CharSize = GetCodePageInfo(static_cast<UINT>(CodePage)).first;
 	return CharSize != 0 && CharSize <= MaxCharSize;
+}
+
+std::pair<UINT, string> codepages::GetInfo(uintptr_t CodePage)
+{
+	auto Result = GetCodePageInfo(static_cast<UINT>(CodePage));
+	if (!Result.first)
+		return Result;
+
+	GetCodePageCustomName(CodePage, Result.second);
+
+	return Result;
 }
 
 long long codepages::GetFavorite(uintptr_t cp)

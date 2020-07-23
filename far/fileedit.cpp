@@ -1972,8 +1972,6 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 
 			size_t LineNumber = -1;
 
-			std::vector<char> Buffer;
-
 			for (auto& Line : m_editor->Lines)
 			{
 				++LineNumber;
@@ -2311,7 +2309,7 @@ void FileEditor::ShowStatus() const
      Узнаем атрибуты файла и заодно сформируем готовую строку атрибутов для
      статуса.
 */
-DWORD FileEditor::EditorGetFileAttributes(const string& Name)
+DWORD FileEditor::EditorGetFileAttributes(string_view const Name)
 {
 	m_FileAttributes = os::fs::get_file_attributes(Name);
 	int ind=0;
@@ -2742,11 +2740,14 @@ bool FileEditor::SetCodePage(uintptr_t codepage)
 	int x, y;
 	if (!m_editor->TryCodePage(codepage, x, y))
 	{
+		auto [MaxCharSize, CodepageName] = codepages::GetInfo(codepage);
+
 		const int ret = Message(MSG_WARNING,
 			msg(lng::MWarning),
 			{
 				msg(lng::MEditorSwitchCPWarn1),
-				format(msg(lng::MEditorSwitchCPWarn2), codepage),
+				format(msg(lng::MEditorSwitchCPWarn2)),
+				format(FSTR(L"{0} - {1}"), codepage, CodepageName),
 				msg(lng::MEditorSwitchCPConfirm)
 			},
 			{ lng::MCancel, lng::MEditorSaveCPWarnShow, lng::MOk });

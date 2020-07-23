@@ -531,7 +531,7 @@ public:
 
 		for (auto i = EnumClipboardFormats(0); i; i = EnumClipboardFormats(i))
 		{
-			if (i == CF_BITMAP)
+			if (i == CF_BITMAP || i == CF_ENHMETAFILE)
 				continue;
 
 			m_Data.emplace_back(i, os::memory::global::copy(GetClipboardData(i)));
@@ -568,8 +568,8 @@ TEST_CASE("clipboard.stream")
 
 	const std::array Types
 	{
-		std::pair{SetClipboardText, GetClipboardText},
-		std::pair{SetClipboardVText, GetClipboardVText},
+		std::pair{&SetClipboardText, &GetClipboardText},
+		std::pair{&SetClipboardVText, &GetClipboardVText},
 	};
 
 	for (const auto i: { clipboard_mode::system, clipboard_mode::internal })

@@ -56,7 +56,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-const wchar_t* AbstractSettings::Add(const string& String)
+const wchar_t* AbstractSettings::Add(string_view const String)
 {
 	return static_cast<const wchar_t*>(Add(String.data(), (String.size() + 1) * sizeof(wchar_t)));
 }
@@ -118,7 +118,9 @@ PluginSettings::PluginSettings(const Plugin* const pPlugin, bool const Local)
 	PluginsCfg = ConfigProvider().CreatePluginsConfig(strGuid, Local, false);
 	PluginsCfg->BeginTransaction();
 
-	m_Keys.emplace_back(PluginsCfg->CreateKey(HierarchicalConfig::root_key, strGuid, &pPlugin->Title()));
+	const auto Key = PluginsCfg->CreateKey(HierarchicalConfig::root_key, strGuid);
+	PluginsCfg->SetKeyDescription(Key, pPlugin->Title());
+	m_Keys.emplace_back(Key);
 
 	if (!Global->Opt->ReadOnlyConfig)
 	{
@@ -161,7 +163,7 @@ bool PluginSettings::Set(const FarSettingsItem& Item)
 		return true;
 
 	case FST_DATA:
-		PluginsCfg->SetValue(m_Keys[Item.Root], name, bytes_view(Item.Data.Data, Item.Data.Size));
+		PluginsCfg->SetValue(m_Keys[Item.Root], name, view_bytes(Item.Data.Data, Item.Data.Size));
 		return true;
 
 	default:
@@ -260,7 +262,7 @@ public:
 	class FarSettingsHistoryItems;
 
 private:
-	bool FillHistory(int Type, const string& HistoryName, FarSettingsEnum& Enum, function_ref<bool(history_record_type)> Filter);
+	bool FillHistory(int Type, string_view HistoryName, FarSettingsEnum& Enum, function_ref<bool(history_record_type)> Filter);
 	std::vector<FarSettingsHistoryItems> m_Enum;
 	std::vector<string> m_Keys;
 };
@@ -474,7 +476,7 @@ static const auto& HistoryRef(int Type)
 	return IsPersistent()? ConfigProvider().HistoryCfg() : ConfigProvider().HistoryCfgMem();
 }
 
-bool FarSettings::FillHistory(int Type,const string& HistoryName,FarSettingsEnum& Enum, function_ref<bool(history_record_type)> const Filter)
+bool FarSettings::FillHistory(int Type, string_view const HistoryName, FarSettingsEnum& Enum, function_ref<bool(history_record_type)> const Filter)
 {
 	FarSettingsHistory item = {};
 	FarSettingsHistoryItems NewEnumItem;

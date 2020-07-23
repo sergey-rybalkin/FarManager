@@ -316,7 +316,7 @@ auto elevation::execute(lng Why, string_view const Object, T Fallback, const F1&
 	}
 }
 
-static os::handle create_named_pipe(const string& Name)
+static os::handle create_named_pipe(string_view const Name)
 {
 	SID_IDENTIFIER_AUTHORITY NtAuthority = SECURITY_NT_AUTHORITY;
 
@@ -394,10 +394,7 @@ static bool connect_pipe_to_process(const os::handle& Process, const os::handle&
 			return false;
 	}
 
-	os::multi_waiter Waiter;
-	Waiter.add(AEvent);
-	Waiter.add(Process.native_handle());
-	if (Waiter.wait(os::multi_waiter::mode::any, 15s) != WAIT_OBJECT_0)
+	if (const auto Result = os::handle::wait_any({ AEvent.native_handle(), Process.native_handle() }, 15s); !Result || *Result == 1)
 		return false;
 
 	DWORD NumberOfBytesTransferred;

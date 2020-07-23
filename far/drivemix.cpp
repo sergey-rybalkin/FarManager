@@ -56,6 +56,9 @@ void UpdateSavedDrives(const std::any& Payload)
 		return;
 
 	const auto& Message = std::any_cast<const update_devices_message&>(Payload);
+	if (Message.Media)
+		return;
+
 	const os::fs::drives_set Drives(Message.Drives);
 
 	if (Message.Arrival)
@@ -79,9 +82,4 @@ os::fs::drives_set os::fs::get_logical_drives()
 	}
 
 	return *SavedLogicalDrives;
-}
-
-bool IsDriveTypeRemote(UINT DriveType)
-{
-	return DriveType == DRIVE_REMOTE || DriveType == DRIVE_REMOTE_NOT_CONNECTED;
 }

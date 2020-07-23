@@ -41,13 +41,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Platform:
 
 // Common:
+#include "common/bytes_view.hpp"
 #include "common/range.hpp"
 
 // External:
 
 //----------------------------------------------------------------------------
-
-class bytes_view;
 
 namespace sqlite
 {
@@ -116,21 +115,14 @@ protected:
 		std::string GetColTextUTF8(int Col) const;
 		int GetColInt(int Col) const;
 		unsigned long long GetColInt64(int Col) const;
-		bytes_view GetColBlob(int Col) const;
+		bytes GetColBlob(int Col) const;
 		column_type GetColType(int Col) const;
 
 	private:
-		template<typename type>
-		SQLiteStmt& BindImpl(const type* Value)
-		{
-			return Value? BindImpl(*Value) : BindImpl(nullptr);
-		}
-
-		SQLiteStmt& BindImpl(std::nullptr_t);
 		SQLiteStmt& BindImpl(int Value);
 		SQLiteStmt& BindImpl(long long Value);
 		SQLiteStmt& BindImpl(string_view Value);
-		SQLiteStmt& BindImpl(const bytes_view& Value);
+		SQLiteStmt& BindImpl(bytes_view Value);
 		SQLiteStmt& BindImpl(unsigned int Value) { return BindImpl(static_cast<int>(Value)); }
 		SQLiteStmt& BindImpl(unsigned long long Value) { return BindImpl(static_cast<long long>(Value)); }
 

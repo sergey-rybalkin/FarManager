@@ -52,6 +52,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DlgGuid.hpp"
 #include "lang.hpp"
 #include "global.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -83,12 +84,12 @@ class Shortcuts::shortcut: public data, public rel_ops<shortcut>
 public:
 	shortcut() = default;
 
-	shortcut(string Name, string Folder, string PluginFile, string PluginData, const GUID& PluginGuid):
-		Name(std::move(Name))
+	shortcut(string_view const Name, string_view const Folder, string_view const PluginFile, string_view const PluginData, const GUID& PluginGuid):
+		Name(Name)
 	{
-		this->Folder = std::move(Folder);
-		this->PluginFile = std::move(PluginFile);
-		this->PluginData = std::move(PluginData);
+		this->Folder = Folder;
+		this->PluginFile = PluginFile;
+		this->PluginData = PluginData;
 		this->PluginGuid = PluginGuid;
 	}
 
@@ -370,7 +371,7 @@ std::list<Shortcuts::shortcut>::const_iterator Shortcuts::Select(bool Raw)
 	const auto FolderList = VMenu2::create(msg(lng::MFolderShortcutsTitle), {}, ScrY - 4);
 	FolderList->SetMenuFlags(VMENU_WRAPMODE | VMENU_AUTOHIGHLIGHT);
 	FolderList->SetHelp(HelpFolderShortcuts);
-	FolderList->SetBottomTitle(msg(lng::MFolderShortcutBottomSub));
+	FolderList->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, KEY_CTRLUP, KEY_CTRLDOWN));
 	FolderList->SetId(FolderShortcutsMoreId);
 	FillMenu(*FolderList, m_Items, Raw);
 
@@ -453,16 +454,16 @@ bool Shortcuts::GetOne(size_t Index, data& Data) const
 	return true;
 }
 
-void Shortcuts::Add(const string& Folder, const GUID& PluginGuid, const string& PluginFile, const string& PluginData)
+void Shortcuts::Add(string_view const Folder, const GUID& PluginGuid, string_view const PluginFile, string_view const PluginData)
 {
 	m_Items.emplace_back(string{}, Folder, PluginFile, PluginData, PluginGuid);
 	m_Changed = true;
 }
 
-static void MakeListName(const std::list<Shortcuts::shortcut>& List, const string& Key, MenuItemEx& MenuItem)
+static void MakeListName(const std::list<Shortcuts::shortcut>& List, string_view const Key, MenuItemEx& MenuItem)
 {
 	const auto ItemName = List.empty()? msg(lng::MShortcutNone) : MakeName(List.front());
-	MenuItem.Name = concat(msg(lng::MRightCtrl), L"+&"sv, Key, L" \x2502 "sv, ItemName);
+	MenuItem.Name = concat(KeyToLocalizedText(KEY_RCTRL), L"+&"sv, Key, L" \x2502 "sv, ItemName);
 	if (List.size() > 1)
 	{
 		MenuItem.Flags |= MIF_SUBMENU;
@@ -497,7 +498,7 @@ int Shortcuts::Configure()
 	const auto FolderList = VMenu2::create(msg(lng::MFolderShortcutsTitle), {}, ScrY - 4);
 	FolderList->SetMenuFlags(VMENU_WRAPMODE);
 	FolderList->SetHelp(HelpFolderShortcuts);
-	FolderList->SetBottomTitle(msg(lng::MFolderShortcutBottom));
+	FolderList->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4));
 	FolderList->SetId(FolderShortcutsId);
 
 	for (auto& i: AllShortcuts)

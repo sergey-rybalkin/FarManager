@@ -142,6 +142,7 @@ static const auto
 	NKeyPanelLayout = L"Panel.Layout"sv,
 	NKeyPanelTree = L"Panel.Tree"sv,
 	NKeyPanelInfo = L"Panel.Info"sv,
+	NKeyPanelSortLayers = L"Panel.SortLayers"sv,
 	NKeyLayout = L"Layout"sv,
 	NKeyDescriptions = L"Descriptions"sv,
 	NKeyKeyMacros = L"Macros"sv,
@@ -449,7 +450,7 @@ static void ApplyDefaultMaskGroups()
 {
 	static const std::pair<string_view, string_view> Sets[] =
 	{
-		{ L"arc"sv,  L"*.rar,*.zip,*.[zj],*.[bg7x]z,*.[bg]zip,*.tar,*.t[agbx]z,*.ar[cj],*.r[0-9][0-9],*.a[0-9][0-9],*.bz2,*.cab,*.msi,*.jar,*.lha,*.lzh,*.ha,*.ac[bei],*.pa[ck],*.rk,*.cpio,*.rpm,*.zoo,*.hqx,*.sit,*.ice,*.uc2,*.ain,*.imp,*.777,*.ufa,*.boa,*.bs[2a],*.sea,*.hpk,*.ddi,*.x2,*.rkv,*.[lw]sz,*.h[ay]p,*.lim,*.sqz,*.chz"sv },
+		{ L"arc"sv,  L"*.rar,*.zip,*.[zj],*.[bg7x]z,*.[bg]zip,*.tar,*.t[agbx]z,*.ar[cj],*.r[0-9][0-9],*.a[0-9][0-9],*.bz2,*.cab,*.[aj]ar,*.lha,*.lzh,*.ha,*.ac[bei],*.pa[ck],*.rk,*.cpio,*.rpm,*.zoo,*.hqx,*.sit,*.ice,*.uc2,*.ain,*.imp,*.777,*.ufa,*.boa,*.bs[2a],*.sea,*.[ah]pk,*.ddi,*.x2,*.rkv,*.[lw]sz,*.h[ay]p,*.lim,*.sqz,*.chz"sv },
 		{ L"temp"sv, L"*.bak,*.tmp"sv },
 		{ L"exec"sv, L"*.exe,*.com,*.bat,*.cmd,%PATHEXT%"sv },
 	};
@@ -479,7 +480,8 @@ static void FillMasksMenu(VMenu2& MasksMenu, int SelPos = 0)
 void Options::MaskGroupsSettings()
 {
 	const auto MasksMenu = VMenu2::create(msg(lng::MMenuMaskGroups), {}, 0, VMENU_WRAPMODE | VMENU_SHOWAMPERSAND);
-	MasksMenu->SetBottomTitle(msg(lng::MMaskGroupBottom));
+	const auto BottomTitle = KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, KEY_F7, KEY_CTRLR);
+	MasksMenu->SetBottomTitle(BottomTitle);
 	MasksMenu->SetHelp(L"MaskGroupsSettings"sv);
 	FillMasksMenu(*MasksMenu);
 	MasksMenu->SetPosition({ -1, -1, -1, -1 });
@@ -502,7 +504,7 @@ void Options::MaskGroupsSettings()
 					}
 					MasksMenu->SetPosition({ -1, -1, -1, -1 });
 					MasksMenu->SetTitle(msg(lng::MMenuMaskGroups));
-					MasksMenu->SetBottomTitle(msg(lng::MMaskGroupBottom));
+					MasksMenu->SetBottomTitle(BottomTitle);
 				}
 				return 1;
 			}
@@ -1167,7 +1169,7 @@ void Options::SetFilePanelModes()
 			ModeList->SetHelp(L"PanelViewModes"sv);
 			ModeList->SetMenuFlags(VMENU_WRAPMODE);
 			ModeList->SetId(PanelViewModesId);
-			ModeList->SetBottomTitle(msg(lng::MEditPanelModesBottom));
+			ModeList->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, KEY_CTRLENTER, KEY_CTRLSHIFTENTER));
 
 			ModeNumber=ModeList->Run([&](const Manager::Key& RawKey)
 			{
@@ -1447,7 +1449,7 @@ struct FARConfigItem
 	}
 };
 
-static bool ParseIntValue(const string& sValue, long long& iValue)
+static bool ParseIntValue(string_view const sValue, long long& iValue)
 {
 	if (from_string(sValue, iValue))
 		return true;
@@ -2115,7 +2117,7 @@ void Options::InitConfigs()
 	}
 }
 
-void Options::SetSearchColumns(const string& Columns, const string& Widths)
+void Options::SetSearchColumns(string_view const Columns, string_view const Widths)
 {
 	if (Columns.empty())
 		return;
@@ -2128,8 +2130,6 @@ void Options::SetDriveMenuHotkeys()
 {
 	if (!ConfigProvider().GeneralCfg()->GetValue<bool>(L"Interface"sv, L"InitDriveMenuHotkeys"sv, true))
 		return;
-
-	using namespace guid_parse::literals;
 
 	static constexpr struct
 	{
@@ -2151,6 +2151,54 @@ void Options::SetDriveMenuHotkeys()
 	}
 
 	ConfigProvider().GeneralCfg()->SetValue(L"Interface"sv, L"InitDriveMenuHotkeys"sv, false);
+}
+
+void Options::ReadSortLayers()
+{
+	PanelSortLayers.resize(static_cast<size_t>(panel_sort::COUNT));
+
+	for (auto& [Item, i]: enumerate(PanelSortLayers))
+	{
+		Item.emplace_back(i + 1);
+
+		string Layers;
+		if (ConfigProvider().GeneralCfg()->GetValue(NKeyPanelSortLayers, str(i), Layers))
+		{
+			for (const auto& Str: enum_tokens(Layers, L" "sv))
+			{
+				int SortLayerId;
+				if (
+					!from_string(Str, SortLayerId) ||
+					!SortLayerId ||
+					!in_range(-static_cast<int>(panel_sort::COUNT), SortLayerId, static_cast<int>(panel_sort::COUNT)) ||
+					contains(Item, SortLayerId)
+					)
+				{
+					// TODO: log
+					continue;
+				}
+
+				Item.emplace_back(SortLayerId);
+			}
+		}
+		else
+		{
+			const auto& DefaultLayers = default_sort_layers(static_cast<panel_sort>(i));
+			Item.insert(Item.end(), ALL_CONST_RANGE(DefaultLayers));
+		}
+	}
+}
+
+void Options::SaveSortLayers(bool const Always)
+{
+	auto& Cfg = *ConfigProvider().GeneralCfg();
+
+	for (const auto& [Item, i]: enumerate(PanelSortLayers))
+	{
+		const auto NewLayers = join(select(span(Item).subspan(1), [](int const SortLayerId){ return str(SortLayerId); }), L" "sv);
+		if ( Always || (NewLayers != Cfg.GetValue<string>(NKeyPanelSortLayers, str(i))))
+			Cfg.SetValue(NKeyPanelSortLayers, str(i), NewLayers);
+	}
 }
 
 void Options::Load(overrides&& Overrides)
@@ -2258,6 +2306,8 @@ void Options::Load(overrides&& Overrides)
 
 	SetDriveMenuHotkeys();
 
+	ReadSortLayers();
+
 /* *************************************************** </ПОСТПРОЦЕССЫ> */
 
 	// we assume that any changes after this point will be made by the user
@@ -2324,6 +2374,7 @@ void Options::Save(bool Manual)
 
 	FileFilter::Save(Manual);
 	SavePanelModes(Manual);
+	SaveSortLayers(Manual);
 	Global->CtrlObject->Macro.SaveMacros(Manual);
 }
 
@@ -2372,8 +2423,10 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 			SCOPED_ACTION(Dialog::suppress_redraw)(Dlg);
 
 			FarListTitles Titles{ sizeof(Titles) };
+
+			const auto BottomTitle = KeysToLocalizedText(KEY_SHIFTF1, KEY_F4, KEY_SHIFTF4, KEY_CTRLH);
 			Titles.Title = msg(lng::MConfigEditor).c_str();
-			Titles.Bottom = msg(lng::MConfigEditorHelp).c_str();
+			Titles.Bottom = BottomTitle.c_str();
 			Dlg->SendMessage(DM_LISTSETTITLES, ac_item_listbox, &Titles);
 
 			Dlg->SendMessage(DM_LISTSORT, ac_item_listbox, nullptr);

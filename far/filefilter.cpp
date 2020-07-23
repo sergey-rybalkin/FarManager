@@ -150,12 +150,12 @@ FileFilter::FileFilter(Panel *HostPanel, FAR_FILE_FILTER_TYPE FilterType):
 	UpdateCurrentTime();
 }
 
-static void ParseAndAddMasks(std::map<string, int, string_sort::less_t>& Extensions, const string& FileName, DWORD FileAttr, int Check)
+static void ParseAndAddMasks(std::map<string, int, string_sort::less_t>& Extensions, string_view const FileName, DWORD const FileAttr, int const Check)
 {
 	if ((FileAttr & FILE_ATTRIBUTE_DIRECTORY) || IsParentDirectory(FileName))
 		return;
 
-	const auto Ext = PointToExt(FileName);
+	const auto Ext = name_ext(FileName).second;
 	Extensions.emplace(Ext.empty()? L"*."s : concat(L'*', Ext), Check);
 }
 
@@ -172,7 +172,7 @@ void FileFilter::FilterEdit()
 	const auto FilterList = VMenu2::create(msg(lng::MFilterTitle), {}, ScrY - 6);
 	FilterList->SetHelp(L"FiltersMenu"sv);
 	FilterList->SetPosition({ -1, -1, 0, 0 });
-	FilterList->SetBottomTitle(msg(lng::MFilterBottom));
+	FilterList->SetBottomTitle(KeysToLocalizedText(L'+', L'-', KEY_SPACE, L'I', L'X', KEY_BS, KEY_SHIFTBS, KEY_INS, KEY_DEL, KEY_F4, KEY_F5, KEY_CTRLUP, KEY_CTRLDOWN));
 	FilterList->SetMenuFlags(VMENU_WRAPMODE);
 	FilterList->SetId(FiltersMenuId);
 
@@ -318,7 +318,7 @@ void FileFilter::FilterEdit()
 					{
 						MenuItemEx ListItem(MenuString(&FilterData()[SelPos]));
 
-						if (const auto Check = GetCheck(FilterData()[SelPos]))
+						if (const auto Check = FilterList->GetCheck(SelPos))
 							ListItem.SetCustomCheck(Check);
 
 						FilterList->DeleteItem(SelPos);
@@ -586,10 +586,10 @@ void FileFilter::UpdateCurrentTime()
 
 bool FileFilter::FileInFilter(const FileListItem* fli, filter_status* FilterStatus)
 {
-	return FileInFilter(*fli, FilterStatus, &fli->FileName);
+	return FileInFilter(*fli, FilterStatus, fli->FileName);
 }
 
-bool FileFilter::FileInFilter(const os::fs::find_data& fde, filter_status* FilterStatus, const string* FullName)
+bool FileFilter::FileInFilter(const os::fs::find_data& fde, filter_status* const FilterStatus, string_view const FullName)
 {
 	const auto FFFT = GetFFFT();
 	const auto bFolder = (fde.Attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -715,7 +715,7 @@ bool FileFilter::FileInFilter(const PluginPanelItem& fd, filter_status* FilterSt
 {
 	os::fs::find_data fde;
 	PluginPanelItemToFindDataEx(fd, fde);
-	return FileInFilter(fde, FilterStatus, &fde.FileName);
+	return FileInFilter(fde, FilterStatus, fde.FileName);
 }
 
 bool FileFilter::IsEnabledOnPanel()
@@ -763,7 +763,7 @@ FileFilterParams FileFilter::LoadFilter(/*const*/ HierarchicalConfig& cfg, unsig
 	{
 		// Old format
 		// TODO 2020 Q4: remove
-		if (cfg.GetValue(Key, legacy_names::DateAfter, bytes::reference(DateAfter)))
+		if (bytes Blob; cfg.GetValue(Key, legacy_names::DateAfter, Blob) && deserialise(Blob, DateAfter))
 		{
 			cfg.SetValue(Key, names::DateTimeAfter, DateAfter);
 			cfg.DeleteValue(Key, legacy_names::DateAfter);
@@ -775,7 +775,7 @@ FileFilterParams FileFilter::LoadFilter(/*const*/ HierarchicalConfig& cfg, unsig
 	{
 		// Old format
 		// TODO 2020 Q4: remove
-		if (cfg.GetValue(Key, legacy_names::DateBefore, bytes::reference(DateBefore)))
+		if (bytes Blob; cfg.GetValue(Key, legacy_names::DateBefore, Blob) && deserialise(Blob, DateBefore))
 		{
 			cfg.SetValue(Key, names::DateTimeBefore, DateBefore);
 			cfg.DeleteValue(Key, legacy_names::DateBefore);
@@ -798,7 +798,7 @@ FileFilterParams FileFilter::LoadFilter(/*const*/ HierarchicalConfig& cfg, unsig
 	}
 
 	Item.SetDate(UseDate, static_cast<enumFDateType>(DateType), DateRelative?
-		filter_dates(os::chrono::duration(DateAfter), os::chrono::duration(DateBefore)) :
+		filter_dates(os::chrono::hectonanoseconds(DateAfter), os::chrono::hectonanoseconds(DateBefore)) :
 		filter_dates(os::chrono::nt_clock::from_hectonanoseconds(DateAfter), os::chrono::nt_clock::from_hectonanoseconds(DateBefore)));
 
 	const auto UseSize = cfg.GetValue<bool>(Key, names::UseSize);
@@ -892,14 +892,14 @@ static bool LoadLegacyFlags(const HierarchicalConfigUniquePtr& Cfg, Hierarchical
 	static_assert(FFFT_COUNT >= LegacyCount);
 
 	DWORD LegacyFlags[LegacyCount]{};
-	if (!Cfg->GetValue(Key, Name, bytes::reference(LegacyFlags)))
+	if (bytes Blob; !Cfg->GetValue(Key, Name, Blob) || !deserialise(Blob, LegacyFlags))
 		return false;
 
 	for (int i = 0; i != LegacyCount; ++i)
 		Item.SetFlags(static_cast<enumFileFilterFlagsType>(i), LegacyFlags[i]);
 
 	return true;
-};
+}
 
 void FileFilter::InitFilter()
 {
@@ -991,8 +991,6 @@ void FileFilter::SaveFilter(HierarchicalConfig& cfg, unsigned long long KeyId, c
 	filter_dates Dates;
 	cfg.SetValue(Key, names::UseDate, Item.GetDate(&DateType, &Dates));
 	cfg.SetValue(Key, names::DateType, DateType);
-
-	using namespace os::chrono::literals;
 
 	Dates.visit(overload
 	{

@@ -118,8 +118,8 @@ public:
 	void SetCurDir(string_view CurDir, bool redrawPrompt = false);
 
 	const string& GetString() const { return CmdStr.GetString(); }
-	void SetString(const string& Str, bool Redraw);
-	void InsertString(const string& Str);
+	void SetString(string_view Str, bool Redraw);
+	void InsertString(string_view Str);
 	void ExecString(execute_info& Info);
 	void ShowViewEditHistory();
 	void SetCurPos(int Pos, int LeftPos=0, bool Redraw=true);
@@ -133,7 +133,7 @@ public:
 	void LockUpdatePanel(bool Mode);
 	int GetPromptSize() const {return PromptSize;}
 	void SetPromptSize(int NewSize);
-	void DrawFakeCommand(const string& FakeCommand);
+	void DrawFakeCommand(string_view FakeCommand);
 
 private:
 	void DisplayObject() override;

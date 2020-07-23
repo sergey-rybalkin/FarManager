@@ -71,10 +71,10 @@ string GroupDigits(unsigned long long Value)
 
 	Fmt.Grouping = locale.digits_grouping();
 
-	wchar_t DecimalSeparator[]{ locale.decimal_separator(), {} };
+	wchar_t DecimalSeparator[]{ locale.decimal_separator(), L'\0' };
 	Fmt.lpDecimalSep = DecimalSeparator;
 
-	wchar_t ThousandSeparator[]{ locale.thousand_separator(), {} };
+	wchar_t ThousandSeparator[]{ locale.thousand_separator(), L'\0' };
 	Fmt.lpThousandSep = ThousandSeparator;
 
 	// Don't care - can't be negative
@@ -199,6 +199,11 @@ string truncate_right(string Str, size_t const MaxLength)
 	return Str;
 }
 
+string truncate_right(string_view const Str, size_t const MaxLength)
+{
+	return truncate_right(string(Str), MaxLength);
+}
+
 wchar_t* legacy::truncate_left(wchar_t *Str, int MaxLength)
 {
 	return legacy_operation(Str, MaxLength, [](span<wchar_t> const StrParam, size_t const MaxLengthParam, string_view const CurrentDots)
@@ -225,6 +230,11 @@ string truncate_left(string Str, size_t const MaxLength)
 {
 	inplace::truncate_left(Str, MaxLength);
 	return Str;
+}
+
+string truncate_left(string_view const Str, size_t const MaxLength)
+{
+	return truncate_left(string(Str), MaxLength);
 }
 
 wchar_t* legacy::truncate_center(wchar_t *Str, int MaxLength)
@@ -255,6 +265,10 @@ string truncate_center(string Str, size_t const MaxLength)
 	return Str;
 }
 
+string truncate_center(string_view const Str, size_t const MaxLength)
+{
+	return truncate_center(string(Str), MaxLength);
+}
 
 static auto StartOffset(string_view const Str)
 {
@@ -294,6 +308,11 @@ string truncate_path(string Str, size_t const MaxLength)
 	return Str;
 }
 
+string truncate_path(string_view const Str, size_t const MaxLength)
+{
+	return truncate_path(string(Str), MaxLength);
+}
+
 bool IsCaseMixed(const string_view Str)
 {
 	const auto AlphaBegin = std::find_if(ALL_CONST_RANGE(Str), is_alpha);
@@ -307,23 +326,38 @@ bool IsCaseMixed(const string_view Str)
 /* FileSizeToStr()
    Форматирование размера файла в удобочитаемый вид.
 */
-enum
+
+static const unsigned long long BytesInUnit[][2]
 {
-	UNIT_COUNT = 7, // byte, kilobyte, megabyte, gigabyte, terabyte, petabyte, exabyte.
+	{0x0000000000000001ull,                   1ull}, // B
+	{0x0000000000000400ull,                1000ull}, // KiB / KB
+	{0x0000000000100000ull,             1000000ull}, // MiB / MB
+	{0x0000000040000000ull,          1000000000ull}, // GiB / GB
+	{0x0000010000000000ull,       1000000000000ull}, // TiB / TB
+	{0x0004000000000000ull,    1000000000000000ull}, // PiB / PB
+	{0x1000000000000000ull, 1000000000000000000ull}, // EiB / EB
 };
+
+static const unsigned long long PrecisionMultiplier[]
+{
+	  1ull,
+	 10ull,
+	100ull,
+};
+
 
 static string& UnitStr(size_t Unit, bool Binary)
 {
-	static string Data[UNIT_COUNT][2];
-	return Data[Unit][Binary? 1 : 0];
+	static string Data[std::size(BytesInUnit)][2];
+	return Data[Unit][Binary? 0 : 1];
 }
 
 void PrepareUnitStr()
 {
-	for (int i=0; i<UNIT_COUNT; i++)
+	for (size_t i = 0; i != std::size(BytesInUnit); ++i)
 	{
-		UnitStr(i, false) = lower(msg(lng::MListBytes + i));
 		UnitStr(i, true) = upper(msg(lng::MListBytes + i));
+		UnitStr(i, false) = lower(msg(lng::MListBytes + i));
 	}
 }
 
@@ -346,8 +380,8 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 	const size_t MinUnit = (ViewFlags & COLFLAGS_MULTIPLIER_MASK & ~COLFLAGS_USE_MULTIPLIER) + 1;
 
 	constexpr std::pair
-		BinaryDivider(1024, 10), // 10 == log2(1024)
-		DecimalDivider(1000, 3); // 3 == log10(1000)
+		BinaryDivider(0, 10), // 10 == log2(1024)
+		DecimalDivider(1, 3); // 3 == log10(1000)
 
 	const auto& Divider = ViewFlags & COLFLAGS_THOUSAND? DecimalDivider : BinaryDivider;
 
@@ -388,31 +422,28 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 		}
 		else
 		{
-			const auto SizeInUnits = FileSize / std::pow(Divider.first, UnitIndex);
-
-			double Parts[2];
-			Parts[1] = std::modf(SizeInUnits, &Parts[0]);
-
-			auto Integral = static_cast<int>(Parts[0]);
+			const auto Denominator = BytesInUnit[UnitIndex][Divider.first];
+			const auto RawIntegral = FileSize / Denominator;
+			const auto RawFractional = static_cast<double>(FileSize % Denominator) / static_cast<double>(Denominator);
 
 			const auto FixedPrecision = 0; // 0 for floating, else fixed. TODO: option?
 
-			if (const auto NumDigits = FixedPrecision? FixedPrecision : Integral < 10? 2 : Integral < 100? 1 : 0)
+			if (const auto NumDigits = FixedPrecision? std::min(FixedPrecision, static_cast<int>(std::size(PrecisionMultiplier) - 1)) : RawIntegral < 10? 2 : RawIntegral < 100? 1 : 0)
 			{
-				const auto AjustedParts = [&]
+				const auto [IntegralPart, FractionalPart] = [&]
 				{
-					const auto Multiplier = static_cast<unsigned long long>(std::pow(10, NumDigits));
-					const auto Value = Parts[1] * Multiplier;
+					const auto Multiplier = PrecisionMultiplier[NumDigits];
+					const auto FractionalDigits = RawFractional * static_cast<double>(Multiplier);
 					const auto UseRound = true;
-					const auto Fractional = static_cast<unsigned long long>(UseRound? std::round(Value) : Value);
-					return Fractional == Multiplier? std::make_pair(Integral + 1, 0ull) : std::make_pair(Integral, Fractional);
+					const auto RoundedFractionalDigits = static_cast<unsigned>(UseRound? std::round(FractionalDigits) : FractionalDigits);
+					return RoundedFractionalDigits == Multiplier? std::pair(RawIntegral + 1, 0u) : std::pair(RawIntegral, RoundedFractionalDigits);
 				}();
 
-				Str = concat(str(AjustedParts.first), locale.decimal_separator(), pad_left(str(AjustedParts.second), NumDigits, L'0'));
+				Str = concat(str(IntegralPart), locale.decimal_separator(), pad_left(str(FractionalPart), NumDigits, L'0'));
 			}
 			else
 			{
-				Str = str(static_cast<int>(std::round(SizeInUnits)));
+				Str = str(static_cast<unsigned long long>(std::round(static_cast<double>(RawIntegral) + RawFractional)));
 			}
 		}
 
@@ -433,7 +464,12 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 
 	while ((UseUnit && UnitIndex < MinUnit) || (Width && Str.size() > MaxNumberWidth))
 	{
-		if (const unsigned long long SizeInUnits = std::round(FileSize / std::pow(Divider.first, UnitIndex + 1)))
+		const auto Denominator = BytesInUnit[UnitIndex + 1][Divider.first];
+		const auto IntegralPart = FileSize / Denominator;
+		const auto FractionalPart = static_cast<double>(FileSize % Denominator) / static_cast<double>(Denominator);
+		const auto SizeInUnits = IntegralPart + static_cast<unsigned long long>(std::round(FractionalPart));
+
+		if (SizeInUnits)
 		{
 			++UnitIndex;
 			Str = ToStr(SizeInUnits);
@@ -951,17 +987,16 @@ int HexToInt(char h)
 	throw MAKE_FAR_FATAL_EXCEPTION(L"Not a hex char"sv);
 }
 
-template<class S, class C>
-static S BlobToHexStringT(bytes_view const Blob, C Separator)
+string BlobToHexString(bytes_view const Blob, wchar_t Separator)
 {
-	S Hex;
+	string Hex;
 
 	Hex.reserve(Blob.size() * (Separator? 3 : 2));
 
 	for (const auto& i: Blob)
 	{
-		Hex.push_back(IntToHex((i & 0xF0) >> 4));
-		Hex.push_back(IntToHex(i & 0x0F));
+		Hex.push_back(IntToHex((std::to_integer<int>(i) & 0xF0) >> 4));
+		Hex.push_back(IntToHex(std::to_integer<int>(i) & 0x0F));
 		if (Separator)
 		{
 			Hex.push_back(Separator);
@@ -975,8 +1010,7 @@ static S BlobToHexStringT(bytes_view const Blob, C Separator)
 	return Hex;
 }
 
-template<typename char_type>
-static auto HexStringToBlobT(const std::basic_string_view<char_type> Hex, const char_type Separator)
+bytes HexStringToBlob(const string_view Hex, const wchar_t Separator)
 {
 	// Size shall be either 3 * N + 2 or even
 	if (!Hex.empty() && (Separator? Hex.size() % 3 != 2 : Hex.size() & 1))
@@ -988,36 +1022,16 @@ static auto HexStringToBlobT(const std::basic_string_view<char_type> Hex, const 
 	const auto BlobSize = AlignedSize / StepSize;
 
 	if (!BlobSize)
-		return bytes();
+		return {};
 
-	std::vector<char> Blob;
+	bytes Blob;
 	Blob.reserve(BlobSize);
 	for (size_t i = 0; i != AlignedSize; i += StepSize)
 	{
-		Blob.emplace_back(HexToInt(Hex[i]) << 4 | HexToInt(Hex[i + 1]));
+		Blob.push_back(std::byte(HexToInt(Hex[i]) << 4 | HexToInt(Hex[i + 1])));
 	}
 
-	return bytes::copy(bytes_view(Blob.data(), Blob.size()));
-}
-
-std::string BlobToHexString(bytes_view const Blob, char Separator)
-{
-	return BlobToHexStringT<std::string>(Blob, Separator);
-}
-
-bytes HexStringToBlob(const std::string_view Hex, const char Separator)
-{
-	return HexStringToBlobT(Hex, Separator);
-}
-
-string BlobToHexWString(bytes_view const Blob, wchar_t Separator)
-{
-	return BlobToHexStringT<string>(Blob, Separator);
-}
-
-bytes HexStringToBlob(const string_view Hex, const wchar_t Separator)
-{
-	return HexStringToBlobT(Hex, Separator);
+	return Blob;
 }
 
 string ExtractHexString(string_view const HexString)
@@ -1044,12 +1058,12 @@ string ConvertHexString(string_view const From, uintptr_t Codepage, bool FromHex
 	if (FromHex)
 	{
 		const auto Blob = HexStringToBlob(ExtractHexString(From), 0);
-		return encoding::get_chars(CompatibleCp, { Blob.data(), Blob.size() });
+		return encoding::get_chars(CompatibleCp, Blob);
 	}
 	else
 	{
 		const auto Blob = encoding::get_bytes(CompatibleCp, From);
-		return BlobToHexWString({ Blob.data(), Blob.size() }, 0);
+		return BlobToHexString(view_bytes(Blob), 0);
 	}
 }
 
@@ -1282,67 +1296,72 @@ TEST_CASE("truncate")
 	}
 	Tests[]
 	{
-		{ L"c:/123/456"sv, 20, L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv, },
-		{ L"c:/123/456"sv, 10, L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv, },
-		{ L"c:/123/456"sv, 9,  L"…/123/456"sv,   L"c:/1…/456"sv,   L"c:/123/4…"sv,   L"c:/…3/456"sv,  },
-		{ L"c:/123/456"sv, 8,  L"…123/456"sv,    L"c:/…/456"sv,    L"c:/123/…"sv,    L"c:/…/456"sv,   },
-		{ L"c:/123/456"sv, 7,  L"…23/456"sv,     L"c:/…456"sv,     L"c:/123…"sv,     L"c:/…456"sv,    },
-		{ L"c:/123/456"sv, 6,  L"…3/456"sv,      L"c:…456"sv,      L"c:/12…"sv,      L"c:/…56"sv,     },
-		{ L"c:/123/456"sv, 5,  L"…/456"sv,       L"c:…56"sv,       L"c:/1…"sv,       L"c:/…6"sv,      },
-		{ L"c:/123/456"sv, 4,  L"…456"sv,        L"c…56"sv,        L"c:/…"sv,        L"c:/…"sv,       },
-		{ L"c:/123/456"sv, 3,  L"…56"sv,         L"c…6"sv,         L"c:…"sv,         L"c:…"sv,        },
-		{ L"c:/123/456"sv, 2,  L"…6"sv,          L"…6"sv,          L"c…"sv,          L"c…"sv,         },
-		{ L"c:/123/456"sv, 1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
-		{ L"c:/123/456"sv, 0,  {},               {},               {},               {},              },
-
-		{ L"0123456789"sv, 20, L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv, },
-		{ L"0123456789"sv, 10, L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv, },
-		{ L"0123456789"sv, 9,  L"…23456789"sv,   L"0123…6789"sv,   L"01234567…"sv,   L"…23456789"sv,  },
-		{ L"0123456789"sv, 8,  L"…3456789"sv,    L"012…6789"sv,    L"0123456…"sv,    L"…3456789"sv,   },
-		{ L"0123456789"sv, 7,  L"…456789"sv,     L"012…789"sv,     L"012345…"sv,     L"…456789"sv,    },
-		{ L"0123456789"sv, 6,  L"…56789"sv,      L"01…789"sv,      L"01234…"sv,      L"…56789"sv,     },
-		{ L"0123456789"sv, 5,  L"…6789"sv,       L"01…89"sv,       L"0123…"sv,       L"…6789"sv,      },
-		{ L"0123456789"sv, 4,  L"…789"sv,        L"0…89"sv,        L"012…"sv,        L"…789"sv,       },
-		{ L"0123456789"sv, 3,  L"…89"sv,         L"0…9"sv,         L"01…"sv,         L"…89"sv,        },
-		{ L"0123456789"sv, 2,  L"…9"sv,          L"…9"sv,          L"0…"sv,          L"…9"sv,         },
-		{ L"0123456789"sv, 1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
-		{ L"0123456789"sv, 0,  {},               {},               {},               {},              },
-
-		{ L"0123"sv,       5,  L"0123"sv,        L"0123"sv,        L"0123"sv,        L"0123"sv,       },
-		{ L"0123"sv,       4,  L"0123"sv,        L"0123"sv,        L"0123"sv,        L"0123"sv,       },
-		{ L"0123"sv,       3,  L"…23"sv,         L"0…3"sv,         L"01…"sv,         L"…23"sv,        },
-		{ L"0123"sv,       2,  L"…3"sv,          L"…3"sv,          L"0…"sv,          L"…3"sv,         },
-		{ L"0123"sv,       1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
-		{ L"0123"sv,       0,  {},               {},               {},               {},              },
-
-		{ L"012"sv,        4,  L"012"sv,         L"012"sv,         L"012"sv,         L"012"sv,        },
-		{ L"012"sv,        3,  L"012"sv,         L"012"sv,         L"012"sv,         L"012"sv,        },
-		{ L"012"sv,        2,  L"…2"sv,          L"…2"sv,          L"0…"sv,          L"…2"sv,         },
-		{ L"012"sv,        1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
-		{ L"012"sv,        0,  {},               {},               {},               {},              },
-
-		{ L"01"sv,         3,  L"01"sv,          L"01"sv,          L"01"sv,          L"01"sv,         },
-		{ L"01"sv,         2,  L"01"sv,          L"01"sv,          L"01"sv,          L"01"sv,         },
-		{ L"01"sv,         1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
-		{ L"01"sv,         0,  {},               {},               {},               {},              },
-
-		{ L"0"sv,          2,  L"0"sv,           L"0"sv,           L"0"sv,           L"0"sv,          },
-		{ L"0"sv,          1,  L"0"sv,           L"0"sv,           L"0"sv,           L"0"sv,          },
-		{ L"0"sv,          0,  {},               {},               {},               {},              },
-
-		{ {},              4,  {},               {},               {},               {},              },
-		{ {},              3,  {},               {},               {},               {},              },
-		{ {},              2,  {},               {},               {},               {},              },
-		{ {},              1,  {},               {},               {},               {},              },
 		{ {},              0,  {},               {},               {},               {},              },
+		{ {},              1,  {},               {},               {},               {},              },
+		{ {},              2,  {},               {},               {},               {},              },
+		{ {},              3,  {},               {},               {},               {},              },
+		{ {},              4,  {},               {},               {},               {},              },
+
+		{ L"0"sv,          0,  {},               {},               {},               {},              },
+		{ L"0"sv,          1,  L"0"sv,           L"0"sv,           L"0"sv,           L"0"sv,          },
+		{ L"0"sv,          2,  L"0"sv,           L"0"sv,           L"0"sv,           L"0"sv,          },
+
+		{ L"01"sv,         0,  {},               {},               {},               {},              },
+		{ L"01"sv,         1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
+		{ L"01"sv,         2,  L"01"sv,          L"01"sv,          L"01"sv,          L"01"sv,         },
+		{ L"01"sv,         3,  L"01"sv,          L"01"sv,          L"01"sv,          L"01"sv,         },
+
+		{ L"012"sv,        0,  {},               {},               {},               {},              },
+		{ L"012"sv,        1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
+		{ L"012"sv,        2,  L"…2"sv,          L"…2"sv,          L"0…"sv,          L"…2"sv,         },
+		{ L"012"sv,        3,  L"012"sv,         L"012"sv,         L"012"sv,         L"012"sv,        },
+		{ L"012"sv,        4,  L"012"sv,         L"012"sv,         L"012"sv,         L"012"sv,        },
+
+		{ L"0123"sv,       0,  {},               {},               {},               {},              },
+		{ L"0123"sv,       1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
+		{ L"0123"sv,       2,  L"…3"sv,          L"…3"sv,          L"0…"sv,          L"…3"sv,         },
+		{ L"0123"sv,       3,  L"…23"sv,         L"0…3"sv,         L"01…"sv,         L"…23"sv,        },
+		{ L"0123"sv,       4,  L"0123"sv,        L"0123"sv,        L"0123"sv,        L"0123"sv,       },
+		{ L"0123"sv,       5,  L"0123"sv,        L"0123"sv,        L"0123"sv,        L"0123"sv,       },
+
+		{ L"0123456789"sv, 0,  {},               {},               {},               {},              },
+		{ L"0123456789"sv, 1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
+		{ L"0123456789"sv, 2,  L"…9"sv,          L"…9"sv,          L"0…"sv,          L"…9"sv,         },
+		{ L"0123456789"sv, 3,  L"…89"sv,         L"0…9"sv,         L"01…"sv,         L"…89"sv,        },
+		{ L"0123456789"sv, 4,  L"…789"sv,        L"0…89"sv,        L"012…"sv,        L"…789"sv,       },
+		{ L"0123456789"sv, 5,  L"…6789"sv,       L"01…89"sv,       L"0123…"sv,       L"…6789"sv,      },
+		{ L"0123456789"sv, 6,  L"…56789"sv,      L"01…789"sv,      L"01234…"sv,      L"…56789"sv,     },
+		{ L"0123456789"sv, 7,  L"…456789"sv,     L"012…789"sv,     L"012345…"sv,     L"…456789"sv,    },
+		{ L"0123456789"sv, 8,  L"…3456789"sv,    L"012…6789"sv,    L"0123456…"sv,    L"…3456789"sv,   },
+		{ L"0123456789"sv, 9,  L"…23456789"sv,   L"0123…6789"sv,   L"01234567…"sv,   L"…23456789"sv,  },
+		{ L"0123456789"sv, 10, L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv, },
+		{ L"0123456789"sv, 20, L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv,  L"0123456789"sv, },
+
+		{ L"c:/123/456"sv, 0,  {},               {},               {},               {},              },
+		{ L"c:/123/456"sv, 1,  L"…"sv,           L"…"sv,           L"…"sv,           L"…"sv,          },
+		{ L"c:/123/456"sv, 2,  L"…6"sv,          L"…6"sv,          L"c…"sv,          L"c…"sv,         },
+		{ L"c:/123/456"sv, 3,  L"…56"sv,         L"c…6"sv,         L"c:…"sv,         L"c:…"sv,        },
+		{ L"c:/123/456"sv, 4,  L"…456"sv,        L"c…56"sv,        L"c:/…"sv,        L"c:/…"sv,       },
+		{ L"c:/123/456"sv, 5,  L"…/456"sv,       L"c:…56"sv,       L"c:/1…"sv,       L"c:/…6"sv,      },
+		{ L"c:/123/456"sv, 6,  L"…3/456"sv,      L"c:…456"sv,      L"c:/12…"sv,      L"c:/…56"sv,     },
+		{ L"c:/123/456"sv, 7,  L"…23/456"sv,     L"c:/…456"sv,     L"c:/123…"sv,     L"c:/…456"sv,    },
+		{ L"c:/123/456"sv, 8,  L"…123/456"sv,    L"c:/…/456"sv,    L"c:/123/…"sv,    L"c:/…/456"sv,   },
+		{ L"c:/123/456"sv, 9,  L"…/123/456"sv,   L"c:/1…/456"sv,   L"c:/123/4…"sv,   L"c:/…3/456"sv,  },
+		{ L"c:/123/456"sv, 10, L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv, },
+		{ L"c:/123/456"sv, 20, L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv, },
 	};
+
+	using handler = string(string_view, size_t);
+	using legacy_handler = wchar_t*(wchar_t*, int);
+	using result_ptr = decltype(&tests::ResultLeft);
+	using tp = std::tuple<handler*, legacy_handler*, result_ptr>;
 
 	static const std::array Functions
 	{
-		std::tuple{ truncate_left,   legacy::truncate_left,   &tests::ResultLeft   },
-		std::tuple{ truncate_center, legacy::truncate_center, &tests::ResultCenter },
-		std::tuple{ truncate_right,  legacy::truncate_right,  &tests::ResultRight  },
-		std::tuple{ truncate_path,   legacy::truncate_path,   &tests::ResultPath   },
+		tp{ truncate_left,   legacy::truncate_left,   &tests::ResultLeft   },
+		tp{ truncate_center, legacy::truncate_center, &tests::ResultCenter },
+		tp{ truncate_right,  legacy::truncate_right,  &tests::ResultRight  },
+		tp{ truncate_path,   legacy::truncate_path,   &tests::ResultPath   },
 	};
 
 	for (const auto& i: Tests)
@@ -1387,21 +1406,25 @@ TEST_CASE("hex")
 {
 	static const struct
 	{
-		string_view Src, Result;
+		string_view Src, Numbers;
+		bytes_view Bytes;
 	}
 	Tests[]
 	{
-		{ L"12 34"sv,    L"1234"sv, },
-		{ L"12 3"sv,     L"1203"sv, },
-		{ L"12 "sv,      L"12"sv,   },
-		{ L"  "sv,       {},        },
-		{ L" "sv,        {},        },
-		{ {},            {},        },
+		{ {},            {},          {},                },
+		{ L" "sv,        {},          {},                },
+		{ L"  "sv,       {},          {},                },
+		{ L"12 "sv,      L"12"sv,     "\x12"_bv,         },
+		{ L"12 3"sv,     L"1203"sv,   "\x12\x03"_bv,     },
+		{ L"12 34"sv,    L"1234"sv,   "\x12\x34"_bv,     },
+		{ L"12 34 56"sv, L"123456"sv, "\x12\x34\x56"_bv, },
 	};
 
 	for (const auto& i: Tests)
 	{
-		REQUIRE(ExtractHexString(i.Src) == i.Result);
+		REQUIRE(ExtractHexString(i.Src) == i.Numbers);
+		REQUIRE(HexStringToBlob(i.Numbers, 0) == i.Bytes);
+		REQUIRE(BlobToHexString(view_bytes(i.Bytes), 0) == i.Numbers);
 	}
 }
 
@@ -1413,12 +1436,12 @@ TEST_CASE("xwcsncpy")
 	}
 	Tests[]
 	{
-		{ L"12345"sv, },
-		{ L"1234"sv,  },
-		{ L"123"sv,   },
-		{ L"12"sv,    },
-		{ L"1"sv,     },
 		{ L""sv,      },
+		{ L"1"sv,     },
+		{ L"12"sv,    },
+		{ L"123"sv,   },
+		{ L"1234"sv,  },
+		{ L"12345"sv, },
 	};
 
 	const auto MaxBufferSize = std::max_element(ALL_CONST_RANGE(Tests), [](const auto& a, const auto& b){ return a.Src.size() < b.Src.size(); })->Src.size() + 1;

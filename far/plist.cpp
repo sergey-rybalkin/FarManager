@@ -46,6 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "string_sort.hpp"
 #include "exception.hpp"
 #include "console.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -200,7 +201,7 @@ void ShowProcessList()
 		return;
 
 	ProcList->AssignHighlights();
-	ProcList->SetBottomTitle(msg(lng::MProcessListBottom));
+	ProcList->SetBottomTitle(KeysToLocalizedText(KEY_DEL, KEY_F2, KEY_CTRLR));
 
 	ProcList->Run([&](const Manager::Key& RawKey)
 	{
@@ -227,7 +228,7 @@ void ShowProcessList()
 						{ lng::MKillProcessKill, lng::MCancel }) == Message::first_button)
 					{
 						const os::handle Process(OpenProcess(PROCESS_TERMINATE, FALSE, MenuData->Pid));
-						if (!Process || !TerminateProcess(Process.native_handle(), 0xFFFFFFFF))
+						if (!Process || !TerminateProcess(Process.native_handle(), ERROR_PROCESS_ABORTED))
 						{
 							const auto ErrorState = error_state::fetch();
 

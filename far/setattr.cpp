@@ -542,7 +542,7 @@ struct AttrPreRedrawItem : public PreRedrawItem
 	string Name;
 };
 
-static void ShellSetFileAttributesMsgImpl(const string& Name)
+static void ShellSetFileAttributesMsgImpl(string_view const Name)
 {
 	static int Width=54;
 	int WidthTemp;
@@ -564,7 +564,7 @@ static void ShellSetFileAttributesMsgImpl(const string& Name)
 		{});
 }
 
-static void ShellSetFileAttributesMsg(const string& Name)
+static void ShellSetFileAttributesMsg(string_view const Name)
 {
 	ShellSetFileAttributesMsgImpl(Name);
 
@@ -585,8 +585,8 @@ static void PR_ShellSetFileAttributesMsg()
 static bool construct_time(
 	os::chrono::time_point const OriginalFileTime,
 	os::chrono::time_point& FileTime,
-	const string& OSrcDate,
-	const string& OSrcTime)
+	string_view const OSrcDate,
+	string_view const OSrcTime)
 {
 	SYSTEMTIME ost;
 	if (!utc_to_local(OriginalFileTime, ost))
@@ -601,7 +601,7 @@ static bool construct_time(
 		std::invoke(Field, st) = New != time_none? New : std::invoke(Field, ost);
 	};
 
-	const auto Milliseconds = Point.Tick == time_none? time_none : os::chrono::duration(Point.Tick) / 1ms;
+	const auto Milliseconds = Point.Tick == time_none? time_none : os::chrono::hectonanoseconds(Point.Tick) / 1ms;
 
 	set_or_inherit(&SYSTEMTIME::wYear,         Point.Year);
 	set_or_inherit(&SYSTEMTIME::wMonth,        Point.Month);
@@ -615,7 +615,7 @@ static bool construct_time(
 		return false;
 
 	FileTime += (Point.Tick != time_none?
-		os::chrono::duration(Point.Tick) :
+		os::chrono::hectonanoseconds(Point.Tick) :
 		OriginalFileTime.time_since_epoch()) % 1ms;
 
 	return true;

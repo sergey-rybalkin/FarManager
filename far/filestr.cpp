@@ -130,7 +130,7 @@ static size_t get_chars(uintptr_t const Codepage, std::string_view const From, s
 
 bool enum_lines::fill() const
 {
-	const auto Read = io::read(m_Stream, m_Buffer);
+	const auto Read = io::read(m_Stream, edit_bytes(m_Buffer));
 	if (!Read)
 		return false;
 
@@ -209,7 +209,7 @@ bool enum_lines::GetTString(std::basic_string<T>& To, eol& Eol, bool BigEndian) 
 
 	const auto Cast = [&]
 	{
-		return std::basic_string_view{ static_cast<const T*>(static_cast<const void*>(m_BufferView.data())), m_BufferView.size() / sizeof(T) };
+		return std::basic_string_view{ view_as<T const*>(m_BufferView.data()), m_BufferView.size() / sizeof(T) };
 	};
 
 	for (;;)
@@ -572,10 +572,8 @@ TEST_CASE("enum_lines")
 			const auto Enumerator = enum_lines(Stream, Codepage);
 
 			// Twice to make sure that reset works as expected
-			for (/*[[maybe_unused]]*/ const auto n: { 0, 1 })
+			for (size_t n = 0; n != 2; ++n)
 			{
-				(void)n; // [[maybe_unused]] causes ICE in VS2017. TODO: Remove after we move to 2019 or later
-
 				auto Iterator = i.Result.begin();
 
 				for (const auto& Line : Enumerator)

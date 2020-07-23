@@ -289,7 +289,8 @@ void Manager::CloseAll()
 
 void Manager::PushWindow(const window_ptr& Param, window_callback Callback)
 {
-	m_Queue.emplace([=]{ std::invoke(Callback, this, Param); });
+	// This idiotic "self=this" is to make both VS17 and VS19 happy
+	m_Queue.emplace([=, self=this]{ std::invoke(Callback, self, Param); });
 }
 
 void Manager::CheckAndPushWindow(const window_ptr& Param, window_callback Callback)
@@ -391,7 +392,7 @@ int Manager::GetModalExitCode() const
 /* $ 11.10.2001 IS
    Подсчитать количество окон с указанным именем.
 */
-int Manager::CountWindowsWithName(const string& Name, bool IgnoreCase)
+int Manager::CountWindowsWithName(string_view const Name, bool IgnoreCase)
 {
 	const auto AreEqual = IgnoreCase? equal_icase : equal;
 
@@ -559,7 +560,8 @@ void Manager::ExecuteWindow(const window_ptr& Executed)
 
 void Manager::ReplaceWindow(const window_ptr& Old, const window_ptr& New)
 {
-	m_Queue.emplace([=]{ ReplaceCommit(Old, New); });
+	// This idiotic "self=this" is to make both VS17 and VS19 happy
+	m_Queue.emplace([=, self=this]{ self->ReplaceCommit(Old, New); });
 }
 
 void Manager::ModalDesktopWindow()

@@ -59,6 +59,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "delete.hpp"
 #include "file_io.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -248,7 +249,7 @@ UserMenu::UserMenu(bool ChooseMenuType):
 	ProcessUserMenu(ChooseMenuType, {});
 }
 
-UserMenu::UserMenu(const string& MenuFileName):
+UserMenu::UserMenu(string_view const MenuFileName):
 	m_MenuMode(menu_mode::local),
 	m_MenuModified(false),
 	m_ItemChanged(false),
@@ -259,7 +260,7 @@ UserMenu::UserMenu(const string& MenuFileName):
 
 UserMenu::~UserMenu() = default;
 
-void UserMenu::SaveMenu(const string& MenuFileName) const
+void UserMenu::SaveMenu(string_view const MenuFileName) const
 {
 	if (!m_MenuModified)
 		return;
@@ -275,7 +276,7 @@ void UserMenu::SaveMenu(const string& MenuFileName) const
 		if (Message(MSG_WARNING,
 			msg(lng::MUserMenuTitle),
 			{
-				MenuFileName,
+				string(MenuFileName),
 				msg(lng::MEditRO),
 				msg(lng::MEditOvr)
 			},
@@ -312,7 +313,7 @@ void UserMenu::SaveMenu(const string& MenuFileName) const
 	}
 }
 
-void UserMenu::ProcessUserMenu(bool ChooseMenuType, const string& MenuFileName)
+void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view const MenuFileName)
 {
 	// Путь к текущему каталогу с файлом LocalMenuFileName
 	auto strMenuFilePath = Global->CtrlObject->Cp()->ActivePanel()->GetCurDir();
@@ -348,7 +349,7 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, const string& MenuFileName)
 		m_Menu.clear();
 
 		const auto strMenuFileFullPath = !MenuFileName.empty()?
-			MenuFileName :
+			string(MenuFileName) :
 			path::join(strMenuFilePath, LocalMenuFileName);
 
 		// Пытаемся открыть файл на локальном диске
@@ -515,7 +516,7 @@ static void FillUserMenu(VMenu2& FarUserMenu, UserMenu::menu_container& Menu, in
 }
 
 // обработка единичного меню
-int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std::list<UserMenuItem>& MenuRoot, const string& MenuFileName, const string& Title)
+int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std::list<UserMenuItem>& MenuRoot, string_view const MenuFileName, const string& Title)
 {
 	for (;;)
 	{
@@ -531,7 +532,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 		UserMenu->SetMenuFlags(VMENU_WRAPMODE | VMENU_NOMERGEBORDER);
 		UserMenu->SetHelp(L"UserMenu"sv);
 		UserMenu->SetPosition({ -1, -1, 0, 0 });
-		UserMenu->SetBottomTitle(msg(lng::MMainMenuBottomTitle));
+		UserMenu->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, KEY_ALTF4, KEY_CTRLUP, KEY_CTRLDOWN));
 		UserMenu->SetMacroMode(MACROAREA_USERMENU);
 
 		int ReturnCode=1;
@@ -760,7 +761,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 					bool PreserveLFN = false;
 					if (SubstFileName(strCommand, Context, &ListNames, &PreserveLFN, false, CurrentLabel) && !strCommand.empty())
 					{
-						SCOPED_ACTION(PreserveLongName)(strShortName, PreserveLFN);
+						SCOPED_ACTION(PreserveLongName)(strName, PreserveLFN);
 
 						execute_info Info;
 						Info.DisplayCommand = strCommand;

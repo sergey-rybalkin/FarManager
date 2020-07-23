@@ -87,6 +87,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <cfloat>
 #include <climits>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <ctime>
@@ -114,7 +115,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 # define GCC_VER_(gcc_major,gcc_minor,gcc_patch) (100*(gcc_major) + 10*(gcc_minor) + (gcc_patch))
 # define _GCC_VER GCC_VER_(__GNUC__, __GNUC_MINOR__, __GNUC_PATCHLEVEL__)
 
-# if _GCC_VER < GCC_VER_(8,1,0)
+# if !defined __clang__ && _GCC_VER < GCC_VER_(8,1,0)
 #  error gcc 8.1.0 (or higher) required
 # endif
 
@@ -164,30 +165,51 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <restartmanager.h>
 #include <commdlg.h>
 
+#define _NTSCSI_USER_MODE_
+
 #ifdef _MSC_VER
-# include <ntstatus.h>
-# include <shobjidl.h>
-# include <winternl.h>
-# include <cfgmgr32.h>
-# include <ntddscsi.h>
-# include <virtdisk.h>
-# include <lmdfs.h>
+#include <ntstatus.h>
+#include <shobjidl.h>
+#include <winternl.h>
+#include <cfgmgr32.h>
+#include <ntddmmc.h>
+#include <ntddscsi.h>
+#include <virtdisk.h>
+#include <lmdfs.h>
+#include <scsi.h>
 #endif // _MSC_VER
 
 #ifdef __GNUC__
 # define __NTDDK_H
-  struct _ADAPTER_OBJECT;
-  typedef struct _ADAPTER_OBJECT ADAPTER_OBJECT,*PADAPTER_OBJECT;
-# ifdef _W32API_OLD
-#  include <ntstatus.h>
-#  include <cfgmgr32.h>
-#  include <ntddscsi.h>
-# else
-#  include <ddk/ntstatus.h>
-#  include <ddk/cfgmgr32.h>
-#  include <ddk/ntddscsi.h>
-#  include <ntdef.h>
-# endif
+struct _ADAPTER_OBJECT;
+typedef struct _ADAPTER_OBJECT ADAPTER_OBJECT,*PADAPTER_OBJECT;
+#ifdef _W32API_OLD
+#include <ntstatus.h>
+#include <cfgmgr32.h>
+#include <ntddmmc.h>
+#include <ntddscsi.h>
+#else
+#include <ddk/ntstatus.h>
+#include <ddk/cfgmgr32.h>
+#include <ddk/ntddmmc.h>
+#include <ddk/ntddscsi.h>
+#include <ntdef.h>
+#endif
+
+// Workaround for MinGW, see a66e40
+// Their loony headers are unversioned,
+// so the only way to make it compatible
+// with both old and new is this madness:
+#include <netfw.h>
+#ifndef __INetFwProduct_FWD_DEFINED__
+#define _LBA
+#define _MSF
+#endif
+#include <ddk/scsi.h>
+#ifndef __INetFwProduct_FWD_DEFINED__
+#undef _MSF
+#undef _LBA
+#endif
 #endif // __GNUC__
 
 //----------------------------------------------------------------------------
@@ -203,12 +225,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using string = std::wstring;
 using string_view = std::wstring_view;
 
-WARNING_PUSH()
-WARNING_DISABLE_CLANG("-Wheader-hygiene")
-using namespace std::string_literals;
-using namespace std::string_view_literals;
-using namespace std::chrono_literals;
-WARNING_POP()
+static_assert(std::is_unsigned_v<char>);
+static_assert(sizeof(wchar_t) == 2);
+
+inline namespace literals
+{
+	using namespace std::literals;
+}
 
 namespace features
 {

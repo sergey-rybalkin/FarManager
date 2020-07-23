@@ -49,6 +49,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "drivemix.hpp"
 #include "global.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -85,7 +86,7 @@ namespace
 		}
 
 	private:
-		[[nodiscard]]
+		[[nodiscard, maybe_unused]]
 		bool get(bool Reset, DEVINST& Value) const
 		{
 			if ((Reset? CM_Get_Child(&m_Current, m_Root, 0) : CM_Get_Sibling(&m_Current, m_Current, 0)) != CR_SUCCESS)
@@ -263,7 +264,7 @@ static bool IsDeviceHotplug(DEVINST hDevInst, bool const IncludeSafeToRemove)
 }
 
 [[nodiscard]]
-static DWORD DriveMaskFromVolumeName(const string& VolumeName)
+static DWORD DriveMaskFromVolumeName(string_view const VolumeName)
 {
 	DWORD Result = 0;
 	string strCurrentVolumeName;
@@ -536,7 +537,7 @@ void ShowHotplugDevices()
 	HotPlugList->SetMenuFlags(VMENU_WRAPMODE | VMENU_SHOWAMPERSAND | VMENU_AUTOHIGHLIGHT);
 	HotPlugList->SetPosition({ -1, -1, 0, 0 });
 	HotPlugList->AssignHighlights();
-	HotPlugList->SetBottomTitle(msg(lng::MHotPlugListBottom));
+	HotPlugList->SetBottomTitle(KeysToLocalizedText(KEY_DEL, KEY_CTRLR));
 
 	bool NeedRefresh = false;
 

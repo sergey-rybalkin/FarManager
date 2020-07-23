@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "platform.chrono.hpp"
 
 // Common:
+#include "common/bytes_view.hpp"
 #include "common/enumerator.hpp"
 #include "common/keep_alive.hpp"
 #include "common/noncopyable.hpp"
@@ -54,8 +55,6 @@ struct FarColor;
 struct VersionInfo;
 class representation_source;
 class representation_destination;
-class bytes;
-class bytes_view;
 
 namespace os
 {
@@ -80,7 +79,7 @@ class GeneralConfig : public representable, virtual public transactional
 public:
 	virtual void SetValue(string_view Key, string_view Name, string_view Value) = 0;
 	virtual void SetValue(string_view Key, string_view Name, unsigned long long Value) = 0;
-	virtual void SetValue(string_view Key, string_view Name, const bytes_view& Value) = 0;
+	virtual void SetValue(string_view Key, string_view Name, bytes_view Value) = 0;
 
 	[[nodiscard]]
 	virtual bool GetValue(string_view Key, string_view Name, bool& Value) const = 0;
@@ -91,7 +90,7 @@ public:
 
 	template<typename value_type, typename default_type = value_type>
 	[[nodiscard]]
-	value_type GetValue(string_view Key, string_view const Name, const default_type& Default = {})
+	value_type GetValue(string_view Key, string_view const Name, const default_type& Default = {}) const
 	{
 		value_type Value;
 		return GetValue(Key, Name, Value)? Value : value_type{ Default };
@@ -131,9 +130,14 @@ private:
 class async_delete
 {
 public:
-	virtual ~async_delete() = default;
 	virtual void finish() = 0;
+
+protected:
+	virtual ~async_delete() = default;
 };
+
+class async_delete_impl;
+
 
 class HierarchicalConfig: public representable, virtual public async_delete, virtual public transactional
 {
@@ -154,7 +158,7 @@ public:
 	static inline const key root_key{0};
 
 	[[nodiscard]]
-	virtual key CreateKey(const key& Root, string_view Name, const string* Description = nullptr) = 0;
+	virtual key CreateKey(const key& Root, string_view Name) = 0;
 	[[nodiscard]]
 	virtual key FindByName(const key& Root, string_view Name) const = 0;
 	[[nodiscard]]
@@ -163,7 +167,7 @@ public:
 
 	virtual void SetValue(const key& Root, string_view Name, string_view Value) = 0;
 	virtual void SetValue(const key& Root, string_view Name, unsigned long long Value) = 0;
-	virtual void SetValue(const key& Root, string_view Name, const bytes_view& Value) = 0;
+	virtual void SetValue(const key& Root, string_view Name, bytes_view Value) = 0;
 
 	virtual bool GetValue(const key& Root, string_view Name, unsigned long long& Value) const = 0;
 	virtual bool GetValue(const key& Root, string_view Name, string& strValue) const = 0;
@@ -178,8 +182,6 @@ public:
 		Value = iValue != 0;
 		return true;
 	}
-
-	bool GetValue(const key& Root, string_view Name, bytes&& Value) const { return GetValue(Root, Name, Value); }
 
 	template<typename value_type, typename default_type = value_type>
 	value_type GetValue(const key& Root, string_view const Name, const default_type& Default = {})
@@ -507,9 +509,15 @@ public:
 	~config_provider();
 	[[nodiscard]]
 	bool ShowProblems() const;
-	void ServiceMode(const string& File);
+	void ServiceMode(string_view File);
 
-	void AsyncCall(const std::function<void()>& Routine);
+	class async_key
+	{
+		friend async_delete_impl;
+		async_key() = default;
+	};
+
+	void AsyncCall(async_key, const std::function<void()>& Routine);
 
 	[[nodiscard]]
 	const auto& GeneralCfg() const { return m_GeneralCfg; }
@@ -550,8 +558,8 @@ private:
 	[[nodiscard]]
 	HierarchicalConfigUniquePtr CreateHierarchicalConfig(dbcheck DbId, string_view DbName, const char* ImportNodeName, bool Local = false, bool IsPlugin = false, bool UseFallback = true);
 
-	void Import(const string& File);
-	void Export(const string& File);
+	void Import(string_view File);
+	void Export(string_view File);
 	void TryImportDatabase(representable& p, const char* NodeName = nullptr, bool IsPlugin = false);
 
 	struct implementation

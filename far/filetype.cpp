@@ -54,6 +54,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "DlgGuid.hpp"
 #include "global.hpp"
 #include "delete.hpp"
+#include "keyboard.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -167,7 +168,7 @@ bool ProcessLocalFileTypes(string_view const Name, string_view const ShortName, 
 	bool PreserveLFN = false;
 	if (SubstFileName(strCommand, Context, &ListNames, &PreserveLFN) && !strCommand.empty())
 	{
-		SCOPED_ACTION(PreserveLongName)(ShortName, PreserveLFN);
+		SCOPED_ACTION(PreserveLongName)(Name, PreserveLFN);
 
 		execute_info Info;
 		Info.DisplayCommand = strCommand;
@@ -271,7 +272,7 @@ void ProcessExternal(string_view const Command, string_view const Name, string_v
 	// If you want your history to be usable - use full paths yourself. We cannot reliably substitute them.
 	Global->CtrlObject->ViewHistory->AddToHistory(strExecStr, AlwaysWaitFinish? HR_EXTERNAL_WAIT : HR_EXTERNAL);
 
-	SCOPED_ACTION(PreserveLongName)(ShortName, PreserveLFN);
+	SCOPED_ACTION(PreserveLongName)(Name, PreserveLFN);
 
 	execute_info Info;
 	Info.DisplayCommand = strExecStr;
@@ -492,7 +493,7 @@ void EditFileTypes()
 	const auto TypesMenu = VMenu2::create(msg(lng::MAssocTitle), {}, ScrY - 4);
 	TypesMenu->SetHelp(L"FileAssoc"sv);
 	TypesMenu->SetMenuFlags(VMENU_WRAPMODE);
-	TypesMenu->SetBottomTitle(msg(lng::MAssocBottom));
+	TypesMenu->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, KEY_CTRLUP, KEY_CTRLDOWN));
 	TypesMenu->SetId(FileAssocMenuId);
 
 	bool Changed = false;

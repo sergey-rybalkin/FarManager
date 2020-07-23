@@ -125,12 +125,12 @@ namespace
 
 	SCOPED_ACTION(components::component)([]
 	{
-		return components::component::info{ L"SQLite"sv, WIDE_S(SQLITE_VERSION) };
+		return components::info{ L"SQLite"sv, WIDE_S(SQLITE_VERSION) };
 	});
 
 	SCOPED_ACTION(components::component)([]
 	{
-		return components::component::info{ L"SQLite Unicode extension"sv, sqlite_unicode::SQLite_Unicode_Version };
+		return components::info{ L"SQLite Unicode extension"sv, sqlite_unicode::SQLite_Unicode_Version };
 	});
 }
 
@@ -209,12 +209,6 @@ void SQLiteDb::SQLiteStmt::Execute() const
 	});
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(std::nullptr_t)
-{
-	invoke(db(), [&]{ return sqlite::sqlite3_bind_null(m_Stmt.get(), ++m_Param) == SQLITE_OK; });
-	return *this;
-}
-
 SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(int Value)
 {
 	invoke(db(), [&]{ return sqlite::sqlite3_bind_int(m_Stmt.get(), ++m_Param, Value) == SQLITE_OK; });
@@ -243,7 +237,7 @@ SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(const string_view Value)
 	return *this;
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(const bytes_view& Value)
+SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(bytes_view const Value)
 {
 	invoke(db(), [&]{ return sqlite::sqlite3_bind_blob(m_Stmt.get(), ++m_Param, Value.data(), static_cast<int>(Value.size()), sqlite::transient_destructor) == SQLITE_OK; });
 	return *this;
@@ -259,7 +253,7 @@ static std::string_view get_column_text(sqlite::sqlite3_stmt* Stmt, int Col)
 	// https://www.sqlite.org/c3ref/column_blob.html
 	// call sqlite3_column_text() first to force the result into the desired format,
 	// then invoke sqlite3_column_bytes() to find the size of the result
-	const auto Data = static_cast<const char*>(static_cast<const void*>(sqlite::sqlite3_column_text(Stmt, Col)));
+	const auto Data = view_as<char const*>(sqlite::sqlite3_column_text(Stmt, Col));
 	const auto Size = static_cast<size_t>(sqlite::sqlite3_column_bytes(Stmt, Col));
 
 	return { Data, Size };
@@ -285,14 +279,14 @@ unsigned long long SQLiteDb::SQLiteStmt::GetColInt64(int Col) const
 	return sqlite::sqlite3_column_int64(m_Stmt.get(), Col);
 }
 
-bytes_view SQLiteDb::SQLiteStmt::GetColBlob(int Col) const
+bytes SQLiteDb::SQLiteStmt::GetColBlob(int Col) const
 {
 	// https://www.sqlite.org/c3ref/column_blob.html
 	// call sqlite3_column_blob() first to force the result into the desired format,
 	// then invoke sqlite3_column_bytes() to find the size of the result
-	const auto Data = sqlite::sqlite3_column_blob(m_Stmt.get(), Col);
-	const auto Size = sqlite::sqlite3_column_bytes(m_Stmt.get(), Col);
-	return bytes_view(Data, Size);
+	const auto Data = static_cast<std::byte const*>(sqlite::sqlite3_column_blob(m_Stmt.get(), Col));
+	const auto Size = static_cast<size_t>(sqlite::sqlite3_column_bytes(m_Stmt.get(), Col));
+	return { Data, Size };
 }
 
 SQLiteDb::column_type SQLiteDb::SQLiteStmt::GetColType(int Col) const

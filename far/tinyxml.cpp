@@ -52,6 +52,7 @@ namespace tinyxml_impl
 WARNING_PUSH()
 
 WARNING_DISABLE_MSC(4668) // 'symbol' is not defined as a preprocessor macro, replacing with '0' for 'directives'
+WARNING_DISABLE_MSC(4774) // 'string' : format string expected in argument number is not a string literal
 
 WARNING_DISABLE_GCC("-Wdouble-promotion")
 WARNING_DISABLE_GCC("-Wimplicit-fallthrough")
@@ -77,5 +78,5 @@ WARNING_POP()
 
 SCOPED_ACTION(components::component)([]
 {
-	return components::component::info{ L"TinyXML-2"sv, format(FSTR(L"{0}.{1}.{2}"), tinyxml_impl::TIXML2_MAJOR_VERSION, tinyxml_impl::TIXML2_MINOR_VERSION, tinyxml_impl::TIXML2_PATCH_VERSION) };
+	return components::info{ L"TinyXML-2"sv, format(FSTR(L"{0}.{1}.{2}"), tinyxml_impl::TIXML2_MAJOR_VERSION, tinyxml_impl::TIXML2_MINOR_VERSION, tinyxml_impl::TIXML2_PATCH_VERSION) };
 });

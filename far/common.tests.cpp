@@ -95,25 +95,22 @@ WARNING_POP()
 
 #include "common/bytes_view.hpp"
 
-TEST_CASE("bytes_view")
+TEST_CASE("bytes")
 {
 	uint32_t Value = 0;
-	const auto BytesRef = bytes::reference(Value);
-	std::fill(BytesRef.begin(), BytesRef.end(), '\x42');
+	const auto BytesRef = edit_bytes(Value);
+	std::fill(BytesRef.begin(), BytesRef.end(), std::byte{0x42});
 	REQUIRE(Value == 0x42424242);
+	const auto View = view_bytes(Value);
+	REQUIRE(View == "\x42\x42\x42\x42"_bv);
+	bytes Copy(View);
+	REQUIRE(Copy == View);
 
-	auto BytesCopy = bytes::copy(Value);
-	std::fill(BytesCopy.begin(), BytesCopy.end(), '\x33');
-	REQUIRE(Value == 0x42424242);
-	const auto NewValue = deserialise<uint32_t>(BytesCopy);
-	REQUIRE(NewValue == 0x33333333);
-
-	uint8_t SmallerValue = 1;
-	auto SmallerView = bytes_view(SmallerValue);
-	auto SmallerRef = bytes::reference(SmallerValue);
-	REQUIRE_THROWS_AS(BytesCopy = SmallerView, std::runtime_error);
-	REQUIRE_THROWS_AS(SmallerRef = bytes_view(Value), std::runtime_error);
-	REQUIRE_NOTHROW(SmallerView = BytesCopy);
+	const auto Str = "BANANA"sv;
+	const auto Bytes = view_bytes(Str);
+	REQUIRE(Bytes == "BANANA"_bv);
+	const auto Str2 = to_string_view(Bytes);
+	REQUIRE(Str2 == Str);
 }
 
 //----------------------------------------------------------------------------
@@ -122,28 +119,29 @@ TEST_CASE("bytes_view")
 
 TEST_CASE("chrono")
 {
-	using namespace std::chrono;
-
 	const auto Duration = 47h + 63min + 71s + 3117ms;
 
+	const auto check = [](const auto& Result, auto Arg)
 	{
-		const auto Result = split_duration<chrono::days, hours, minutes, seconds, milliseconds>(Duration);
-		REQUIRE(Result.get<chrono::days>() == chrono::days{2});
-		REQUIRE(Result.get<hours>() == 0h);
-		REQUIRE(Result.get<minutes>() == 4min);
-		REQUIRE(Result.get<seconds>() == 14s);
-		REQUIRE(Result.get<milliseconds>() == 117ms);
-	}
+		REQUIRE(Result.template get<decltype(Arg)>() == Arg);
+	};
 
+	// The explicit capture is a workaround for VS2017.
+	// TODO: remove once we drop support for VS2017.
+	const auto check_split_duration = [&, check](auto... Args)
 	{
-		const auto Result = split_duration<hours>(Duration);
-		REQUIRE(Result.get<hours>() == 48h);
-	}
+		const auto Result = split_duration<decltype(Args)...>(Duration);
+		(..., check(Result, Args));
+	};
 
-	{
-		const auto Result = split_duration<seconds>(Duration);
-		REQUIRE(Result.get<seconds>() == 173054s);
-	}
+	check_split_duration(2_d);
+	check_split_duration(48h);
+	check_split_duration(2884min);
+	check_split_duration(173054s);
+	check_split_duration(173054117ms);
+	check_split_duration(48h, 254117ms);
+	check_split_duration(2884min, 14s);
+	check_split_duration(2_d, 0h, 4min, 14s, 117ms);
 }
 
 //----------------------------------------------------------------------------
@@ -188,6 +186,51 @@ TEST_CASE("enum_tokens")
 		REQUIRE(BaselineIterator == Baseline.end());
 	}
 
+}
+
+//----------------------------------------------------------------------------
+
+#include "common/enumerator.hpp"
+
+TEST_CASE("enumerator")
+{
+	enum
+	{
+		e_begin = 5,
+		e_end = 14
+	};
+
+	bool Finalised = false;
+
+	{
+		auto TestEnumerator = make_inline_enumerator<int>([Counter = static_cast<int>(e_begin)](bool const Reset, int& Value) mutable
+		{
+			if (Reset)
+				Counter = e_begin;
+
+			Value = Counter++;
+			return Value != e_end;
+		},
+		[&]
+		{
+			Finalised = true;
+		});
+
+		for (size_t N = 1; N != 3; ++N)
+		{
+			int Start = e_begin;
+
+			for (auto& i: TestEnumerator)
+			{
+				REQUIRE(i == Start++);
+				i = 0;
+			}
+
+			REQUIRE(Start == e_end);
+		}
+	}
+
+	REQUIRE(Finalised);
 }
 
 //----------------------------------------------------------------------------
@@ -266,7 +309,7 @@ TEST_CASE("io")
 	constexpr auto Str = "12345"sv;
 	REQUIRE_NOTHROW(io::write(Stream, Str));
 
-	char Buffer[Str.size()];
+	std::byte Buffer[Str.size()];
 	REQUIRE(io::read(Stream, Buffer) == Str.size());
 	REQUIRE(!io::read(Stream, Buffer));
 }
@@ -362,6 +405,9 @@ TEST_CASE("range.static")
 
 				const auto TestType = [&](const auto & ContainerGetter, const auto & RangeGetter)
 				{
+					// Workaround for VS19
+					[[maybe_unused]] auto& RangeRef = Range;
+
 					static_assert(std::is_same_v<decltype(ContainerGetter(ContainerVersion)), decltype(RangeGetter(Range))>);
 				};
 
@@ -467,18 +513,24 @@ namespace
 		REQUIRE(IsTriggered == MustBeTriggered);
 	}
 
-	template<scope_exit::scope_type type>
-	static void test_scope(bool OnFail, bool OnSuccess)
+	enum
 	{
-		test_scope_impl<type>(true, OnFail);
-		test_scope_impl<type>(false, OnSuccess);
+		on_fail    = bit(0),
+		on_success = bit(1),
+	};
+
+	template<scope_exit::scope_type type>
+	static void test_scope(int const When)
+	{
+		test_scope_impl<type>(true, (When & on_fail) != 0);
+		test_scope_impl<type>(false, (When & on_success) != 0);
 	}
 }
 TEST_CASE("scope_exit")
 {
-	test_scope<scope_exit::scope_type::exit>(true, true);
-	test_scope<scope_exit::scope_type::fail>(true, false);
-	test_scope<scope_exit::scope_type::success>(false, true);
+	test_scope<scope_exit::scope_type::exit>(on_fail | on_success);
+	test_scope<scope_exit::scope_type::fail>(on_fail);
+	test_scope<scope_exit::scope_type::success>(on_success);
 }
 
 //----------------------------------------------------------------------------
@@ -509,17 +561,18 @@ TEST_CASE("string_utils.cut")
 	}
 	Tests[]
 	{
-		{ L"12345"sv, 6, L"12345"sv, L"12345"sv, },
-		{ L"12345"sv, 3, L"345"sv,   L"123"sv,   },
-		{ L"12345"sv, 1, L"5"sv,     L"1"sv,     },
-		{ L"12345"sv, 0, {},         {},         },
-
-		{ L"1"sv,     2, L"1"sv,     L"1"sv,     },
-		{ L"1"sv,     1, L"1"sv,     L"1"sv,     },
-		{ L"1"sv,     0, {},         {},         },
+		{ {},         0, {},         {},         },
 
 		{ {},         1, {},         {},         },
-		{ {},         0, {},         {},         },
+
+		{ L"1"sv,     0, {},         {},         },
+		{ L"1"sv,     1, L"1"sv,     L"1"sv,     },
+		{ L"1"sv,     2, L"1"sv,     L"1"sv,     },
+
+		{ L"12345"sv, 0, {},         {},         },
+		{ L"12345"sv, 1, L"5"sv,     L"1"sv,     },
+		{ L"12345"sv, 3, L"345"sv,   L"123"sv,   },
+		{ L"12345"sv, 6, L"12345"sv, L"12345"sv, },
 	};
 
 	for (const auto& i: Tests)
@@ -539,17 +592,17 @@ TEST_CASE("string_utils.pad")
 	}
 	Tests[]
 	{
-		{ L"123"sv, 5, L"  123"sv, L"123  "sv, },
-		{ L"123"sv, 2, L"123"sv,   L"123"sv,   },
-		{ L"123"sv, 0, L"123"sv,   L"123"sv,   },
-
-		{ L"1"sv,   3, L"  1"sv,   L"1  "sv,   },
-		{ L"1"sv,   1, L"1"sv,     L"1"sv,     },
-		{ L"1"sv,   0, L"1"sv,     L"1"sv,     },
-
-		{ {},       2, L"  "sv,    L"  "sv,    },
-		{ {},       1, L" "sv,     L" "sv,     },
 		{ {},       0, {},         {},         },
+		{ {},       1, L" "sv,     L" "sv,     },
+		{ {},       2, L"  "sv,    L"  "sv,    },
+
+		{ L"1"sv,   0, L"1"sv,     L"1"sv,     },
+		{ L"1"sv,   1, L"1"sv,     L"1"sv,     },
+		{ L"1"sv,   3, L"  1"sv,   L"1  "sv,   },
+
+		{ L"123"sv, 0, L"123"sv,   L"123"sv,   },
+		{ L"123"sv, 2, L"123"sv,   L"123"sv,   },
+		{ L"123"sv, 5, L"  123"sv, L"123  "sv, },
 	};
 
 	for (const auto& i: Tests)
@@ -568,12 +621,12 @@ TEST_CASE("string_utils.trim")
 	}
 	Tests[]
 	{
+		{ {},             {},           {},           {},         },
+		{ L" "sv,         {},           {},           {},         },
 		{ L"12345"sv,     L"12345"sv,   L"12345"sv,   L"12345"sv, },
 		{ L"  12345"sv,   L"12345"sv,   L"  12345"sv, L"12345"sv, },
 		{ L"12345  "sv,   L"12345  "sv, L"12345"sv,   L"12345"sv, },
 		{ L"  12345  "sv, L"12345  "sv, L"  12345"sv, L"12345"sv, },
-		{ L" "sv,         {},           {},           {},         },
-		{ {},             {},           {},           {},         },
 	};
 
 	for (const auto& i: Tests)
@@ -594,19 +647,19 @@ TEST_CASE("string_utils.fit")
 	}
 	Tests[]
 	{
-		{ L"12345"sv,  7,   L"12345  "sv,   L" 12345 "sv,   L"  12345"sv, },
-		{ L"12345"sv,  5,   L"12345"sv,     L"12345"sv,     L"12345"sv,   },
-		{ L"12345"sv,  3,   L"123"sv,       L"123"sv,       L"123"sv,     },
-		{ L"12345"sv,  1,   L"1"sv,         L"1"sv,         L"1"sv,       },
-		{ L"12345"sv,  0,   {},             {},             {},           },
-
-		{ L"1"sv,      2,   L"1 "sv,        L"1 "sv,        L" 1"sv,      },
-		{ L"1"sv,      1,   L"1"sv,         L"1"sv,         L"1"sv,       },
-		{ L"1"sv,      0,   {},             {},             {},           },
-
-		{ {},          2,   L"  "sv,        L"  "sv,        L"  "sv,      },
-		{ {},          1,   L" "sv,         L" "sv,         L" "sv,       },
 		{ {},          0,   {},             {},             {},           },
+		{ {},          1,   L" "sv,         L" "sv,         L" "sv,       },
+		{ {},          2,   L"  "sv,        L"  "sv,        L"  "sv,      },
+
+		{ L"1"sv,      0,   {},             {},             {},           },
+		{ L"1"sv,      1,   L"1"sv,         L"1"sv,         L"1"sv,       },
+		{ L"1"sv,      2,   L"1 "sv,        L"1 "sv,        L" 1"sv,      },
+
+		{ L"12345"sv,  0,   {},             {},             {},           },
+		{ L"12345"sv,  1,   L"1"sv,         L"1"sv,         L"1"sv,       },
+		{ L"12345"sv,  3,   L"123"sv,       L"123"sv,       L"123"sv,     },
+		{ L"12345"sv,  5,   L"12345"sv,     L"12345"sv,     L"12345"sv,   },
+		{ L"12345"sv,  7,   L"12345  "sv,   L" 12345 "sv,   L"  12345"sv, },
 	};
 
 	for (const auto& i: Tests)
@@ -627,17 +680,18 @@ TEST_CASE("string_utils.contains")
 	}
 	Tests[]
 	{
-		{ L"12345"sv,      L"123456"sv, false,  false,  false,  },
-		{ L"12345"sv,      L"12345"sv,  true,   true,   true,   },
-		{ L"12345"sv,      L"123"sv,    true,   false,  true,   },
-		{ L"12345"sv,      L"345"sv,    false,  true,   true,   },
-		{ L"12345"sv,      L"234"sv,    false,  false,  true,   },
-		{ L"12345"sv,      {},          true,   true,   true,   },
-		{ L"12345"sv,      L"foo"sv,    false,  false,  false,  },
-		{ L"12345"sv,      L"24"sv,     false,  false,  false,  },
-
-		{ {},              L"1"sv,      false,  false,  false,  },
 		{ {},              {},          true,   true,   true,   },
+		{ {},              L"1"sv,      false,  false,  false,  },
+
+		{ L"12345"sv,      {},          true,   true,   true,   },
+		{ L"12345"sv,      L"123"sv,    true,   false,  true,   },
+		{ L"12345"sv,      L"234"sv,    false,  false,  true,   },
+		{ L"12345"sv,      L"345"sv,    false,  true,   true,   },
+		{ L"12345"sv,      L"12345"sv,  true,   true,   true,   },
+		{ L"12345"sv,      L"123456"sv, false,  false,  false,  },
+		{ L"12345"sv,      L"24"sv,     false,  false,  false,  },
+		{ L"12345"sv,      L"foo"sv,    false,  false,  false,  },
+
 	};
 
 	for (const auto& i: Tests)
@@ -650,22 +704,34 @@ TEST_CASE("string_utils.contains")
 
 TEST_CASE("string_utils.quotes")
 {
-	REQUIRE(unquote(LR"("12"345")"s) == L"12345"sv);
-	REQUIRE(unquote(L"12345"s) == L"12345"sv);
-	REQUIRE(unquote(L""s).empty());
+	static const struct
+	{
+		string_view Src, ResultUnquote, ResultQuote, ResultQuoteUnconditional, ResultQuoteNormalise, ResultQuoteSpace;
+	}
+	Tests[]
+	{
+		{ {},                  {},            LR"("")"sv,         LR"("")"sv,           LR"("")"sv,        {},                 },
+		{ L" "sv,              L" "sv,        LR"(" ")"sv,        LR"(" ")"sv,          LR"(" ")"sv,       LR"(" ")"sv,        },
+		{ LR"(")"sv,           {},            LR"("")"sv,         LR"(""")"sv,          LR"("")"sv,        LR"(")"sv,          },
+		{ LR"(" )"sv,          L" "sv,        LR"(" ")"sv,        LR"("" ")"sv,         LR"(" ")"sv,       LR"(" ")"sv,        },
+		{ LR"( ")"sv,          L" "sv,        LR"(" ")"sv,        LR"(" "")"sv,         LR"(" ")"sv,       LR"(" ")"sv,        },
+		{ LR"("")"sv,          {},            LR"("")"sv,         LR"("""")"sv,         LR"("")"sv,        LR"("")"sv,         },
+		{ LR"(" ")"sv,         L" "sv,        LR"(" ")"sv,        LR"("" "")"sv,        LR"(" ")"sv,       LR"(" ")"sv,        },
+		{ L"12345"sv,          L"12345"sv,    LR"("12345")"sv,    LR"("12345")"sv,      LR"("12345")"sv,   L"12345"sv,         },
+		{ L"12 345"sv,         L"12 345"sv,   LR"("12 345")"sv,   LR"("12 345")"sv,     LR"("12 345")"sv,  LR"("12 345")"sv,   },
+		{ LR"("12345")"sv,     L"12345"sv,    LR"("12345")"sv,    LR"(""12345"")"sv,    LR"("12345")"sv,   LR"("12345")"sv,    },
+		{ LR"("12"345")"sv,    L"12345"sv,    LR"("12"345")"sv,   LR"(""12"345"")"sv,   LR"("12345")"sv,   LR"("12"345")"sv,   },
+		{ LR"("12" 345")"sv,   L"12 345"sv,   LR"("12" 345")"sv,  LR"(""12" 345"")"sv,  LR"("12 345")"sv,  LR"("12" 345")"sv,  },
+	};
 
-	REQUIRE(quote(L"12345"s) == LR"("12345")"sv);
-	REQUIRE(quote(LR"("12345")"s) == LR"("12345")"sv);
-	REQUIRE(quote(L""s) == LR"("")"sv);
-	REQUIRE(quote(LR"("")"s) == LR"("")"sv);
-
-	REQUIRE(quote_unconditional(LR"("12345")"s) == LR"(""12345"")"sv);
-	REQUIRE(quote_unconditional(L"12345"s) == LR"("12345")"sv);
-	REQUIRE(quote_unconditional(L""s) == LR"("")"sv);
-
-	REQUIRE(quote_normalise(LR"("12"345")"s) == LR"("12345")"sv);
-	REQUIRE(quote_normalise(L"12345"s) == LR"("12345")"sv);
-	REQUIRE(quote_normalise(L""s) == LR"("")"sv);
+	for (const auto& i: Tests)
+	{
+		REQUIRE(unquote(i.Src) == i.ResultUnquote);
+		REQUIRE(quote(i.Src) == i.ResultQuote);
+		REQUIRE(quote_unconditional(i.Src) == i.ResultQuoteUnconditional);
+		REQUIRE(quote_normalise(i.Src) == i.ResultQuoteNormalise);
+		REQUIRE(quote_space(i.Src) == i.ResultQuoteSpace);
+	}
 }
 
 TEST_CASE("string_utils.split_name_value")
@@ -677,15 +743,16 @@ TEST_CASE("string_utils.split_name_value")
 	}
 	Tests[]
 	{
-		{ L"foo=bar"sv,    { L"foo"sv,   L"bar"sv,   }, },
-		{ L"foo=bar="sv,   { L"foo"sv,   L"bar="sv,  }, },
+		{ {},              { {},         {},         }, },
+		{ L"="sv,          { {},         {},         }, },
 		{ L"=foo"sv,       { {},         L"foo"sv,   }, },
 		{ L"==foo"sv,      { {},         L"=foo"sv,  }, },
 		{ L"foo="sv,       { L"foo"sv,   {},         }, },
 		{ L"foo=="sv,      { L"foo"sv,   L"="sv,     }, },
-		{ L"="sv,          { {},         {},         }, },
-		{ {},              { {},         {},         }, },
 		{ L"foo"sv,        { L"foo"sv,   L"foo"sv,   }, },
+		{ L"foo=bar"sv,    { L"foo"sv,   L"bar"sv,   }, },
+		{ L"foo=bar="sv,   { L"foo"sv,   L"bar="sv,  }, },
+		{ L"foo==bar="sv,  { L"foo"sv,   L"=bar="sv, }, },
 	};
 
 	for (const auto& i: Tests)
@@ -740,7 +807,6 @@ TEMPLATE_TEST_CASE("utility.reserve_exp_noshrink", "", string, std::vector<int>)
 	TestType Container;
 	Container.resize(42);
 	const auto InitialCapacity = Container.capacity();
-	const auto GrowthFactor = 1.5;
 
 	SECTION("no shrink")
 	{
@@ -750,8 +816,8 @@ TEMPLATE_TEST_CASE("utility.reserve_exp_noshrink", "", string, std::vector<int>)
 
 	SECTION("exponential < factor")
 	{
-		reserve_exp_noshrink(Container, InitialCapacity * 1.1);
-		REQUIRE(Container.capacity() >= InitialCapacity * GrowthFactor);
+		reserve_exp_noshrink(Container, InitialCapacity + InitialCapacity / 10);
+		REQUIRE(Container.capacity() >= InitialCapacity  + InitialCapacity / 2);
 	}
 
 	SECTION("exponential > factor")
@@ -838,7 +904,7 @@ TEST_CASE("view.enumerate")
 
 TEST_CASE("view.reverse")
 {
-	const std::array Data = { 1, 2, 3, 4, 5 };
+	const std::array Data     = { 1, 2, 3, 4, 5 };
 	const std::array Reversed = { 5, 4, 3, 2, 1 };
 
 	auto Iterator = std::cbegin(Reversed);
@@ -879,7 +945,7 @@ WARNING_POP()
 	{
 		std::pair<bool, int> const Data[]
 		{
-			{ true, 42 },
+			{ true,  42 },
 			{ false, 33 },
 		};
 
