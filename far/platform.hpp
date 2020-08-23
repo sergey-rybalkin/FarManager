@@ -182,6 +182,12 @@ namespace os
 			}
 
 			[[nodiscard]]
+			static bool is_signaled(HANDLE const Handle, std::chrono::milliseconds const Timeout)
+			{
+				return handle_implementation::wait(Handle, Timeout);
+			}
+
+			[[nodiscard]]
 			static auto wait_any(span<HANDLE const> const Handles, std::chrono::milliseconds const Timeout)
 			{
 				return handle_implementation::wait(Handles, false, Timeout);
@@ -228,6 +234,24 @@ namespace os
 
 	[[nodiscard]]
 	string GetErrorString(bool Nt, DWORD Code);
+
+
+	class last_error_guard
+	{
+	public:
+		NONCOPYABLE(last_error_guard);
+
+		last_error_guard();
+		~last_error_guard();
+
+		void dismiss();
+
+	private:
+		DWORD m_LastError;
+		NTSTATUS m_LastStatus;
+		bool m_Active;
+	};
+
 
 	bool WNetGetConnection(string_view LocalName, string &RemoteName);
 

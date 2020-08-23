@@ -2256,20 +2256,12 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 
 				if (panel)
 				{
-					int SortMode = static_cast<int>(Data->Values[1].Double);
-					bool InvertByDefault = Data->Values[2].Boolean != 0;
-					sort_order Order = SO_AUTO;
-					if (Data->Count>=4 && Data->Values[3].Type==FMVT_DOUBLE)
-					{
-						switch (static_cast<int>(Data->Values[3].Double))
-						{
-							default:
-							case 0: Order=SO_AUTO; break;
-							case 1: Order=SO_KEEPCURRENT; break;
-							case 2: Order=SO_DIRECT; break;
-							case 3: Order=SO_REVERSE; break;
-						}
-					}
+					const auto SortMode = panel_sort{ static_cast<int>(Data->Values[1].Double) };
+					const auto InvertByDefault = Data->Values[2].Boolean != 0;
+					const auto Order = Data->Count < 4 || Data->Values[3].Type != FMVT_DOUBLE || !in_range(static_cast<int>(sort_order::first), static_cast<int>(Data->Values[3].Double), static_cast<int>(sort_order::last))?
+						sort_order::flip_or_default :
+						sort_order{ static_cast<int>(Data->Values[3].Double) };
+
 					panel->SetCustomSortMode(SortMode, Order, InvertByDefault);
 				}
 			}
@@ -2307,7 +2299,7 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 				auto Flags = static_cast<unsigned long long>(Data->Values[1].Double);
 				const auto Src = Data->Values[2].String;
 				const auto Descr = Data->Values[3].String;
-				if (GetMacroSettings(Key, Flags, Src, Descr))
+				if (Key && GetMacroSettings(Key, Flags, Src, Descr))
 				{
 					api.PassNumber(static_cast<double>(Flags));
 					api.PassString(m_RecCode);
@@ -2723,9 +2715,7 @@ int FarMacroApi::keyFunc()
 	else
 	{
 		// Проверим...
-		const auto Key = KeyNameToKey(Params[0].asString());
-
-		if (Key != -1)
+		if (const auto Key = KeyNameToKey(Params[0].asString()))
 			strKeyText=Params[0].asString();
 	}
 
@@ -5004,7 +4994,7 @@ intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 		_SVS(SysLog(L"[%d] ((FarDialogItem*)Param2)->PtrData='%s'",__LINE__,((FarDialogItem*)Param2)->Data));
 		key = KeyNameToKey(static_cast<FarDialogItem*>(Param2)->Data);
 
-		if (key != -1 && !KMParam->Recurse)
+		if (key && !KMParam->Recurse)
 			goto M1;
 	}
 	else if (Msg == DN_CONTROLINPUT && record->EventType==KEY_EVENT && (((key&KEY_END_SKEY) < KEY_END_FKEY) ||

@@ -872,6 +872,7 @@ enum OPENPANELINFO_SORTMODES
 	SM_DEFAULT                   =  0,
 	SM_UNSORTED                  =  1,
 	SM_NAME                      =  2,
+	SM_FULLNAME                  =  SM_NAME,
 	SM_EXT                       =  3,
 	SM_MTIME                     =  4,
 	SM_CTIME                     =  5,
@@ -883,10 +884,12 @@ enum OPENPANELINFO_SORTMODES
 	SM_NUMLINKS                  = 11,
 	SM_NUMSTREAMS                = 12,
 	SM_STREAMSSIZE               = 13,
-	SM_FULLNAME                  = 14,
+	SM_NAMEONLY                  = 14,
 	SM_CHTIME                    = 15,
 
-	SM_COUNT
+	SM_COUNT,
+
+	SM_USER                      = 100000
 };
 
 struct PanelInfo
@@ -2734,18 +2737,6 @@ struct OpenMacroPluginInfo
 	struct FarMacroCall *Data;
 	struct MacroPluginReturn Ret;
 };
-
-#ifdef FAR_USE_INTERNALS
-enum FAR_PKF_FLAGS
-{
-	PKF_CONTROL     = 0x00000001,
-	PKF_ALT         = 0x00000002,
-	PKF_SHIFT       = 0x00000004,
-	PKF_RCONTROL    = 0x00000010,
-	PKF_RALT        = 0x00000020,
-	PKF_PREPROCESS  = 0x00080000, // for "Key", function ProcessKey()
-};
-#endif // END FAR_USE_INTERNALS
 
 enum FAR_EVENTS
 {

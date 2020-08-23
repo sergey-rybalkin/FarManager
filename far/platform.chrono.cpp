@@ -95,7 +95,7 @@ namespace os::chrono
 		return Duration / 1_hns;
 	}
 
-	void sleep_for(std::chrono::milliseconds Duration)
+	void sleep_for(std::chrono::milliseconds const Duration)
 	{
 		Sleep(static_cast<DWORD>(Duration / 1ms));
 	}

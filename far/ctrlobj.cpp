@@ -108,8 +108,10 @@ void ControlObject::Init(int DirCount)
 
 	FarChDir(FPanels->ActivePanel()->GetCurDir());
 
-	FPanels->LeftPanel()->SetCustomSortMode(Global->Opt->LeftPanel.SortMode, SO_KEEPCURRENT);
-	FPanels->RightPanel()->SetCustomSortMode(Global->Opt->RightPanel.SortMode, SO_KEEPCURRENT);
+	// BUGBUG
+	FPanels->LeftPanel()->SetCustomSortMode(panel_sort(Global->Opt->LeftPanel.SortMode.Get()), sort_order::keep, false);
+	FPanels->RightPanel()->SetCustomSortMode(panel_sort(Global->Opt->RightPanel.SortMode.Get()), sort_order::keep, false);
+
 	Global->WindowManager->SwitchToPanels();  // otherwise panels are empty
 }
 

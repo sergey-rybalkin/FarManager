@@ -114,6 +114,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
+static_assert(as_underlying_type(panel_sort::BY_USER) == as_underlying_type(OPENPANELINFO_SORTMODES::SM_USER));
+
+
 constexpr auto operator+(panel_sort const Value) noexcept
 {
 	return as_underlying_type(Value);
@@ -122,38 +125,44 @@ constexpr auto operator+(panel_sort const Value) noexcept
 static const struct
 {
 	lng Label;
-	bool InvertByDefault;
 	int MenuPosition;
-	LISTITEMFLAGS MenuFlags;
 	far_key_code MenuKey;
 
-	std::initializer_list<int> DefaultLayers;
+	std::initializer_list<std::pair<panel_sort, sort_order>> DefaultLayers;
 }
 SortModes[]
 {
-	{ lng::MMenuUnsorted,             false, 5,  LIF_NONE,        KEY_CTRLF7,  { /* Shifted by 1 to allow unsorted to be reversed */     }, },
-	{ lng::MMenuSortByName,           false, 0,  LIF_SELECTED,    KEY_CTRLF3,  {                               +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByExt,            false, 2,  LIF_NONE,        KEY_CTRLF4,  { +panel_sort::BY_NAMEONLY + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByWrite,          true,  3,  LIF_NONE,        KEY_CTRLF5,  { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByCreation,       true,  6,  LIF_NONE,        KEY_CTRLF8,  { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByAccess,         true,  7,  LIF_NONE,        KEY_CTRLF9,  { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortBySize,           true,  4,  LIF_NONE,        KEY_CTRLF6,  { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByDiz,            false, 9,  LIF_NONE,        KEY_CTRLF10, { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByOwner,          false, 10, LIF_NONE,        KEY_CTRLF11, { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByAllocatedSize,  true,  11, LIF_NONE,        NO_KEY,      { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByNumLinks,       true,  12, LIF_NONE,        NO_KEY,      { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByNumStreams,     true,  13, LIF_NONE,        NO_KEY,      { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByStreamsSize,    true,  14, LIF_NONE,        NO_KEY,      { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByNameOnly,       false, 1,  LIF_NONE,        NO_KEY,      { +panel_sort::BY_EXT      + 1, +panel_sort::UNSORTED + 1 }, },
-	{ lng::MMenuSortByChange,         true,  8,  LIF_NONE,        NO_KEY,      { +panel_sort::BY_NAME     + 1, +panel_sort::UNSORTED + 1 }, },
+	{ lng::MMenuUnsorted,             5,  KEY_CTRLF7,  {  { panel_sort::UNSORTED,         sort_order::ascend,  }, }, },
+	{ lng::MMenuSortByName,           0,  KEY_CTRLF3,  {  { panel_sort::BY_NAME,          sort_order::ascend,  }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByExt,            2,  KEY_CTRLF4,  {  { panel_sort::BY_EXT,           sort_order::ascend,  }, { panel_sort::BY_NAMEONLY, sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByWrite,          3,  KEY_CTRLF5,  {  { panel_sort::BY_MTIME,         sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByCreation,       6,  KEY_CTRLF8,  {  { panel_sort::BY_CTIME,         sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByAccess,         7,  KEY_CTRLF9,  {  { panel_sort::BY_ATIME,         sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortBySize,           4,  KEY_CTRLF6,  {  { panel_sort::BY_SIZE,          sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByDiz,            9,  KEY_CTRLF10, {  { panel_sort::BY_DIZ,           sort_order::ascend,  }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByOwner,          10, KEY_CTRLF11, {  { panel_sort::BY_OWNER,         sort_order::ascend,  }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByAllocatedSize,  11, NO_KEY,      {  { panel_sort::BY_COMPRESSEDSIZE,sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByNumLinks,       12, NO_KEY,      {  { panel_sort::BY_NUMLINKS,      sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByNumStreams,     13, NO_KEY,      {  { panel_sort::BY_NUMSTREAMS,    sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByStreamsSize,    14, NO_KEY,      {  { panel_sort::BY_STREAMSSIZE,   sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByNameOnly,       1,  NO_KEY,      {  { panel_sort::BY_NAMEONLY,      sort_order::ascend,  }, { panel_sort::BY_EXT,      sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
+	{ lng::MMenuSortByChange,         8,  NO_KEY,      {  { panel_sort::BY_CHTIME,        sort_order::descend, }, { panel_sort::BY_NAME,     sort_order::ascend }, { panel_sort::UNSORTED, sort_order::ascend }, }, },
 };
 
 static_assert(std::size(SortModes) == static_cast<size_t>(panel_sort::COUNT));
 
-const auto SortAsc = L'\x25B2', SortDesc = L'\x25BC';
+static constexpr auto order_indicator(sort_order const Order)
+{
+	switch (Order)
+	{
+	default:
+	case sort_order::keep:    return L'=';
+	case sort_order::ascend:  return L'▲';
+	case sort_order::descend: return L'▼';
+	}
+}
 
-
-span<int const> default_sort_layers(panel_sort const SortMode)
+span<std::pair<panel_sort, sort_order> const> default_sort_layers(panel_sort const SortMode)
 {
 	return SortModes[static_cast<size_t>(SortMode)].DefaultLayers;
 }
@@ -161,12 +170,12 @@ span<int const> default_sort_layers(panel_sort const SortMode)
 template<typename T>
 auto compare_numbers(T const First, T const Second)
 {
-	return First < Second? -1 : static_cast<bool>(First - Second);
+	return First < Second? -1 : First != Second;
 }
 
 static auto compare_time(os::chrono::time_point First, os::chrono::time_point Second)
 {
-	return compare_numbers(First.time_since_epoch().count(), Second.time_since_epoch().count());
+	return compare_numbers(First, Second);
 }
 
 // FAT Last Write time is rounded up to the even number of seconds
@@ -586,17 +595,18 @@ void FileList::CorrectPosition()
 class list_less
 {
 public:
-	explicit list_less(const FileList* Owner, const plugin_panel* SortPlugin):
+	explicit list_less(const FileList* Owner, const plugin_panel* SortPlugin, bool const IgnorePaths):
 		m_Owner(Owner),
 		m_ListSortMode(Owner->GetSortMode()),
-		ListPanelMode(Owner->GetMode()),
-		hSortPlugin(SortPlugin),
+		m_ListPanelMode(Owner->GetMode()),
+		m_SortPlugin(SortPlugin),
 		m_SortLayers(Global->Opt->PanelSortLayers[static_cast<size_t>(m_ListSortMode)]),
 		m_Reverse(Owner->GetSortOrder()),
-		ListSortGroups(Owner->GetSortGroups()),
-		ListSelectedFirst(Owner->GetSelectedFirstMode()),
-		ListDirectoriesFirst(Owner->GetDirectoriesFirst()),
-		SortFolderExt(Global->Opt->SortFolderExt)
+		m_ListSortGroups(Owner->GetSortGroups()),
+		m_ListSelectedFirst(Owner->GetSelectedFirstMode()),
+		m_ListDirectoriesFirst(Owner->GetDirectoriesFirst()),
+		m_SortFolderExt(Global->Opt->SortFolderExt),
+		m_IgnorePaths(IgnorePaths)
 	{
 	}
 
@@ -614,7 +624,7 @@ public:
 		if (IsParentDirItem2)
 			return false;
 
-		if (ListDirectoriesFirst)
+		if (m_ListDirectoriesFirst)
 		{
 			const auto IsDirItem1 = (Item1.Attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 			const auto IsDirItem2 = (Item2.Attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
@@ -623,10 +633,10 @@ public:
 				return IsDirItem1;
 		}
 
-		if (ListSelectedFirst && Item1.Selected != Item2.Selected)
+		if (m_ListSelectedFirst && Item1.Selected != Item2.Selected)
 			return Item1.Selected;
 
-		if (ListSortGroups && Item1.SortGroup != Item2.SortGroup &&
+		if (m_ListSortGroups && Item1.SortGroup != Item2.SortGroup &&
 			(
 				m_ListSortMode == panel_sort::BY_NAME ||
 				m_ListSortMode == panel_sort::BY_EXT ||
@@ -635,26 +645,26 @@ public:
 		)
 			return Item1.SortGroup < Item2.SortGroup;
 
-		if (hSortPlugin)
+		if (m_SortPlugin)
 		{
 			const auto& [a, b] = m_Reverse? std::tie(Item2, Item1) : std::tie(Item1, Item2);
 
 			PluginPanelItemHolder pi1, pi2;
 			m_Owner->FileListToPluginItem(a, pi1);
 			m_Owner->FileListToPluginItem(b, pi2);
-			if (const auto Result = Global->CtrlObject->Plugins->Compare(hSortPlugin, &pi1.Item, &pi2.Item, static_cast<int>(m_ListSortMode) + (SM_UNSORTED - static_cast<int>(panel_sort::UNSORTED))))
+			if (const auto Result = Global->CtrlObject->Plugins->Compare(m_SortPlugin, &pi1.Item, &pi2.Item, internal_sort_mode_to_plugin(m_ListSortMode)))
 			{
 				if (Result != -2)
 					return Result < 0;
 			}
 		}
 
-		for (const auto i: m_SortLayers)
+		for (const auto& [ModeValue, Order]: m_SortLayers)
 		{
-			const auto SortMode = static_cast<panel_sort>(std::abs(i) - 1);
-			const auto Reverse = SortMode == m_ListSortMode? m_Reverse : i < 0;
+			const auto LayerSort = static_cast<panel_sort>(ModeValue);
+			const auto Reverse = LayerSort == m_ListSortMode || Order == sort_order::keep? m_Reverse : Order == sort_order::descend;
 
-			if (const auto Result = compare(SortMode, Reverse, Item1, Item2))
+			if (const auto Result = compare(LayerSort, Reverse, Item1, Item2))
 				return Result < 0;
 		}
 
@@ -666,7 +676,12 @@ private:
 	{
 		const auto& [a, b] = Reverse? std::tie(Item2, Item1) : std::tie(Item1, Item2);
 
-		const auto name_ext_opt = [SortFolderExt = SortFolderExt](FileListItem const& i)
+		const auto ignore_path_opt = [&](string_view const FullName)
+		{
+			return m_IgnorePaths? PointToName(FullName) : FullName;
+		};
+
+		const auto name_ext_opt = [SortFolderExt = m_SortFolderExt](FileListItem const& i)
 		{
 			return SortFolderExt || !(i.Attributes & FILE_ATTRIBUTE_DIRECTORY)?
 				name_ext(i.FileName) :
@@ -679,10 +694,10 @@ private:
 			return compare_numbers(a.Position, b.Position);
 
 		case panel_sort::BY_NAME:
-			return string_sort::compare(a.FileName, b.FileName);
+			return string_sort::compare(ignore_path_opt(a.FileName), ignore_path_opt(b.FileName));
 
 		case panel_sort::BY_NAMEONLY:
-			return string_sort::compare(name_ext_opt(a).first, name_ext_opt(b).first);
+			return string_sort::compare(ignore_path_opt(name_ext_opt(a).first), ignore_path_opt(name_ext_opt(b).first));
 
 		case panel_sort::BY_EXT:
 			return string_sort::compare(name_ext_opt(a).second, name_ext_opt(b).second);
@@ -728,14 +743,15 @@ private:
 
 	const FileList* const m_Owner;
 	const panel_sort m_ListSortMode;
-	const panel_mode ListPanelMode;
-	const plugin_panel* hSortPlugin;
-	const span<int> m_SortLayers;
+	const panel_mode m_ListPanelMode;
+	const plugin_panel* m_SortPlugin;
+	const span<std::pair<panel_sort, sort_order>> m_SortLayers;
 	const bool m_Reverse;
-	bool ListSortGroups;
-	bool ListSelectedFirst;
-	bool ListDirectoriesFirst;
-	bool SortFolderExt;
+	bool m_ListSortGroups;
+	bool m_ListSelectedFirst;
+	bool m_ListDirectoriesFirst;
+	bool m_SortFolderExt;
+	bool m_IgnorePaths;
 };
 
 
@@ -762,19 +778,24 @@ void FileList::SortFileList(bool KeepPosition)
 
 		if (m_SortMode < panel_sort::COUNT)
 		{
+			const auto NameColumn = std::find_if(ALL_CONST_RANGE(m_ViewSettings.PanelColumns), [](column const& i){ return i.type == column_type::name; });
+			const auto IgnorePaths = NameColumn != m_ViewSettings.PanelColumns.cend() && NameColumn->type_flags & COLFLAGS_NAMEONLY;
+
+			list_less const Predicate(this, hSortPlugin, IgnorePaths);
+
 			const auto& SortLayers = Global->Opt->PanelSortLayers[static_cast<size_t>(m_SortMode)];
 
-			if (std::any_of(ALL_CONST_RANGE(SortLayers), [](int const Id){ return std::abs(Id) - 1 == static_cast<int>(panel_sort::UNSORTED); }))
+			if (std::any_of(ALL_CONST_RANGE(SortLayers), [](std::pair<panel_sort, sort_order> const& Layer){ return Layer.first == panel_sort::UNSORTED; }))
 			{
 				// Unsorted criterion is deterministic and won't report equality, thus ensuring stability
-				std::sort(ALL_RANGE(m_ListData), list_less(this, hSortPlugin));
+				std::sort(ALL_RANGE(m_ListData), Predicate);
 			}
 			else
 			{
-				std::stable_sort(ALL_RANGE(m_ListData), list_less(this, hSortPlugin));
+				std::stable_sort(ALL_RANGE(m_ListData), Predicate);
 			}
 		}
-		else
+		else if (m_SortMode >= panel_sort::BY_USER)
 		{
 			custom_sort::CustomSort cs{};
 			custom_sort::FileListPtr = this;
@@ -800,6 +821,10 @@ void FileList::SortFileList(bool KeepPosition)
 				SetSortMode(panel_sort::BY_NAME); // recursive call
 				return;
 			}
+		}
+		else
+		{
+			// TODO: log
 		}
 
 		if (KeepPosition)
@@ -3101,7 +3126,7 @@ bool FileList::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 			{
 				FlushInputBuffer(); // !!!
 				INPUT_RECORD rec;
-				ProcessKeyToInputRecord(VK_RETURN,IntKeyState.ShiftPressed()? PKF_SHIFT:0,&rec);
+				FarKeyToInputRecord({VK_RETURN, IntKeyState.ShiftPressed()? SHIFT_PRESSED : 0u}, &rec);
 				if (Global->CtrlObject->Plugins->ProcessKey(GetPluginHandle(), &rec, false))
 					return true;
 			}
@@ -3363,34 +3388,44 @@ void FileList::SetSortMode(panel_sort Mode, bool KeepOrder)
 	{
 		if (!KeepOrder)
 		{
-			m_ReverseSortOrder = (m_SortMode == Mode && Global->Opt->ReverseSort)?
+			m_ReverseSortOrder = (m_SortMode == Mode && Global->Opt->AllowReverseSort)?
 				!m_ReverseSortOrder :
-				SortModes[static_cast<size_t>(Mode)].InvertByDefault;
+				Global->Opt->PanelSortLayers[static_cast<size_t>(Mode)].front().second == sort_order::descend;
 		}
 
 		ApplySortMode(Mode);
 	}
-	else
-		SetCustomSortMode(static_cast<int>(Mode), (KeepOrder ? SO_KEEPCURRENT : SO_AUTO), false);
+	else if (Mode >= panel_sort::BY_USER)
+	{
+		SetCustomSortMode(Mode, KeepOrder? sort_order::keep : sort_order::flip_or_default, false);
+	}
 }
 
-void FileList::SetCustomSortMode(int Mode, sort_order Order, bool InvertByDefault)
+void FileList::SetCustomSortMode(panel_sort const Mode, sort_order const Order, bool const InvertByDefault)
 {
-	if (Mode >= static_cast<int>(panel_sort::COUNT))
-	{
-		switch (Order)
-		{
-			default:
-			case SO_AUTO:
-				m_ReverseSortOrder = (static_cast<int>(m_SortMode) == Mode && Global->Opt->ReverseSort)? !m_ReverseSortOrder : InvertByDefault;
-				break;
-			case SO_KEEPCURRENT: break;
-			case SO_DIRECT: m_ReverseSortOrder = false; break;
-			case SO_REVERSE: m_ReverseSortOrder = true; break;
-		}
+	if (Mode < panel_sort::BY_USER)
+		return;
 
-		ApplySortMode(panel_sort(Mode));
+	switch (Order)
+	{
+	default:
+	case sort_order::flip_or_default:
+		m_ReverseSortOrder = (Mode == m_SortMode && Global->Opt->AllowReverseSort)? !m_ReverseSortOrder : InvertByDefault;
+		break;
+
+	case sort_order::keep:
+		break;
+
+	case sort_order::ascend:
+		m_ReverseSortOrder = false;
+		break;
+
+	case sort_order::descend:
+		m_ReverseSortOrder = true;
+		break;
 	}
+
+	ApplySortMode(Mode);
 }
 
 void FileList::ChangeDirectoriesFirst(bool Mode)
@@ -4417,7 +4452,7 @@ void FileList::EditFilter()
 	m_Filter->FilterEdit();
 }
 
-static int select_sort_layer(std::vector<int> const& SortLayers)
+static int select_sort_layer(std::vector<std::pair<panel_sort, sort_order>> const& SortLayers)
 {
 	std::vector<menu_item> AvailableSortModesMenuItems(static_cast<size_t>(panel_sort::COUNT));
 	auto VisibleCount = AvailableSortModesMenuItems.size();
@@ -4427,7 +4462,7 @@ static int select_sort_layer(std::vector<int> const& SortLayers)
 		auto& Item = AvailableSortModesMenuItems[i.MenuPosition];
 		Item.Name = msg(i.Label);
 
-		if (std::any_of(ALL_CONST_RANGE(SortLayers), [&](int const SortLayerId){ return std::abs(SortLayerId) == &i - SortModes + 1; }))
+		if (std::any_of(ALL_CONST_RANGE(SortLayers), [&](std::pair<panel_sort, sort_order> const& Layer) { return Layer.first == static_cast<panel_sort>(&i - SortModes); }))
 		{
 			Item.Flags |= MIF_HIDDEN;
 			--VisibleCount;
@@ -4458,19 +4493,25 @@ static void edit_sort_layers(int MenuPos)
 
 	std::vector<menu_item> SortLayersMenuItems;
 	SortLayersMenuItems.reserve(SortLayers.size());
-	std::transform(ALL_CONST_RANGE(SortLayers), std::back_inserter(SortLayersMenuItems), [](int const SortLayerId)
+	std::transform(ALL_CONST_RANGE(SortLayers), std::back_inserter(SortLayersMenuItems), [](std::pair<panel_sort, sort_order> const& Layer)
 	{
-		return menu_item{ msg(SortModes[std::abs(SortLayerId) - 1].Label), LIF_CHECKED | (SortLayerId < 0? SortDesc : SortAsc) };
+		return menu_item{ msg(SortModes[static_cast<size_t>(Layer.first)].Label), LIF_CHECKED | order_indicator(Layer.second) };
 	});
 
-	SortLayersMenuItems.front().Flags = LIF_DISABLE;
+	SortLayersMenuItems.front().Flags |= LIF_DISABLE;
 
 	const auto SortLayersMenu = VMenu2::create({}, SortLayersMenuItems, 0);
 
 	SortLayersMenu->SetHelp(L"PanelCmdSort"sv);
 	SortLayersMenu->SetPosition({ -1, -1, 0, 0 });
 	SortLayersMenu->SetMenuFlags(VMENU_WRAPMODE);
-	SortLayersMenu->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, L'+', L'-', L'*', KEY_CTRLUP, KEY_CTRLDOWN, KEY_CTRLR));
+	SortLayersMenu->SetBottomTitle(KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, L'+', L'-', L'*', L'=', KEY_CTRLUP, KEY_CTRLDOWN, KEY_CTRLR));
+
+	const auto SetCheck = [&](int const Pos, sort_order const Order)
+	{
+		SortLayersMenu->SetCustomCheck(order_indicator(Order), SortLayersMenu->GetSelectPos());
+		SortLayers[Pos].second = Order;
+	};
 
 	SortLayersMenu->Run([&](const Manager::Key& RawKey)
 	{
@@ -4482,14 +4523,16 @@ static void edit_sort_layers(int MenuPos)
 		{
 		case KEY_INS:
 		case KEY_NUMPAD0:
-			if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
+			if (Pos > 0)
 			{
-				const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i){ return i.MenuPosition == Result; }) - SortModes;
-				const auto Invert = SortModes[NewSortModeIndex].InvertByDefault;
-				const auto InsertionPos = std::max(1, Pos);
-				SortLayersMenu->AddItem(MenuItemEx{ msg(SortModes[NewSortModeIndex].Label), MIF_CHECKED | (Invert? SortDesc : SortAsc) }, InsertionPos);
-				SortLayersMenu->SetSelectPos(InsertionPos);
-				SortLayers.insert(SortLayers.begin() + InsertionPos, (NewSortModeIndex + 1) * (Invert? -1 : 1));
+				if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
+				{
+					const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i) { return i.MenuPosition == Result; }) - SortModes;
+					const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
+					SortLayersMenu->AddItem(MenuItemEx{ msg(SortModes[NewSortModeIndex].Label), MIF_CHECKED | order_indicator(Order) }, Pos);
+					SortLayersMenu->SetSelectPos(Pos);
+					SortLayers.emplace(SortLayers.begin() + Pos, static_cast<panel_sort>(NewSortModeIndex), Order);
+				}
 			}
 			break;
 
@@ -4502,33 +4545,45 @@ static void edit_sort_layers(int MenuPos)
 			}
 			break;
 
+		case KEY_F4:
+			if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
+			{
+				const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i) { return i.MenuPosition == Result; }) - SortModes;
+				const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
+				SortLayersMenu->at(Pos).Name = msg(SortModes[NewSortModeIndex].Label);
+				SortLayersMenu->at(Pos).SetCustomCheck(order_indicator(Order));
+				SortLayers[Pos] = { static_cast<panel_sort>(NewSortModeIndex), Order };
+			}
+			break;
+
 		case L'+':
 		case KEY_ADD:
-			if (Pos > 0)
-			{
-				SortLayersMenu->SetCustomCheck(SortAsc, SortLayersMenu->GetSelectPos());
-				SortLayers[Pos] = std::abs(SortLayers[Pos]);
-			}
+			SetCheck(Pos, sort_order::ascend);
 			break;
 
 		case L'-':
 		case KEY_SUBTRACT:
-			if (Pos > 0)
-			{
-				SortLayersMenu->SetCustomCheck(SortDesc, SortLayersMenu->GetSelectPos());
-				SortLayers[Pos] = -std::abs(SortLayers[Pos]);
-			}
+			SetCheck(Pos, sort_order::descend);
 			break;
 
 		case L'*':
 		case KEY_MULTIPLY:
-		case KEY_SPACE:
-			if (Pos > 0)
 			{
-				const auto Check = SortLayersMenu->GetCheck(Pos);
-				SortLayersMenu->SetCustomCheck(Check == SortAsc? SortDesc : SortAsc);
-				SortLayers[Pos] = -SortLayers[Pos];
+				const auto CurrentOrder = SortLayers[Pos].second;
+				const auto NewOrder =
+					CurrentOrder == sort_order::ascend?
+						sort_order::descend :
+						CurrentOrder == sort_order::descend?
+							sort_order::ascend :
+							CurrentOrder;
+
+				SetCheck(Pos, NewOrder);
 			}
+			break;
+
+		case L'=':
+			if (Pos > 0)
+				SetCheck(Pos, sort_order::keep);
 			break;
 
 		case KEY_CTRLUP:
@@ -4537,7 +4592,7 @@ static void edit_sort_layers(int MenuPos)
 		case KEY_RCTRLDOWN:
 			if (Pos > 0)
 			{
-				const auto OtherPos = Pos + ((Key & KEY_UP) == KEY_UP? - 1 : 1);
+				const auto OtherPos = Pos + ((Key & KEY_UP) == KEY_UP? -1 : 1);
 				if (in_range(1, OtherPos, static_cast<int>(SortLayers.size() - 1)))
 				{
 					using std::swap;
@@ -4552,12 +4607,10 @@ static void edit_sort_layers(int MenuPos)
 		case KEY_RCTRLR:
 			{
 				const auto DefaultLayers = default_sort_layers(static_cast<panel_sort>(SortMode));
-				SortLayers.resize(1);
-				SortLayers.insert(SortLayers.end(), ALL_CONST_RANGE(DefaultLayers));
+				SortLayers.assign(ALL_CONST_RANGE(DefaultLayers));
 				SortLayersMenu->Close(-1);
 				return true;
 			}
-
 
 		default:
 			break;
@@ -4573,8 +4626,8 @@ void FileList::SelectSortMode()
 	for (const auto& i: SortModes)
 	{
 		auto& Item = SortMenu[i.MenuPosition];
+
 		Item.Name = msg(i.Label);
-		Item.Flags = i.MenuFlags;
 		Item.AccelKey = i.MenuKey;
 	}
 
@@ -4608,7 +4661,7 @@ void FileList::SelectSortMode()
 	const auto& SetCheckAndSelect = [&](size_t const Index)
 	{
 		auto& MenuItem = SortMenu[Index];
-		MenuItem.SetCustomCheck(m_ReverseSortOrder? SortDesc : SortAsc);
+		MenuItem.SetCustomCheck(order_indicator(m_ReverseSortOrder? sort_order::descend : sort_order::ascend));
 		MenuItem.SetSelect(true);
 	};
 
@@ -4616,7 +4669,7 @@ void FileList::SelectSortMode()
 	{
 		SetCheckAndSelect(SortModes[static_cast<size_t>(m_SortMode)].MenuPosition);
 	}
-	else if (mpr)
+	else if (m_SortMode >= panel_sort::BY_USER)
 	{
 		for (size_t i=0; i < mpr->Count; i += 3)
 		{
@@ -4626,6 +4679,10 @@ void FileList::SelectSortMode()
 				break;
 			}
 		}
+	}
+	else
+	{
+		// TODO: log
 	}
 
 	enum SortOptions
@@ -4727,15 +4784,15 @@ void FileList::SelectSortMode()
 		if (custom_sort::CanSort(mode))
 		{
 			const auto InvertByDefault = mpr->Values[index+1].Boolean != 0;
-			sort_order Order = SO_AUTO;
+			auto Order = sort_order::flip_or_default;
 
 			if (!InvertPressed)
 			{
 				m_ReverseSortOrder = !PlusPressed;
-				Order = SO_KEEPCURRENT;
+				Order = sort_order::keep;
 			}
 
-			SetCustomSortMode(mode, Order, InvertByDefault);
+			SetCustomSortMode(panel_sort{ mode }, Order, InvertByDefault);
 		}
 	}
 	// sort options
@@ -6229,10 +6286,7 @@ void FileList::SetPluginMode(std::unique_ptr<plugin_panel>&& PluginPanel, string
 
 	if (m_CachedOpenPanelInfo.StartSortMode)
 	{
-		if (m_CachedOpenPanelInfo.StartSortMode <= SM_COUNT)
-			m_SortMode = panel_sort(m_CachedOpenPanelInfo.StartSortMode - (SM_UNSORTED - static_cast<int>(panel_sort::UNSORTED)));
-		else
-			m_SortMode = panel_sort(m_CachedOpenPanelInfo.StartSortMode);
+		m_SortMode = plugin_sort_mode_to_internal(m_CachedOpenPanelInfo.StartSortMode);
 		m_ReverseSortOrder = m_CachedOpenPanelInfo.StartSortOrder != 0;
 	}
 
@@ -7394,28 +7448,29 @@ void FileList::ShowFileList(bool Fast)
 
 		if (Global->Opt->ShowColumnTitles)
 		{
-			lng IDMessage = lng::MColumnUnknown;
-
-			switch (m_ViewSettings.PanelColumns[I].type)
+			const auto IDMessage = [&]
 			{
-				case column_type::name:               IDMessage = lng::MColumnName;            break;
-				case column_type::extension:          IDMessage = lng::MColumnExtension;       break;
-				case column_type::size:               IDMessage = lng::MColumnSize;            break;
-				case column_type::size_compressed:    IDMessage = lng::MColumnAlocatedSize;    break;
-				case column_type::date:               IDMessage = lng::MColumnDate;            break;
-				case column_type::time:               IDMessage = lng::MColumnTime;            break;
-				case column_type::date_write:         IDMessage = lng::MColumnWrited;          break;
-				case column_type::date_creation:      IDMessage = lng::MColumnCreated;         break;
-				case column_type::date_access:        IDMessage = lng::MColumnAccessed;        break;
-				case column_type::date_change:        IDMessage = lng::MColumnChanged;         break;
-				case column_type::attributes:         IDMessage = lng::MColumnAttr;            break;
-				case column_type::description:        IDMessage = lng::MColumnDescription;     break;
-				case column_type::owner:              IDMessage = lng::MColumnOwner;           break;
-				case column_type::links_number:       IDMessage = lng::MColumnMumLinks;        break;
-				case column_type::streams_number:     IDMessage = lng::MColumnNumStreams;      break;
-				case column_type::streams_size:       IDMessage = lng::MColumnStreamsSize;     break;
-				default: break;
-			}
+				switch (m_ViewSettings.PanelColumns[I].type)
+				{
+				case column_type::name:               return lng::MColumnName;
+				case column_type::extension:          return lng::MColumnExtension;
+				case column_type::size:               return lng::MColumnSize;
+				case column_type::size_compressed:    return lng::MColumnAlocatedSize;
+				case column_type::date:               return lng::MColumnDate;
+				case column_type::time:               return lng::MColumnTime;
+				case column_type::date_write:         return lng::MColumnWrited;
+				case column_type::date_creation:      return lng::MColumnCreated;
+				case column_type::date_access:        return lng::MColumnAccessed;
+				case column_type::date_change:        return lng::MColumnChanged;
+				case column_type::attributes:         return lng::MColumnAttr;
+				case column_type::description:        return lng::MColumnDescription;
+				case column_type::owner:              return lng::MColumnOwner;
+				case column_type::links_number:       return lng::MColumnMumLinks;
+				case column_type::streams_number:     return lng::MColumnNumStreams;
+				case column_type::streams_size:       return lng::MColumnStreamsSize;
+				default:                              return lng::MColumnUnknown;
+				}
+			}();
 
 			strTitle = IDMessage == lng::MColumnUnknown && !m_ViewSettings.PanelColumns[I].title.empty()? m_ViewSettings.PanelColumns[I].title : msg(IDMessage);
 
@@ -7481,12 +7536,16 @@ void FileList::ShowFileList(bool Fast)
 			const auto& CurrentModeName = msg(CurrenModeData.Label);
 			// Owerflow from npos to 0 is ok - pick the first character if & isn't there.
 			const auto Char = CurrentModeName[CurrentModeName.find(L'&') + 1];
-			const auto UseReverseIndicator = Global->Opt->ReverseSortCharCompat && CurrenModeData.InvertByDefault? !m_ReverseSortOrder: m_ReverseSortOrder;
+			const auto UseReverseIndicator = Global->Opt->ReverseSortCharCompat && Global->Opt->PanelSortLayers[static_cast<size_t>(m_SortMode)].front().second == sort_order::descend? !m_ReverseSortOrder: m_ReverseSortOrder;
 			Indicator = UseReverseIndicator? upper(Char) : lower(Char);
+		}
+		else if (m_SortMode >= panel_sort::BY_USER)
+		{
+			Indicator = m_ReverseSortOrder? CustomSortIndicator[1] : CustomSortIndicator[0];
 		}
 		else
 		{
-			Indicator = m_ReverseSortOrder? CustomSortIndicator[1] : CustomSortIndicator[0];
+			// TODO: log
 		}
 
 		if (Indicator)
@@ -7918,15 +7977,15 @@ void FileList::PrepareViewSettings(int ViewMode)
 		}
 		else
 		{
+			const auto NameOnlyFlag = m_CachedOpenPanelInfo.Flags & OPIF_SHOWNAMESONLY? COLFLAGS_NAMEONLY : COLFLAGS_NONE;
+			const auto RightAlignFlag = m_CachedOpenPanelInfo.Flags & OPIF_SHOWRIGHTALIGNNAMES? COLFLAGS_RIGHTALIGN : COLFLAGS_NONE;
+
 			for (auto& i: m_ViewSettings.PanelColumns)
 			{
 				if (i.type == column_type::name)
 				{
-					if (m_CachedOpenPanelInfo.Flags & OPIF_SHOWNAMESONLY)
-						i.type_flags |= COLFLAGS_NAMEONLY;
-
-					if (m_CachedOpenPanelInfo.Flags & OPIF_SHOWRIGHTALIGNNAMES)
-						i.type_flags |= COLFLAGS_RIGHTALIGN;
+					i.type_flags |= NameOnlyFlag;
+					i.type_flags |= RightAlignFlag;
 				}
 			}
 

@@ -59,7 +59,7 @@ struct detailed_time_point
 		Hour,
 		Minute,
 		Second,
-		Tick;
+		Hectonanosecond;
 };
 
 detailed_time_point parse_detailed_time_point(string_view Date, string_view Time, int DateFormat);
@@ -83,7 +83,6 @@ std::tuple<string, string> ConvertDuration(os::chrono::duration Duration);
 
 string ConvertDurationToHMS(os::chrono::duration Duration);
 
-string StrFTime(string_view Format, const tm* Time);
 string MkStrFTime(string_view Format = {});
 
 bool utc_to_local(os::chrono::time_point UtcTime, SYSTEMTIME& LocalTime);

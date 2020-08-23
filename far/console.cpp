@@ -456,6 +456,12 @@ namespace console_detail
 		return true;
 	}
 
+	bool console::PeekOneInput(INPUT_RECORD& Record) const
+	{
+		size_t Read;
+		return PeekInput({ &Record, 1 }, Read) && Read == 1;
+	}
+
 	bool console::ReadInput(span<INPUT_RECORD> const Buffer, size_t& NumberOfEventsRead) const
 	{
 		DWORD dwNumberOfEventsRead = 0;
@@ -470,6 +476,12 @@ namespace console_detail
 		}
 
 		return true;
+	}
+
+	bool console::ReadOneInput(INPUT_RECORD& Record) const
+	{
+		size_t Read;
+		return ReadInput({ &Record, 1 }, Read) && Read == 1;
 	}
 
 	bool console::WriteInput(span<INPUT_RECORD> const Buffer, size_t& NumberOfEventsWritten) const
@@ -965,7 +977,7 @@ namespace console_detail
 			auto& ExeMap = Result[ExeNamePtr];
 			for (const auto& AliasToken : enum_substrings(AliasesBuffer.data()))
 			{
-				ExeMap.emplace(split_name_value(AliasToken));
+				ExeMap.emplace(split(AliasToken));
 			}
 		}
 

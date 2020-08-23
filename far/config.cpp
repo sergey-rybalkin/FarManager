@@ -228,7 +228,7 @@ void Options::PanelSettings()
 	Builder.AddCheckbox(lng::MConfigSelectFolders, SelectFolders);
 	Builder.AddCheckbox(lng::MConfigRightClickSelect, RightClickSelect);
 	Builder.AddCheckbox(lng::MConfigSortFolderExt, SortFolderExt);
-	Builder.AddCheckbox(lng::MConfigReverseSort, ReverseSort);
+	Builder.AddCheckbox(lng::MConfigAllowReverseSort, AllowReverseSort);
 
 	const auto AutoUpdateEnabled = Builder.AddCheckbox(lng::MConfigAutoUpdateLimit, AutoUpdate);
 	const auto AutoUpdateLimitItem = Builder.AddIntEditField(AutoUpdateLimit, 6);
@@ -394,26 +394,29 @@ void Options::InfoPanelSettings()
 {
 	static const DialogBuilderListItem UNListItems[]
 	{
-		{ lng::MConfigInfoPanelUNFullyQualifiedDN, NameFullyQualifiedDN },          // 1  - CN=John Doe, OU=Software, OU=Engineering, O=Widget, C=US
-		{ lng::MConfigInfoPanelUNSamCompatible, NameSamCompatible },                // 2  - Engineering\JohnDoe, If the user account is not in a domain, only NameSamCompatible is supported.
-		{ lng::MConfigInfoPanelUNDisplay, NameDisplay },                            // 3  - Probably "John Doe" but could be something else.  I.e. The display name is not necessarily the defining RDN.
-		{ lng::MConfigInfoPanelUNUniqueId, NameUniqueId },                          // 6  - String-ized GUID as returned by IIDFromString(). eg: {4fa050f0-f561-11cf-bdd9-00aa003a77b6}
-		{ lng::MConfigInfoPanelUNCanonical, NameCanonical },                        // 7  - engineering.widget.com/software/John Doe
-		{ lng::MConfigInfoPanelUNUserPrincipal, NameUserPrincipal },                // 8  - someone@example.com
-		{ lng::MConfigInfoPanelUNServicePrincipal, NameServicePrincipal },          // 10 - www/srv.engineering.com/engineering.com
-		{ lng::MConfigInfoPanelUNDnsDomain, NameDnsDomain },                        // 12 - DNS domain name + SAM username eg: engineering.widget.com\JohnDoe
+		{ lng::MConfigInfoPanelUNLogon,             NameUnknown },
+		{ lng::MConfigInfoPanelUNFullyQualifiedDN,  NameFullyQualifiedDN },
+		{ lng::MConfigInfoPanelUNSamCompatible,     NameSamCompatible },
+		{ lng::MConfigInfoPanelUNDisplay,           NameDisplay },
+		{ lng::MConfigInfoPanelUNUniqueId,          NameUniqueId },
+		{ lng::MConfigInfoPanelUNCanonical,         NameCanonical },
+		{ lng::MConfigInfoPanelUNUserPrincipal,     NameUserPrincipal },
+		{ lng::MConfigInfoPanelUNServicePrincipal,  NameServicePrincipal },
+		{ lng::MConfigInfoPanelUNDnsDomain,         NameDnsDomain },
+		{ lng::MConfigInfoPanelUNGivenName,         NameGivenName },
+		{ lng::MConfigInfoPanelUNSurname,           NameSurname },
 	};
 
 	static const DialogBuilderListItem CNListItems[]
 	{
-		{ lng::MConfigInfoPanelCNNetBIOS, ComputerNameNetBIOS },                                     // The NetBIOS name of the local computer or the cluster associated with the local computer. This name is limited to MAX_COMPUTERNAME_LENGTH + 1 characters and may be a truncated version of the DNS host name. For example, if the DNS host name is "corporate-mail-server", the NetBIOS name would be "corporate-mail-".
-		{ lng::MConfigInfoPanelCNDnsHostname, ComputerNameDnsHostname },                             // The DNS name of the local computer or the cluster associated with the local computer.
-		{ lng::MConfigInfoPanelCNDnsDomain, ComputerNameDnsDomain },                                 // The name of the DNS domain assigned to the local computer or the cluster associated with the local computer.
-		{ lng::MConfigInfoPanelCNDnsFullyQualified, ComputerNameDnsFullyQualified },                 // The fully-qualified DNS name that uniquely identifies the local computer or the cluster associated with the local computer. This name is a combination of the DNS host name and the DNS domain name, using the form HostName.DomainName. For example, if the DNS host name is "corporate-mail-server" and the DNS domain name is "microsoft.com", the fully qualified DNS name is "corporate-mail-server.microsoft.com".
-		{ lng::MConfigInfoPanelCNPhysicalNetBIOS, ComputerNamePhysicalNetBIOS },                     // The NetBIOS name of the local computer. On a cluster, this is the NetBIOS name of the local node on the cluster.
-		{ lng::MConfigInfoPanelCNPhysicalDnsHostname, ComputerNamePhysicalDnsHostname },             // The DNS host name of the local computer. On a cluster, this is the DNS host name of the local node on the cluster.
-		{ lng::MConfigInfoPanelCNPhysicalDnsDomain, ComputerNamePhysicalDnsDomain },                 // The name of the DNS domain assigned to the local computer. On a cluster, this is the DNS domain of the local node on the cluster.
-		{ lng::MConfigInfoPanelCNPhysicalDnsFullyQualified, ComputerNamePhysicalDnsFullyQualified }, // The fully-qualified DNS name that uniquely identifies the computer. On a cluster, this is the fully qualified DNS name of the local node on the cluster. The fully qualified DNS name is a combination of the DNS host name and the DNS domain name, using the form HostName.DomainName.
+		{ lng::MConfigInfoPanelCNNetBIOS,                    ComputerNameNetBIOS },
+		{ lng::MConfigInfoPanelCNDnsHostname,                ComputerNameDnsHostname },
+		{ lng::MConfigInfoPanelCNDnsDomain,                  ComputerNameDnsDomain },
+		{ lng::MConfigInfoPanelCNDnsFullyQualified,          ComputerNameDnsFullyQualified },
+		{ lng::MConfigInfoPanelCNPhysicalNetBIOS,            ComputerNamePhysicalNetBIOS },
+		{ lng::MConfigInfoPanelCNPhysicalDnsHostname,        ComputerNamePhysicalDnsHostname },
+		{ lng::MConfigInfoPanelCNPhysicalDnsDomain,          ComputerNamePhysicalDnsDomain },
+		{ lng::MConfigInfoPanelCNPhysicalDnsFullyQualified,  ComputerNamePhysicalDnsFullyQualified },
 	};
 
 	DialogBuilder Builder(lng::MConfigInfoPanelTitle, L"InfoPanelSettings"sv);
@@ -450,9 +453,9 @@ static void ApplyDefaultMaskGroups()
 {
 	static const std::pair<string_view, string_view> Sets[] =
 	{
-		{ L"arc"sv,  L"*.rar,*.zip,*.[zj],*.[bg7x]z,*.[bg]zip,*.tar,*.t[agbx]z,*.ar[cj],*.r[0-9][0-9],*.a[0-9][0-9],*.bz2,*.cab,*.[aj]ar,*.lha,*.lzh,*.ha,*.ac[bei],*.pa[ck],*.rk,*.cpio,*.rpm,*.zoo,*.hqx,*.sit,*.ice,*.uc2,*.ain,*.imp,*.777,*.ufa,*.boa,*.bs[2a],*.sea,*.[ah]pk,*.ddi,*.x2,*.rkv,*.[lw]sz,*.h[ay]p,*.lim,*.sqz,*.chz"sv },
+		{ L"arc"sv,  L"*.zip,*.rar,*.[7bgx]z,*.[bg]zip,*.tar,*.t[agbx]z,*.z,*.ar[cj],*.r[0-9][0-9],*.a[0-9][0-9],*.bz2,*.cab,*.jar,*.lha,*.lzh,*.ha,*.ac[bei],*.pa[ck],*.rk,*.cpio,*.rpm,*.zoo,*.hqx,*.sit,*.ice,*.uc2,*.ain,*.imp,*.777,*.ufa,*.boa,*.bs[2a],*.sea,*.[ah]pk,*.ddi,*.x2,*.rkv,*.[lw]sz,*.h[ay]p,*.lim,*.sqz,*.chz,*.aa[br]"sv },
 		{ L"temp"sv, L"*.bak,*.tmp"sv },
-		{ L"exec"sv, L"*.exe,*.com,*.bat,*.cmd,%PATHEXT%"sv },
+		{ L"exec"sv, L"*.exe,*.cmd,*.bat,*.com,%PATHEXT%"sv },
 	};
 
 	for (const auto& [Name, Value]: Sets)
@@ -1667,7 +1670,8 @@ Options::Options():
 
 	const auto MacroKeyValidator = [](const string& Value, DWORD& Key, string_view const DefaultValue, DWORD DefaultKey)
 	{
-		if ((Key = KeyNameToKey(Value)) == static_cast<DWORD>(-1))
+		Key = KeyNameToKey(Value);
+		if (!Key)
 		{
 			Key = DefaultKey;
 			return string(DefaultValue);
@@ -1870,7 +1874,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyPanel,                  L"CtrlAltShiftRule"sv,              PanelCtrlAltShiftRule, 0},
 		{FSSF_PRIVATE,           NKeyPanel,                  L"CtrlFRule"sv,                     PanelCtrlFRule, false},
 		{FSSF_PRIVATE,           NKeyPanel,                  L"Highlight"sv,                     Highlight, true},
-		{FSSF_PRIVATE,           NKeyPanel,                  L"ReverseSort"sv,                   ReverseSort, true},
+		{FSSF_PRIVATE,           NKeyPanel,                  L"ReverseSort"sv,                   AllowReverseSort, true},
 		{FSSF_PRIVATE,           NKeyPanel,                  L"ReverseSortCharCompat"sv,         ReverseSortCharCompat, false},
 		{FSSF_PRIVATE,           NKeyPanel,                  L"RememberLogicalDrives"sv,         RememberLogicalDrives, false},
 		{FSSF_PRIVATE,           NKeyPanel,                  L"RightClickRule"sv,                PanelRightClickRule, 2},
@@ -1882,7 +1886,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyPanel,                  L"SortFolderExt"sv,                 SortFolderExt, false},
 		{FSSF_PRIVATE,           NKeyPanel,                  L"RightClickSelect"sv,              RightClickSelect, false},
 		{FSSF_PRIVATE,           NKeyPanelInfo,              L"InfoComputerNameFormat"sv,        InfoPanel.ComputerNameFormat, ComputerNamePhysicalNetBIOS},
-		{FSSF_PRIVATE,           NKeyPanelInfo,              L"InfoUserNameFormat"sv,            InfoPanel.UserNameFormat, NameUserPrincipal},
+		{FSSF_PRIVATE,           NKeyPanelInfo,              L"InfoUserNameFormat"sv,            InfoPanel.UserNameFormat, NameUnknown },
 		{FSSF_PRIVATE,           NKeyPanelInfo,              L"ShowCDInfo"sv,                    InfoPanel.ShowCDInfo, true},
 		{FSSF_PRIVATE,           NKeyPanelInfo,              L"ShowPowerStatus"sv,               InfoPanel.ShowPowerStatus, false},
 		{FSSF_PANELLAYOUT,       NKeyPanelLayout,            L"ColumnTitles"sv,                  ShowColumnTitles, true},
@@ -2153,38 +2157,70 @@ void Options::SetDriveMenuHotkeys()
 	ConfigProvider().GeneralCfg()->SetValue(L"Interface"sv, L"InitDriveMenuHotkeys"sv, false);
 }
 
+static std::optional<std::pair<panel_sort, sort_order>> deserialise_sort_layer(string_view const LayerStr)
+{
+	int Sort = -1;
+	int Order = -1;
+
+	for (const auto& Str: enum_tokens(LayerStr, L":"sv))
+	{
+		switch (Str.front())
+		{
+		case L'S':
+			if (!from_string(Str.substr(1), Sort) || !in_range(0, Sort, static_cast<int>(panel_sort::COUNT)))
+				return {};
+			break;
+
+		case L'O':
+			if (!from_string(Str.substr(1), Order) || !in_range(static_cast<int>(sort_order::first), Order, static_cast<int>(sort_order::last)))
+				return {};
+			break;
+		}
+	}
+
+	if (Sort == -1 || Order == -1)
+		return {};
+
+	return std::pair(panel_sort{ Sort }, sort_order{ Order });
+}
+
+static auto deserialise_sort_layers(string_view const LayersStr)
+{
+	std::vector<std::pair<panel_sort, sort_order>> Layers;
+
+	for (const auto& Str: enum_tokens(LayersStr, L" "sv))
+	{
+		if (const auto Layer = deserialise_sort_layer(Str); Layer && !contains(Layers, *Layer))
+			Layers.emplace_back(*Layer);
+	}
+
+	return Layers;
+}
+
+static auto serialise_sort_layer(std::pair<panel_sort, sort_order> const& Layer)
+{
+	return format(FSTR(L"S{0}:O{1}"), Layer.first, Layer.second);
+}
+
+static auto serialise_sort_layers(span<std::pair<panel_sort, sort_order> const> const Layers)
+{
+	return join(select(Layers, serialise_sort_layer), L" "sv);
+}
+
 void Options::ReadSortLayers()
 {
 	PanelSortLayers.resize(static_cast<size_t>(panel_sort::COUNT));
 
-	for (auto& [Item, i]: enumerate(PanelSortLayers))
+	for (auto& [Layers, i]: enumerate(PanelSortLayers))
 	{
-		Item.emplace_back(i + 1);
+		string LayersStr;
+		if (ConfigProvider().GeneralCfg()->GetValue(NKeyPanelSortLayers, str(i), LayersStr))
+			Layers = deserialise_sort_layers(LayersStr);
 
-		string Layers;
-		if (ConfigProvider().GeneralCfg()->GetValue(NKeyPanelSortLayers, str(i), Layers))
+		if (Layers.empty())
 		{
-			for (const auto& Str: enum_tokens(Layers, L" "sv))
-			{
-				int SortLayerId;
-				if (
-					!from_string(Str, SortLayerId) ||
-					!SortLayerId ||
-					!in_range(-static_cast<int>(panel_sort::COUNT), SortLayerId, static_cast<int>(panel_sort::COUNT)) ||
-					contains(Item, SortLayerId)
-					)
-				{
-					// TODO: log
-					continue;
-				}
-
-				Item.emplace_back(SortLayerId);
-			}
-		}
-		else
-		{
-			const auto& DefaultLayers = default_sort_layers(static_cast<panel_sort>(i));
-			Item.insert(Item.end(), ALL_CONST_RANGE(DefaultLayers));
+			const auto DefaultLayers = default_sort_layers(static_cast<panel_sort>(i));
+			Layers.assign(ALL_CONST_RANGE(DefaultLayers));
 		}
 	}
 }
@@ -2193,11 +2229,18 @@ void Options::SaveSortLayers(bool const Always)
 {
 	auto& Cfg = *ConfigProvider().GeneralCfg();
 
-	for (const auto& [Item, i]: enumerate(PanelSortLayers))
+	for (const auto& [Layers, i]: enumerate(PanelSortLayers))
 	{
-		const auto NewLayers = join(select(span(Item).subspan(1), [](int const SortLayerId){ return str(SortLayerId); }), L" "sv);
-		if ( Always || (NewLayers != Cfg.GetValue<string>(NKeyPanelSortLayers, str(i))))
-			Cfg.SetValue(NKeyPanelSortLayers, str(i), NewLayers);
+		const auto DefaultLayers = default_sort_layers(static_cast<panel_sort>(i));
+		if (std::equal(ALL_CONST_RANGE(Layers), ALL_CONST_RANGE(DefaultLayers)))
+		{
+			Cfg.DeleteValue(NKeyPanelSortLayers, str(i));
+			continue;
+		}
+
+		const auto LayersStr = serialise_sort_layers(Layers);
+		if ( Always || (LayersStr != Cfg.GetValue<string>(NKeyPanelSortLayers, str(i))))
+			Cfg.SetValue(NKeyPanelSortLayers, str(i), LayersStr);
 	}
 }
 
