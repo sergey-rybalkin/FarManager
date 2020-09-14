@@ -69,6 +69,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "locale.hpp"
 #include "farversion.hpp"
+#include "exception.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -92,7 +93,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef TESTS_ENTRYPOINT_ONLY
 #endif
 
-global *Global = nullptr;
+global* Global = nullptr;
 
 static void show_help()
 {
@@ -107,7 +108,7 @@ static void show_help()
 		L" -?   This help.\n"
 		L" -clearcache [profilepath [localprofilepath]]\n"
 		L"      Clear plugins cache.\n"
-		L" -co  Forces FAR to load plugins from the cache only.\n"
+		L" -co  Load plugins from the cache only.\n"
 #ifdef DIRECT_RT
 		L" -do  Direct output.\n"
 #endif
@@ -141,188 +142,189 @@ static void show_help()
 		L" -v <filename>\n"
 		L"      View the specified file. If <filename> is -, data is read from the stdin.\n"
 		L" -w[-] Stretch to console window instead of console buffer or vise versa.\n"
+		L" -x   Disable exception handling.\n"
 		L""sv;
 
 	std::wcout << HelpMsg << std::flush;
 }
 
 static int MainProcess(
-    const string& EditName,
-    const string& ViewName,
-    const string& DestName1,
-    const string& DestName2,
-    int StartLine,
-    int StartChar
+	const string& EditName,
+	const string& ViewName,
+	const string& DestName1,
+	const string& DestName2,
+	int StartLine,
+	int StartChar
 )
 {
-		FarColor InitAttributes;
-		if (!console.GetTextAttributes(InitAttributes))
-			InitAttributes = colors::ConsoleColorToFarColor(F_LIGHTGRAY | B_BLACK);
-		SetRealColor(colors::PaletteColorToFarColor(COL_COMMANDLINEUSERSCREEN));
+	FarColor InitAttributes;
+	if (!console.GetTextAttributes(InitAttributes))
+		InitAttributes = colors::ConsoleColorToFarColor(F_LIGHTGRAY | B_BLACK);
+	SetRealColor(colors::PaletteColorToFarColor(COL_COMMANDLINEUSERSCREEN));
 
-		string ename(EditName),vname(ViewName), apanel(DestName1),ppanel(DestName2);
-		if (ConfigProvider().ShowProblems())
+	string ename(EditName), vname(ViewName), apanel(DestName1), ppanel(DestName2);
+	if (ConfigProvider().ShowProblems())
+	{
+		ename.clear();
+		vname.clear();
+		StartLine = StartChar = -1;
+		apanel = Global->Opt->ProfilePath;
+		ppanel = Global->Opt->LocalProfilePath;
+	}
+
+	if (!ename.empty() || !vname.empty())
+	{
+		Global->OnlyEditorViewerUsed = true;
+
+		_tran(SysLog(L"create dummy panels"));
+		Global->CtrlObject->CreateDummyFilePanels();
+		Global->WindowManager->PluginCommit();
+
+		Global->CtrlObject->Plugins->LoadPlugins();
+		Global->CtrlObject->Macro.LoadMacros(true, true);
+
+		if (!ename.empty())
 		{
-			ename.clear();
-			vname.clear();
-			StartLine = StartChar = -1;
-			apanel = Global->Opt->ProfilePath;
-			ppanel = Global->Opt->LocalProfilePath;
+			const auto ShellEditor = FileEditor::create(ename, CP_DEFAULT, FFILEEDIT_CANNEWFILE | FFILEEDIT_ENABLEF6, StartLine, StartChar);
+			_tran(SysLog(L"make shelleditor %p", ShellEditor));
+
+			if (!ShellEditor->GetExitCode())  // ????????????
+			{
+				Global->WindowManager->ExitMainLoop(0);
+			}
+		}
+		// TODO: Этот else убрать только после разборок с возможностью задавать несколько /e и /v в ком.строке
+		else if (!vname.empty())
+		{
+			const auto ShellViewer = FileViewer::create(vname, true);
+
+			if (!ShellViewer->GetExitCode())
+			{
+				Global->WindowManager->ExitMainLoop(0);
+			}
+
+			_tran(SysLog(L"make shellviewer, %p", ShellViewer));
 		}
 
-		if (!ename.empty() || !vname.empty())
+		Global->WindowManager->EnterMainLoop();
+	}
+	else
+	{
+		int DirCount = 0;
+
+		// воспользуемся тем, что ControlObject::Init() создает панели
+		// юзая Global->Opt->*
+
+		const auto SetupPanel = [&](bool active)
 		{
-			Global->OnlyEditorViewerUsed = true;
-
-			_tran(SysLog(L"create dummy panels"));
-			Global->CtrlObject->CreateDummyFilePanels();
-			Global->WindowManager->PluginCommit();
-
-			Global->CtrlObject->Plugins->LoadPlugins();
-			Global->CtrlObject->Macro.LoadMacros(true, true);
-
-			if (!ename.empty())
+			++DirCount;
+			string strPath = active ? apanel : ppanel;
+			if (os::fs::is_file(strPath))
 			{
-				const auto ShellEditor = FileEditor::create(ename, CP_DEFAULT, FFILEEDIT_CANNEWFILE | FFILEEDIT_ENABLEF6, StartLine, StartChar);
-				_tran(SysLog(L"make shelleditor %p",ShellEditor));
-
-				if (!ShellEditor->GetExitCode())  // ????????????
-				{
-					Global->WindowManager->ExitMainLoop(0);
-				}
-			}
-			// TODO: Этот else убрать только после разборок с возможностью задавать несколько /e и /v в ком.строке
-			else if (!vname.empty())
-			{
-				const auto ShellViewer = FileViewer::create(vname, true);
-
-				if (!ShellViewer->GetExitCode())
-				{
-					Global->WindowManager->ExitMainLoop(0);
-				}
-
-				_tran(SysLog(L"make shellviewer, %p",ShellViewer));
+				CutToParent(strPath);
 			}
 
-			Global->WindowManager->EnterMainLoop();
+			bool Root = false;
+			const auto Type = ParsePath(strPath, nullptr, &Root);
+			if (Root && (Type == root_type::drive_letter || Type == root_type::unc_drive_letter || Type == root_type::volume))
+			{
+				AddEndSlash(strPath);
+			}
+
+			auto& CurrentPanelOptions = (Global->Opt->LeftFocus == active) ? Global->Opt->LeftPanel : Global->Opt->RightPanel;
+			CurrentPanelOptions.m_Type = static_cast<int>(panel_type::FILE_PANEL);  // сменим моду панели
+			CurrentPanelOptions.Visible = true;     // и включим ее
+			CurrentPanelOptions.Folder = strPath;
+		};
+
+		if (!apanel.empty())
+		{
+			SetupPanel(true);
+
+			if (!ppanel.empty())
+			{
+				SetupPanel(false);
+			}
 		}
-		else
+
+		// теперь все готово - создаем панели!
+		Global->CtrlObject->Init(DirCount);
+
+		// а теперь "провалимся" в каталог или хост-файл (если получится ;-)
+		if (!apanel.empty())  // активная панель
 		{
-			int DirCount=0;
+			const auto ActivePanel = Global->CtrlObject->Cp()->ActivePanel();
+			const auto AnotherPanel = Global->CtrlObject->Cp()->PassivePanel();
 
-			// воспользуемся тем, что ControlObject::Init() создает панели
-			// юзая Global->Opt->*
-
-			const auto SetupPanel = [&](bool active)
+			if (!ppanel.empty())  // пассивная панель
 			{
-				++DirCount;
-				string strPath = active? apanel : ppanel;
-				if (os::fs::is_file(strPath))
+				FarChDir(AnotherPanel->GetCurDir());
+
+				if (IsPluginPrefixPath(ppanel))
 				{
-					CutToParent(strPath);
-				}
+					AnotherPanel->Parent()->SetActivePanel(AnotherPanel);
 
-				bool Root = false;
-				const auto Type = ParsePath(strPath, nullptr, &Root);
-				if(Root && (Type == root_type::drive_letter || Type == root_type::unc_drive_letter || Type == root_type::volume))
-				{
-					AddEndSlash(strPath);
-				}
-
-				auto& CurrentPanelOptions = (Global->Opt->LeftFocus == active)? Global->Opt->LeftPanel : Global->Opt->RightPanel;
-				CurrentPanelOptions.m_Type = static_cast<int>(panel_type::FILE_PANEL);  // сменим моду панели
-				CurrentPanelOptions.Visible = true;     // и включим ее
-				CurrentPanelOptions.Folder = strPath;
-			};
-
-			if (!apanel.empty())
-			{
-				SetupPanel(true);
-
-				if (!ppanel.empty())
-				{
-					SetupPanel(false);
-				}
-			}
-
-			// теперь все готово - создаем панели!
-			Global->CtrlObject->Init(DirCount);
-
-			// а теперь "провалимся" в каталог или хост-файл (если получится ;-)
-			if (!apanel.empty())  // активная панель
-			{
-				const auto ActivePanel = Global->CtrlObject->Cp()->ActivePanel();
-				const auto AnotherPanel = Global->CtrlObject->Cp()->PassivePanel();
-
-				if (!ppanel.empty())  // пассивная панель
-				{
-					FarChDir(AnotherPanel->GetCurDir());
-
-					if (IsPluginPrefixPath(ppanel))
-					{
-						AnotherPanel->Parent()->SetActivePanel(AnotherPanel);
-
-						execute_info Info;
-						Info.DisplayCommand = ppanel;
-						Info.Command = ppanel;
-
-						Global->CtrlObject->CmdLine()->ExecString(Info);
-						ActivePanel->Parent()->SetActivePanel(ActivePanel);
-					}
-					else
-					{
-						const auto strPath = PointToName(ppanel);
-
-						if (!strPath.empty())
-						{
-							if (AnotherPanel->GoToFile(strPath))
-								AnotherPanel->ProcessKey(Manager::Key(KEY_CTRLPGDN));
-						}
-					}
-				}
-
-				FarChDir(ActivePanel->GetCurDir());
-
-				if (IsPluginPrefixPath(apanel))
-				{
 					execute_info Info;
-					Info.DisplayCommand = apanel;
-					Info.Command = apanel;
+					Info.DisplayCommand = ppanel;
+					Info.Command = ppanel;
 
 					Global->CtrlObject->CmdLine()->ExecString(Info);
+					ActivePanel->Parent()->SetActivePanel(ActivePanel);
 				}
 				else
 				{
-					const auto strPath = PointToName(apanel);
+					const auto strPath = PointToName(ppanel);
 
 					if (!strPath.empty())
 					{
-						if (ActivePanel->GoToFile(strPath))
-							ActivePanel->ProcessKey(Manager::Key(KEY_CTRLPGDN));
+						if (AnotherPanel->GoToFile(strPath))
+							AnotherPanel->ProcessKey(Manager::Key(KEY_CTRLPGDN));
 					}
 				}
-
-				// !!! ВНИМАНИЕ !!!
-				// Сначала редравим пассивную панель, а потом активную!
-				AnotherPanel->Redraw();
-				ActivePanel->Redraw();
 			}
 
-			Global->WindowManager->EnterMainLoop();
+			FarChDir(ActivePanel->GetCurDir());
+
+			if (IsPluginPrefixPath(apanel))
+			{
+				execute_info Info;
+				Info.DisplayCommand = apanel;
+				Info.Command = apanel;
+
+				Global->CtrlObject->CmdLine()->ExecString(Info);
+			}
+			else
+			{
+				const auto strPath = PointToName(apanel);
+
+				if (!strPath.empty())
+				{
+					if (ActivePanel->GoToFile(strPath))
+						ActivePanel->ProcessKey(Manager::Key(KEY_CTRLPGDN));
+				}
+			}
+
+			// !!! ВНИМАНИЕ !!!
+			// Сначала редравим пассивную панель, а потом активную!
+			AnotherPanel->Redraw();
+			ActivePanel->Redraw();
 		}
 
-		TreeList::FlushCache();
+		Global->WindowManager->EnterMainLoop();
+	}
 
-		// очистим за собой!
-		SetScreen({ 0, 0, ScrX, ScrY }, L' ', colors::PaletteColorToFarColor(COL_COMMANDLINEUSERSCREEN));
-		console.SetTextAttributes(InitAttributes);
-		Global->ScrBuf->ResetLockCount();
-		Global->ScrBuf->Flush();
+	TreeList::FlushCache();
 
-		return EXIT_SUCCESS;
+	// очистим за собой!
+	SetScreen({ 0, 0, ScrX, ScrY }, L' ', colors::PaletteColorToFarColor(COL_COMMANDLINEUSERSCREEN));
+	console.SetTextAttributes(InitAttributes);
+	Global->ScrBuf->ResetLockCount();
+	Global->ScrBuf->Flush();
+
+	return EXIT_SUCCESS;
 }
 
-static void InitTemplateProfile(string &strTemplatePath)
+static void InitTemplateProfile(string& strTemplatePath)
 {
 	if (strTemplatePath.empty())
 	{
@@ -341,7 +343,7 @@ static void InitTemplateProfile(string &strTemplatePath)
 	}
 }
 
-static void InitProfile(string &strProfilePath, string &strLocalProfilePath)
+static void InitProfile(string& strProfilePath, string& strLocalProfilePath)
 {
 	if (Global->Opt->ReadOnlyConfig < 0) // do not override 'far /ro', 'far /ro-'
 		Global->Opt->ReadOnlyConfig = GetFarIniInt(L"General"sv, L"ReadOnlyConfig"sv, 0);
@@ -363,14 +365,14 @@ static void InitProfile(string &strProfilePath, string &strLocalProfilePath)
 			const auto GetShellProfilePath = [](int Idl)
 			{
 				wchar_t Buffer[MAX_PATH];
-				SHGetFolderPath(nullptr, Idl | (Global->Opt->ReadOnlyConfig? 0 : CSIDL_FLAG_CREATE), nullptr, SHGFP_TYPE_CURRENT, Buffer);
+				SHGetFolderPath(nullptr, Idl | (Global->Opt->ReadOnlyConfig ? 0 : CSIDL_FLAG_CREATE), nullptr, SHGFP_TYPE_CURRENT, Buffer);
 				return path::join(Buffer, L"Far Manager"sv, L"Profile"sv);
 			};
 
 			// roaming data default path: %APPDATA%\Far Manager\Profile
 			Global->Opt->ProfilePath = GetShellProfilePath(CSIDL_APPDATA);
 
-			Global->Opt->LocalProfilePath = UseSystemProfiles == 2?
+			Global->Opt->LocalProfilePath = UseSystemProfiles == 2 ?
 				Global->Opt->ProfilePath :
 				// local data default path: %LOCALAPPDATA%\Far Manager\Profile
 				GetShellProfilePath(CSIDL_LOCAL_APPDATA);
@@ -386,7 +388,7 @@ static void InitProfile(string &strProfilePath, string &strLocalProfilePath)
 	else
 	{
 		Global->Opt->ProfilePath = strProfilePath;
-		Global->Opt->LocalProfilePath = !strLocalProfilePath.empty()? strLocalProfilePath : strProfilePath;
+		Global->Opt->LocalProfilePath = !strLocalProfilePath.empty() ? strLocalProfilePath : strProfilePath;
 	}
 
 	Global->Opt->LoadPlug.strPersonalPluginsPath = path::join(Global->Opt->ProfilePath, L"Plugins"sv);
@@ -428,20 +430,22 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 	if (in_range(2u, Args.size(), 5u) && (isArg(Args[0], L"export"sv) || isArg(Args[0], L"import"sv)))
 	{
 		const auto Export = isArg(Args[0], L"export"sv);
-		string strProfilePath(Args.size() > 2? Args[2] : L""sv), strLocalProfilePath(Args.size() > 3 ? Args[3] : L""), strTemplatePath(Args.size() > 4 ? Args[4] : L"");
+		string strProfilePath(Args.size() > 2 ? Args[2] : L""sv), strLocalProfilePath(Args.size() > 3 ? Args[3] : L""), strTemplatePath(Args.size() > 4 ? Args[4] : L"");
 		InitTemplateProfile(strTemplatePath);
 		InitProfile(strProfilePath, strLocalProfilePath);
-		Global->m_ConfigProvider = new config_provider(Export? config_provider::mode::m_export : config_provider::mode::m_import);
+		Global->m_ConfigProvider = new config_provider(Export ? config_provider::mode::m_export : config_provider::mode::m_import);
 		ConfigProvider().ServiceMode(Args[1]);
 		return EXIT_SUCCESS;
 	}
 
 	if (in_range(1u, Args.size(), 3u) && isArg(Args[0], L"clearcache"sv))
 	{
-		string strProfilePath(Args.size() > 1? Args[1] : L""sv);
-		string strLocalProfilePath(Args.size() > 2? Args[2] : L""sv);
+		string strProfilePath(Args.size() > 1 ? Args[1] : L""sv);
+		string strLocalProfilePath(Args.size() > 2 ? Args[2] : L""sv);
 		InitProfile(strProfilePath, strLocalProfilePath);
-		(void)config_provider{config_provider::clear_cache{}};
+		(void)config_provider {
+			config_provider::clear_cache{}
+		};
 		return EXIT_SUCCESS;
 	}
 
@@ -477,7 +481,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	os::memory::enable_low_fragmentation_heap();
 
-	if(!console.IsFullscreenSupported())
+	if (!console.IsFullscreenSupported())
 	{
 		const BYTE ReserveAltEnter = 0x8;
 		imports.SetConsoleKeyShortcuts(TRUE, ReserveAltEnter, nullptr, 0);
@@ -492,7 +496,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	Global->g_strFarINI = concat(Global->g_strFarModuleName, L".ini"sv);
 	Global->g_strFarPath = Global->g_strFarModuleName;
-	CutToSlash(Global->g_strFarPath,true);
+	CutToSlash(Global->g_strFarPath, true);
 	os::env::set(L"FARHOME"sv, Global->g_strFarPath);
 	AddEndSlash(Global->g_strFarPath);
 
@@ -513,8 +517,8 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	string strEditName;
 	string strViewName;
 	string DestNames[2];
-	int StartLine=-1,StartChar=-1;
-	int CntDestName=0; // количество параметров-имен каталогов
+	int StartLine = -1, StartChar = -1;
+	int CntDestName = 0; // количество параметров-имен каталогов
 
 	string strProfilePath, strLocalProfilePath, strTemplatePath;
 
@@ -524,162 +528,162 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	FOR_RANGE(Args, Iter)
 	{
 		const auto& Arg = *Iter;
-		if ((Arg[0]==L'/' || Arg[0]==L'-') && Arg[1])
+		if ((Arg[0] == L'/' || Arg[0] == L'-') && Arg[1])
 		{
 			switch (upper(Arg[1]))
 			{
-				case L'E':
-					if (std::iswdigit(Arg[2]))
-					{
-						StartLine = static_cast<int>(std::wcstol(Arg + 2, nullptr, 10));
-						const wchar_t *ChPtr = wcschr(Arg + 2, L':');
+			case L'E':
+				if (std::iswdigit(Arg[2]))
+				{
+					StartLine = static_cast<int>(std::wcstol(Arg + 2, nullptr, 10));
+					const wchar_t* ChPtr = wcschr(Arg + 2, L':');
 
-						if (ChPtr)
-							StartChar = static_cast<int>(std::wcstol(ChPtr + 1, nullptr, 10));
-					}
+					if (ChPtr)
+						StartChar = static_cast<int>(std::wcstol(ChPtr + 1, nullptr, 10));
+				}
 
-					if (Iter + 1 != Args.end())
-					{
-						strEditName = *++Iter;
-					}
+				if (Iter + 1 != Args.end())
+				{
+					strEditName = *++Iter;
+				}
+				break;
+
+			case L'V':
+				if (Iter + 1 != Args.end())
+				{
+					strViewName = *++Iter;
+				}
+				break;
+
+			case L'M':
+				switch (upper(Arg[2]))
+				{
+				case L'\0':
+					Global->Opt->Macro.DisableMacro |= MDOL_ALL;
 					break;
 
-				case L'V':
-					if (Iter + 1 != Args.end())
-					{
-						strViewName = *++Iter;
-					}
+				case L'A':
+					if (!Arg[3])
+						Global->Opt->Macro.DisableMacro |= MDOL_AUTOSTART;
 					break;
-
-				case L'M':
-					switch (upper(Arg[2]))
-					{
-					case L'\0':
-						Global->Opt->Macro.DisableMacro|=MDOL_ALL;
-						break;
-
-					case L'A':
-						if (!Arg[3])
-							Global->Opt->Macro.DisableMacro|=MDOL_AUTOSTART;
-						break;
-					}
-					break;
+				}
+				break;
 
 #ifndef NO_WRAPPER
-				case L'U':
-					if (Iter + 1 != Args.end())
-					{
-						//Affects OEM plugins only!
-						Global->strRegUser = *++Iter;
-					}
-					break;
+			case L'U':
+				if (Iter + 1 != Args.end())
+				{
+					//Affects OEM plugins only!
+					Global->strRegUser = *++Iter;
+				}
+				break;
 #endif // NO_WRAPPER
 
-				case L'S':
+			case L'S':
+			{
+				constexpr auto SetParam = L"set:"sv;
+				if (starts_with_icase(Arg + 1, SetParam))
+				{
+					if (const auto EqualPtr = wcschr(Arg + 1, L'='))
 					{
-						constexpr auto SetParam = L"set:"sv;
-						if (starts_with_icase(Arg + 1, SetParam))
-						{
-							if (const auto EqualPtr = wcschr(Arg + 1, L'='))
-							{
-								Overrides.emplace(string(Arg + 1 + SetParam.size(), EqualPtr), EqualPtr + 1);
-							}
-						}
-						else if (Iter + 1 != Args.end())
-						{
-							strProfilePath = *++Iter;
-							const auto Next = Iter + 1;
-							if (Next != Args.end() && *Next[0] != L'-'  && *Next[0] != L'/')
-							{
-								strLocalProfilePath = *Next;
-								Iter = Next;
-							}
-						}
+						Overrides.emplace(string(Arg + 1 + SetParam.size(), EqualPtr), EqualPtr + 1);
 					}
-					break;
-
-				case L'T':
+				}
+				else if (Iter + 1 != Args.end())
+				{
+					strProfilePath = *++Iter;
+					const auto Next = Iter + 1;
+					if (Next != Args.end() && *Next[0] != L'-' && *Next[0] != L'/')
 					{
-						const auto Title = L"title"sv;
-						if (starts_with_icase(Arg + 1, Title))
-						{
-							if (Arg[1 + Title.size()] == L':')
-								CustomTitle = Arg + 1 + Title.size() + 1;
-							else
-								CustomTitle = L""sv;
-						}
-						else if (Iter + 1 != Args.end())
-						{
-							strTemplatePath = *++Iter;
-						}
+						strLocalProfilePath = *Next;
+						Iter = Next;
 					}
-					break;
+				}
+			}
+			break;
 
-				case L'P':
-					{
-						Global->Opt->LoadPlug.PluginsPersonal = false;
-						Global->Opt->LoadPlug.MainPluginDir = false;
+			case L'T':
+			{
+				const auto Title = L"title"sv;
+				if (starts_with_icase(Arg + 1, Title))
+				{
+					if (Arg[1 + Title.size()] == L':')
+						CustomTitle = Arg + 1 + Title.size() + 1;
+					else
+						CustomTitle = L""sv;
+				}
+				else if (Iter + 1 != Args.end())
+				{
+					strTemplatePath = *++Iter;
+				}
+			}
+			break;
 
-						if (Arg[2])
-						{
-							// we can't expand it here - some environment variables might not be available yet
-							Global->Opt->LoadPlug.strCustomPluginsPath = &Arg[2];
-						}
-						else
-						{
-							// если указан -P без <путь>, то, считаем, что основные
-							//  плагины не загружать вооообще!!!
-							Global->Opt->LoadPlug.strCustomPluginsPath.clear();
-						}
-					}
-					break;
+			case L'P':
+			{
+				Global->Opt->LoadPlug.PluginsPersonal = false;
+				Global->Opt->LoadPlug.MainPluginDir = false;
 
-				case L'C':
-					if (upper(Arg[2])==L'O' && !Arg[3])
-					{
-						Global->Opt->LoadPlug.PluginsCacheOnly = true;
-						Global->Opt->LoadPlug.PluginsPersonal = false;
-					}
-					break;
+				if (Arg[2])
+				{
+					// we can't expand it here - some environment variables might not be available yet
+					Global->Opt->LoadPlug.strCustomPluginsPath = &Arg[2];
+				}
+				else
+				{
+					// если указан -P без <путь>, то, считаем, что основные
+					//  плагины не загружать вооообще!!!
+					Global->Opt->LoadPlug.strCustomPluginsPath.clear();
+				}
+			}
+			break;
 
-				case L'?':
-				case L'H':
-					ControlObject::ShowVersion();
-					show_help();
-					return EXIT_SUCCESS;
+			case L'C':
+				if (upper(Arg[2]) == L'O' && !Arg[3])
+				{
+					Global->Opt->LoadPlug.PluginsCacheOnly = true;
+					Global->Opt->LoadPlug.PluginsPersonal = false;
+				}
+				break;
+
+			case L'?':
+			case L'H':
+				ControlObject::ShowVersion();
+				show_help();
+				return EXIT_SUCCESS;
 
 #ifdef DIRECT_RT
-				case L'D':
-					if (upper(Arg[2])==L'O' && !Arg[3])
-						Global->DirectRT=true;
-					break;
+			case L'D':
+				if (upper(Arg[2]) == L'O' && !Arg[3])
+					Global->DirectRT = true;
+				break;
 #endif
-				case L'W':
-					{
-						if(Arg[2] == L'-')
-						{
-							Global->Opt->WindowMode = false;
-						}
-						else if(!Arg[2])
-						{
-							Global->Opt->WindowMode = true;
-						}
-					}
-					break;
+			case L'W':
+			{
+				if (Arg[2] == L'-')
+				{
+					Global->Opt->WindowMode = false;
+				}
+				else if (!Arg[2])
+				{
+					Global->Opt->WindowMode = true;
+				}
+			}
+			break;
 
-				case L'R':
-					if (upper(Arg[2]) == L'O')
+			case L'R':
+				if (upper(Arg[2]) == L'O')
+				{
+					if (!Arg[3]) // -ro
 					{
-						if (!Arg[3]) // -ro
-						{
-							Global->Opt->ReadOnlyConfig = TRUE;
-						}
-						else if (Arg[3] == L'-') // -ro-
-						{
-							Global->Opt->ReadOnlyConfig = FALSE;
-						}
+						Global->Opt->ReadOnlyConfig = TRUE;
 					}
-					break;
+					else if (Arg[3] == L'-') // -ro-
+					{
+						Global->Opt->ReadOnlyConfig = FALSE;
+					}
+				}
+				break;
 			}
 		}
 		else // простые параметры. Их может быть max две штукА.
@@ -712,13 +716,13 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	InitKeysArray();
 
 	if (!Global->Opt->LoadPlug.MainPluginDir) //если есть ключ /p то он отменяет /co
-		Global->Opt->LoadPlug.PluginsCacheOnly=false;
+		Global->Opt->LoadPlug.PluginsCacheOnly = false;
 
 	if (Global->Opt->LoadPlug.PluginsCacheOnly)
 	{
 		Global->Opt->LoadPlug.strCustomPluginsPath.clear();
-		Global->Opt->LoadPlug.MainPluginDir=false;
-		Global->Opt->LoadPlug.PluginsPersonal=false;
+		Global->Opt->LoadPlug.MainPluginDir = false;
+		Global->Opt->LoadPlug.PluginsPersonal = false;
 	}
 
 	InitConsole();
@@ -748,21 +752,36 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	NoElevationDuringBoot.reset();
 
-	try
+	const auto CurrentFunctionName = __FUNCTION__;
+
+	return cpp_try(
+		[&]
+		{
+			return MainProcess(strEditName, strViewName, DestNames[0], DestNames[1], StartLine, StartChar);
+		},
+			[&]() -> int
+		{
+			if (handle_unknown_exception(CurrentFunctionName))
+				std::_Exit(EXIT_FAILURE);
+			throw;
+		},
+			[&](std::exception const& e) -> int
+		{
+			if (handle_std_exception(e, CurrentFunctionName))
+				std::_Exit(EXIT_FAILURE);
+			throw;
+		});
+}
+
+static void configure_exception_handling(int Argc, const wchar_t* const Argv[])
+{
+	for (const auto& i : span(Argv + 1, Argc - 1))
 	{
-		return MainProcess(strEditName, strViewName, DestNames[0], DestNames[1], StartLine, StartChar);
-	}
-	catch (const std::exception& e)
-	{
-		if (ProcessStdException(e, __FUNCTION__))
-			std::_Exit(EXIT_FAILURE);
-		throw;
-	}
-	catch (...)
-	{
-		if (ProcessUnknownException(__FUNCTION__))
-			std::_Exit(EXIT_FAILURE);
-		throw;
+		if ((i[0] == L'/' || i[0] == L'-') && upper(i[1]) == L'X' && !i[2])
+		{
+			disable_exception_handling();
+			return;
+		}
 	}
 }
 
@@ -775,6 +794,8 @@ static int wmain_seh(int Argc, const wchar_t* const Argv[])
 	}
 #endif
 
+	configure_exception_handling(Argc, Argv);
+
 #if defined(SYSLOG)
 	atexit(PrintSysLogStat);
 #endif
@@ -782,54 +803,58 @@ static int wmain_seh(int Argc, const wchar_t* const Argv[])
 	SCOPED_ACTION(unhandled_exception_filter);
 	SCOPED_ACTION(new_handler);
 
-	git_libgit2_init();
 
-	try
-	{
-		int retVal = mainImpl({ Argv + 1, Argv + Argc });
-		git_libgit2_shutdown();
+	const auto CurrentFunctionName = __FUNCTION__;
 
-		return retVal;
-	}
-	catch (const far_known_exception& e)
-	{
-		std::wcout << build::version_string() << L'\n' << std::endl;
-		std::wcerr << e.message() << std::endl;
-		return EXIT_FAILURE;
-	}
-	catch (const std::exception& e)
-	{
-		if (ProcessStdException(e, __FUNCTION__))
-			std::_Exit(EXIT_FAILURE);
+	return cpp_try(
+		[&]
+		{
+			try
+			{
+				git_libgit2_init();
+				int retVal = mainImpl({ Argv + 1, Argv + Argc });
+				git_libgit2_shutdown();
 
-		unhandled_exception_filter::dismiss();
-		RestoreGPFaultUI();
-		throw;
-	}
-	catch (...)
-	{
-		if (ProcessUnknownException(__FUNCTION__))
-			std::_Exit(EXIT_FAILURE);
+				return retVal;
+			}
+			catch (const far_known_exception& e)
+			{
+				std::wcout << build::version_string() << L'\n' << std::endl;
+				std::wcerr << e.message() << std::endl;
+				return EXIT_FAILURE;
+			}
+		},
+			[&]() -> int
+		{
+			if (handle_unknown_exception(CurrentFunctionName))
+				std::_Exit(EXIT_FAILURE);
 
-		unhandled_exception_filter::dismiss();
-		RestoreGPFaultUI();
-		throw;
-	}
+			restore_gpfault_ui();
+			throw;
+		},
+			[&](std::exception const& e) -> int
+		{
+			if (handle_std_exception(e, CurrentFunctionName))
+				std::_Exit(EXIT_FAILURE);
+
+			restore_gpfault_ui();
+			throw;
+		});
 }
 
 int main()
 {
-	return seh_invoke_with_ui(
-	[]
-	{
-		// wmain is a non-standard extension and not available in gcc.
-		int Argc;
-		const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
-		return wmain_seh(Argc, Argv.get());
-	},
-	[]() -> int
-	{
-		std::_Exit(EXIT_FAILURE);
-	},
-	__FUNCTION__);
+	return seh_try_with_ui(
+		[]
+		{
+			// wmain is a non-standard extension and not available in gcc.
+			int Argc;
+			const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
+			return wmain_seh(Argc, Argv.get());
+		},
+			[]() -> int
+		{
+			std::_Exit(EXIT_FAILURE);
+		},
+			__FUNCTION__);
 }
