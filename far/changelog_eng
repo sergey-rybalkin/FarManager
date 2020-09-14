@@ -1,3 +1,67 @@
+drkns 14.09.2020 00:58:21 +0100 - build 5667
+
+1. Switching exotic code pages didn't work as expected due to incorrectly set flags.
+
+2. Added a manual roundtrip checking for the codepages that OS can't validate.
+
+3. Refactoring.
+
+4. Tests.
+
+zg 14.09.2020 01:03:19 +0300 - build 5666
+
+1. surpress redraw under exception dialog.
+
+drkns 12.09.2020 02:02:02 +0100 - build 5665
+
+1. Regex word search didn't work properly in some cases.
+
+drkns 10.09.2020 00:11:09 +0100 - build 5664
+
+1. Corrections in exception handling.
+
+2. Show system errors in SQLite exeptions.
+
+3. Other minor things.
+
+drkns 06.09.2020 23:00:00 +0100 - build 5663
+
+1. Store binary data in exported configuration as base64.
+
+2. Reading UTF-7 didn't work. At all.
+
+3. Refactoring.
+
+4. Tests.
+
+drkns 01.09.2020 17:48:03 +0100 - build 5662
+
+1. Setting db key descriptions didn't work in some cases.
+
+drkns 31.08.2020 23:01:01 +0100 - build 5661
+
+1. Continuation of #3817.
+
+2. VS2017.
+
+drkns 31.08.2020 19:18:12 +0100 - build 5660
+
+1. Show the version in the UI as major.minor.build.revision, for compatibility with the OS and for the future.
+
+2. Restore the /x parameter - disable exception handling (for ease of development and debugging).
+
+3. Refactoring.
+
+zg 28.08.2020 03:38:58 +0300 - build 5659
+
+1. forum: titles never shown in listbox with DIF_LISTNOBOX flag.
+
+drkns 27.08.2020 00:35:51 +0100 - build 5658
+
+1. 0003817: F6 - Failed move file when volume is mounted to folder only
+
+2. A few minor changes.
+
 drkns 22.08.2020 22:49:52 +0100 - build 5657
 
 1. Sorting again: additional criteria direction can inherit the primary one.

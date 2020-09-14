@@ -2504,17 +2504,21 @@ struct THREADPARAM
 
 void background_searcher::Search()
 {
-	seh_invoke_thread(m_ExceptionPtr, [this]
+	seh_try_thread(m_ExceptionPtr, [this]
 	{
-		try
+		cpp_try(
+		[&]
 		{
 			SCOPED_ACTION(wakeful);
 			InitInFileSearch();
 			m_PluginMode? DoPreparePluginList() : DoPrepareFileList();
 			ReleaseInFileSearch();
-		}
-		CATCH_AND_SAVE_EXCEPTION_TO(m_ExceptionPtr)
-		m_IsRegularException = true;
+		},
+		[&]
+		{
+			SAVE_EXCEPTION_TO(m_ExceptionPtr);
+			m_IsRegularException = true;
+		});
 	});
 
 	m_Owner->itd->SetPercent(0);
@@ -2599,6 +2603,7 @@ bool FindFiles::FindFilesProcess()
 	Dlg->SetHelp(L"FindFileResult"sv);
 	Dlg->SetPosition({ -1, -1, DlgWidth, DlgHeight });
 	Dlg->SetId(FindFileResultId);
+	Dlg->SetFlags(FSCROBJ_SPECIAL);
 
 	m_ResultsDialogPtr = Dlg.get();
 

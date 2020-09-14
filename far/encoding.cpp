@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Internal:
 #include "strmix.hpp"
 #include "exception.hpp"
+#include "exception_handler.hpp"
 #include "plugin.hpp"
 
 // Platform:
@@ -96,11 +97,10 @@ private:
 
 	BOOL enum_cp_callback(wchar_t const* cpNum)
 	{
-		try
+		return cpp_try(
+		[&]
 		{
 			const auto cp = static_cast<UINT>(std::wcstoul(cpNum, nullptr, 10));
-			if (cp == CP_UTF8)
-				return TRUE; // skip standard unicode
 
 			CPINFOEX cpix;
 			if (!GetCPInfoEx(cp, 0, &cpix))
@@ -128,11 +128,14 @@ private:
 				}
 			}
 
-			m_InstalledCp.try_emplace(cp, cpix.MaxCharSize, cp_data);
+			m_InstalledCp[cp] = { string(cp_data), static_cast<unsigned char>(cpix.MaxCharSize) };
 			return TRUE;
-		}
-		CATCH_AND_SAVE_EXCEPTION_TO(m_ExceptionPtr)
-		return FALSE;
+		},
+		[&]
+		{
+			SAVE_EXCEPTION_TO(m_ExceptionPtr);
+			return FALSE;
+		});
 	}
 
 	cp_map m_InstalledCp;
@@ -145,15 +148,164 @@ const cp_map& InstalledCodepages()
 	return s_Icp.get();
 }
 
-cp_map::value_type::second_type GetCodePageInfo(UINT cp)
+cp_info const* GetCodePageInfo(unsigned cp)
 {
 	// Standard unicode CPs (1200, 1201, 65001) are NOT in the list.
 	const auto& InstalledCp = InstalledCodepages();
 
 	if (const auto found = InstalledCp.find(cp); found != InstalledCp.cend())
-		return found->second;
+		return &found->second;
 
 	return {};
+}
+
+template<typename range1, typename range2>
+static std::optional<size_t> mismatch(range1 const& Range1, range2 const& Range2)
+{
+	const auto [Mismatch1, Mismatch2] = std::mismatch(ALL_CONST_RANGE(Range1), ALL_CONST_RANGE(Range2));
+
+	size_t const
+		Pos1 = Mismatch1 - std::cbegin(Range1),
+		Pos2 = Mismatch2 - std::cbegin(Range2);
+
+	if (Pos1 == std::size(Range1) && Pos2 == std::size(Range2))
+		return {};
+
+	return std::min(Pos1, Pos2);
+}
+
+static bool is_retarded_error()
+{
+	const auto Error = GetLastError();
+	return Error == ERROR_INVALID_FLAGS || Error == ERROR_INVALID_PARAMETER;
+}
+
+static size_t widechar_to_multibyte_with_validation(uintptr_t const Codepage, string_view const Str, span<char> Buffer, bool* const UsedDefaultChar)
+{
+	if (UsedDefaultChar)
+		*UsedDefaultChar = false;
+
+	auto IsRetardedCodepage = IsNoFlagsCodepage(Codepage);
+	BOOL DefaultCharUsed = FALSE;
+
+	const auto convert = [&](span<char> const To)
+	{
+		for (;;)
+		{
+			if (const auto Result = WideCharToMultiByte(
+				Codepage,
+				IsRetardedCodepage? 0 : WC_NO_BEST_FIT_CHARS,
+				Str.data(),
+				static_cast<int>(Str.size()),
+				To.data(),
+				static_cast<int>(To.size()),
+				{},
+				IsRetardedCodepage? nullptr : &DefaultCharUsed
+			))
+				return Result;
+
+			if (!IsRetardedCodepage && is_retarded_error())
+				IsRetardedCodepage = true;
+			else
+				return 0;
+		}
+	};
+
+	auto Result = convert(Buffer);
+	if (!Result && Buffer.size() <= Str.size() && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+	{
+		// https://msdn.microsoft.com/en-us/library/windows/desktop/dd374130.aspx
+		// If BufferSize is less than DataSize, this function writes the number of characters specified by BufferSize to the buffer indicated by Buffer.
+
+		// If the function succeeds and BufferSize is 0, the return value is the required size, in bytes, for the buffer indicated by Buffer.
+		Result = convert({});
+	}
+
+	if (!DefaultCharUsed && !IsRetardedCodepage)
+		return Result;
+
+	std::string LocalBuffer;
+
+	if (Buffer.size() < static_cast<size_t>(Result))
+	{
+		LocalBuffer.resize(Result);
+		Buffer = LocalBuffer;
+		Result = convert(Buffer);
+	}
+
+	const auto Roundtrip = encoding::get_chars(Codepage, { Buffer.data(), static_cast<size_t>(Result) });
+
+	if (const auto Pos = mismatch(Str, Roundtrip))
+	{
+		if (UsedDefaultChar)
+			*UsedDefaultChar = true;
+		else
+			throw MAKE_EXCEPTION(encoding::exception, Codepage, *Pos);
+	}
+
+	return Result;
+}
+
+static size_t multibyte_to_widechar_with_validation(uintptr_t const Codepage, std::string_view Str, span<wchar_t> Buffer, bool const Strict)
+{
+	auto IsRetardedCodepage = IsNoFlagsCodepage(Codepage);
+
+	const auto convert = [&](span<wchar_t> const To)
+	{
+		for (;;)
+		{
+			if (const auto Result = MultiByteToWideChar(
+				Codepage,
+				!Strict || IsRetardedCodepage? 0 : MB_ERR_INVALID_CHARS,
+				Str.data(),
+				static_cast<int>(Str.size()),
+				To.data(),
+				static_cast<int>(To.size())
+			))
+				return Result;
+
+			if (!IsRetardedCodepage && is_retarded_error())
+				IsRetardedCodepage = true;
+			else
+				return 0;
+		}
+	};
+
+	auto Result = convert(Buffer);
+	if (!Strict)
+		return Result;
+
+	if (!Result && !IsRetardedCodepage && GetLastError() == ERROR_NO_UNICODE_TRANSLATION)
+	{
+		for(;;)
+		{
+			Str.remove_suffix(1);
+			if (Str.empty() || convert({}))
+				break;
+		}
+
+		throw MAKE_EXCEPTION(encoding::exception, Codepage, Str.size());
+	}
+
+	string LocalBuffer;
+
+	if (Buffer.size() < static_cast<size_t>(Result))
+	{
+		LocalBuffer.resize(Result);
+		Buffer = LocalBuffer;
+		Result = convert(Buffer);
+		if (!Result)
+			return Result;
+	}
+
+	const auto Roundtrip = encoding::get_bytes(Codepage, { Buffer.data(), static_cast<size_t>(Result) }, nullptr);
+
+	if (const auto Pos = mismatch(Str, Roundtrip))
+	{
+		throw MAKE_EXCEPTION(encoding::exception, Codepage, *Pos);
+	}
+
+	return Result;
 }
 
 static bool IsValid(UINT cp)
@@ -164,13 +316,8 @@ static bool IsValid(UINT cp)
 	if (cp==CP_UTF8 || cp==CP_UNICODE || cp==CP_REVERSEBOM)
 		return false;
 
-	return GetCodePageInfo(cp).first == 2;
-}
-
-static auto GetNoBestFitCharsFlag(uintptr_t Codepage)
-{
-	// See https://msdn.microsoft.com/en-us/library/windows/desktop/dd374130.aspx
-	return Codepage == CP_UTF8 || Codepage == 54936 || IsNoFlagsCodepage(Codepage)? 0 : WC_NO_BEST_FIT_CHARS;
+	const auto Info = GetCodePageInfo(cp);
+	return Info && Info->MaxCharSize == 2;
 }
 
 bool MultibyteCodepageDecoder::SetCP(uintptr_t Codepage)
@@ -185,10 +332,6 @@ bool MultibyteCodepageDecoder::SetCP(uintptr_t Codepage)
 	m1.assign(256, 0);
 	m2.assign(256*256, 0);
 
-	BOOL DefUsed, *pDefUsed = (Codepage == CP_UTF8 || Codepage == CP_UTF7) ? nullptr : &DefUsed;
-
-	const DWORD flags = GetNoBestFitCharsFlag(Codepage);
-
 	union
 	{
 		char Buffer[2];
@@ -201,9 +344,9 @@ bool MultibyteCodepageDecoder::SetCP(uintptr_t Codepage)
 	size_t Size = 0;
 	for (size_t i = 0; i != 65536; ++i) // only UCS2 range
 	{
-		DefUsed = FALSE;
+		bool DefUsed = false;
 		const auto Char = static_cast<wchar_t>(i);
-		size_t CharSize = WideCharToMultiByte(Codepage, flags, &Char, 1, u.Buffer, static_cast<int>(std::size(u.Buffer)), nullptr, pDefUsed);
+		const auto CharSize = widechar_to_multibyte_with_validation(Codepage, { &Char, 1 }, u.Buffer, &DefUsed);
 		if (!CharSize || DefUsed)
 			continue;
 
@@ -270,7 +413,7 @@ size_t MultibyteCodepageDecoder::GetChar(std::string_view const Str, wchar_t& Ch
 	}
 }
 
-static size_t get_bytes_impl(uintptr_t const Codepage, string_view const Str, span<char> const Buffer, bool* const UsedDefaultChar)
+static size_t get_bytes_impl(uintptr_t const Codepage, string_view const Str, span<char> Buffer, bool* const UsedDefaultChar)
 {
 	if (Str.empty())
 		return 0;
@@ -295,23 +438,7 @@ static size_t get_bytes_impl(uintptr_t const Codepage, string_view const Str, sp
 		}
 
 	default:
-		{
-			BOOL bUsedDefaultChar = FALSE;
-			auto Result = WideCharToMultiByte(Codepage, GetNoBestFitCharsFlag(Codepage), Str.data(), static_cast<int>(Str.size()), Buffer.data(), static_cast<int>(Buffer.size()), nullptr, UsedDefaultChar? &bUsedDefaultChar : nullptr);
-			if (!Result && Buffer.size() < Str.size() && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
-			{
-				// https://msdn.microsoft.com/en-us/library/windows/desktop/dd374130.aspx
-				// If BufferSize is less than DataSize, this function writes the number of characters specified by BufferSize to the buffer indicated by Buffer.
-
-				// If the function succeeds and BufferSize is 0, the return value is the required size, in bytes, for the buffer indicated by Buffer.
-				Result = WideCharToMultiByte(Codepage, GetNoBestFitCharsFlag(Codepage), Str.data(), static_cast<int>(Str.size()), nullptr, 0, nullptr, UsedDefaultChar ? &bUsedDefaultChar : nullptr);
-			}
-
-			if (UsedDefaultChar)
-				*UsedDefaultChar = bUsedDefaultChar != FALSE;
-
-			return Result;
-		}
+		return widechar_to_multibyte_with_validation(Codepage, Str, Buffer, UsedDefaultChar);
 	}
 }
 
@@ -325,7 +452,7 @@ uintptr_t encoding::codepage::oem()
 	return GetOEMCP();
 }
 
-size_t encoding::get_bytes(uintptr_t const Codepage, string_view const Str, span<char> const Buffer, bool* const UsedDefaultChar)
+static size_t get_bytes_impl_c_str(uintptr_t const Codepage, string_view const Str, span<char> const Buffer, bool* const UsedDefaultChar)
 {
 	const auto Result = get_bytes_impl(Codepage, Str, Buffer, UsedDefaultChar);
 	if (Result < Buffer.size())
@@ -333,6 +460,16 @@ size_t encoding::get_bytes(uintptr_t const Codepage, string_view const Str, span
 		Buffer[Result] = '\0';
 	}
 	return Result;
+}
+
+size_t encoding::get_bytes_strict(uintptr_t const Codepage, string_view const Str, span<char> const Buffer)
+{
+	return get_bytes_impl_c_str(Codepage, Str, Buffer, nullptr);
+}
+
+size_t encoding::get_bytes(uintptr_t const Codepage, string_view const Str, span<char> const Buffer, bool* const UsedDefaultChar)
+{
+	return get_bytes_impl_c_str(Codepage, Str, Buffer, UsedDefaultChar);
 }
 
 std::string encoding::get_bytes(uintptr_t const Codepage, string_view const Str, bool* const UsedDefaultChar)
@@ -354,6 +491,11 @@ std::string encoding::get_bytes(uintptr_t const Codepage, string_view const Str,
 	return Buffer;
 }
 
+size_t encoding::get_bytes_count_strict(uintptr_t const Codepage, string_view const Str)
+{
+	return get_bytes_strict(Codepage, Str, {});
+}
+
 size_t encoding::get_bytes_count(uintptr_t const Codepage, string_view const Str)
 {
 	return get_bytes(Codepage, Str, span<char>{});
@@ -364,8 +506,11 @@ namespace Utf7
 	size_t get_chars(std::string_view Str, span<wchar_t> Buffer, Utf::errors *Errors);
 }
 
-static size_t get_chars_impl(uintptr_t const Codepage, std::string_view Str, span<wchar_t> const Buffer)
+static size_t get_chars_impl(uintptr_t const Codepage, std::string_view Str, span<wchar_t> const Buffer, bool const Strict)
 {
+	if (Str.empty())
+		return 0;
+
 	switch (Codepage)
 	{
 	case CP_UTF8:
@@ -383,18 +528,28 @@ static size_t get_chars_impl(uintptr_t const Codepage, std::string_view Str, spa
 		return Str.size() / sizeof(wchar_t);
 
 	default:
-		return MultiByteToWideChar(Codepage, 0, Str.data(), static_cast<int>(Str.size()), Buffer.data(), static_cast<int>(Buffer.size()));
+		return multibyte_to_widechar_with_validation(Codepage, Str, Buffer, Strict);
 	}
 }
 
-size_t encoding::get_chars(uintptr_t const Codepage, std::string_view const Str, span<wchar_t> const Buffer)
+static size_t get_chars_impl_c_str(uintptr_t const Codepage, std::string_view const Str, span<wchar_t> const Buffer, bool const Strict)
 {
-	const auto Result = get_chars_impl(Codepage, Str, Buffer);
+	const auto Result = get_chars_impl(Codepage, Str, Buffer, Strict);
 	if (Result < Buffer.size())
 	{
 		Buffer[Result] = {};
 	}
 	return Result;
+}
+
+size_t encoding::get_chars_strict(uintptr_t const Codepage, std::string_view const Str, span<wchar_t> const Buffer)
+{
+	return get_chars_impl_c_str(Codepage, Str, Buffer, true);
+}
+
+size_t encoding::get_chars(uintptr_t const Codepage, std::string_view const Str, span<wchar_t> const Buffer)
+{
+	return get_chars_impl_c_str(Codepage, Str, Buffer, false);
 }
 
 size_t encoding::get_chars(uintptr_t const Codepage, bytes_view const Str, span<wchar_t> Buffer)
@@ -440,6 +595,11 @@ string encoding::get_chars(uintptr_t const Codepage, std::string_view const Str)
 string encoding::get_chars(uintptr_t const Codepage, bytes_view const Str)
 {
 	return get_chars(Codepage, to_string_view(Str));
+}
+
+size_t encoding::get_chars_count_strict(uintptr_t const Codepage, std::string_view const Str)
+{
+	return get_chars_strict(Codepage, Str, {});
 }
 
 size_t encoding::get_chars_count(uintptr_t const Codepage, std::string_view const Str)
@@ -522,7 +682,7 @@ size_t Utf::get_chars(uintptr_t const Codepage, std::string_view const Str, span
 
 //                                   2                         5         6
 //         0                         6                         2         2
-// base64: ABCDEFGHIJKLMNOPQRSTUVWXYZabcdrfghijklmnopqrstuvwxyz0123456789+/
+// base64: ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/
 
 static const int ill = 0x0100; // illegal
 static const int dir = 0x0200; // direct
@@ -570,6 +730,7 @@ static const short m7[128] =
 };
 
 // BUGBUG non-BMP range is not supported
+// TODO: Rewrite
 static size_t Utf7_GetChar(std::string_view::const_iterator const Iterator, std::string_view::const_iterator const End, wchar_t* const Buffer, bool& ConversionError, int& state)
 {
 	const size_t DataSize = End - Iterator;
@@ -600,6 +761,11 @@ static size_t Utf7_GetChar(std::string_view::const_iterator const Iterator, std:
 	{
 		ConversionError = true;
 		return BytesConsumed;
+	}
+
+	if (m[0] == DIR || m[0] == OPT)
+	{
+		u.s.base64 = false;
 	}
 
 	if (!u.s.base64)
@@ -696,13 +862,13 @@ static size_t Utf7_GetChar(std::string_view::const_iterator const Iterator, std:
 		else
 		{
 			*Buffer = static_cast<wchar_t>((u.s.carry_bits << 14) | (m18 >> 4));
-			u.s.carry_bits = static_cast<BYTE>(m18 & 0x07);
+			u.s.carry_bits = static_cast<BYTE>(m18 & 0x0F);
 			u.s.carry_count = 4;
 		}
 	}
 	++BytesConsumed;
 
-	if (DataSize > BytesConsumed && *Iterator == '-')
+	if (DataSize > BytesConsumed && *StrIterator == '-')
 	{
 		u.s.base64 = false;
 		++BytesConsumed;
@@ -1134,6 +1300,8 @@ bool IsUnicodeOrUtfCodePage(uintptr_t cp)
 bool IsNoFlagsCodepage(uintptr_t cp)
 {
 	return
+		cp == CP_UTF8 ||
+		cp == 54936 ||
 		(cp >= 50220 && cp <= 50222) ||
 		cp == 50225 ||
 		cp == 50227 ||
@@ -1357,6 +1525,82 @@ TEST_CASE("encoding.ucs2-utf8.round-trip")
 				Char);
 		}
 	}));
+}
+
+TEST_CASE("encoding.errors")
+{
+	static const struct
+	{
+		unsigned Codepage;
+		std::string_view Bytes;
+		size_t Position;
+	}
+	Tests[]
+	{
+		{ 1253,  "\xAA"sv,         0, },
+		{ 10000, "012\xF0"sv,      3, },
+		{ 20000, "01234567\xA0"sv, 8, },
+		{ 21027, "0123"sv,         0, },
+		{ 57011, "0123\xA0"sv,     4, },
+	};
+
+	for (const auto& i: Tests)
+	{
+		auto Thrown = false;
+
+		try
+		{
+			(void)encoding::get_chars_count_strict(i.Codepage, i.Bytes);
+			REQUIRE(false);
+		}
+		catch (encoding::exception const& e)
+		{
+			Thrown = true;
+			REQUIRE(e.codepage() == i.Codepage);
+			REQUIRE(e.position() == i.Position);
+		}
+		REQUIRE(Thrown);
+	}
+}
+
+TEST_CASE("encoding.utf7.valid")
+{
+	static const struct
+	{
+		std::string_view Bytes;
+		string_view Chars;
+		bool OneWay;
+	}
+	Tests[]
+	{
+		{ {},                                     {} },
+		{ "."sv,                                  L"."sv, },
+		{ " \t\r\n"sv,                            L" \t\r\n"sv, },
+		{ "+AKM-1"sv,                             L"£1"sv, },
+		{ "A+ImIDkQ-"sv,                          L"A≢Α"sv, },
+		{ "A+ImIDkQ."sv,                          L"A≢Α."sv, true, },
+		{ "+ADw- and +AD4-"sv,                    L"< and >"sv, },
+		{ "+ZeVnLIqe-"sv,                         L"日本語"sv, },
+		{ "Hello, World+ACE-"sv,                  L"Hello, World!"sv, },
+		{ "INBOX"sv,                              L"INBOX"sv, },
+		{ "Bo+AO4-te de r+AOk-ception"sv,         L"Boîte de réception"sv, },
+		{ "+U9dP4TDIMOwwpA-"sv,                   L"受信トレイ"sv, },
+		{ "+2Dzfttg838HYPN/H-"sv,                 L"🎶🏁🏇"sv, },
+		{ "This+-That-"sv,                        L"This+That-"sv, },
+		{ "+/v8"sv,                               L"\xFEFF"sv, true, },
+		{ "+/v9"sv,                               L"\xFEFF"sv, true, },
+		{ "+/v+"sv,                               L"\xFEFF"sv, true, },
+		{ "+/v/"sv,                               L"\xFEFF"sv, true, },
+		{ "+/v8-"sv,                              L"\xFEFF"sv, },
+	};
+
+	for (const auto& i: Tests)
+	{
+		REQUIRE(encoding::get_chars(CP_UTF7, i.Bytes) == i.Chars);
+
+		if (!i.OneWay)
+			REQUIRE(encoding::get_bytes(CP_UTF7, i.Chars) == i.Bytes);
+	}
 }
 
 TEST_CASE("encoding.raw_eol")

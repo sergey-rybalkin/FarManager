@@ -114,7 +114,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-static_assert(as_underlying_type(panel_sort::BY_USER) == as_underlying_type(OPENPANELINFO_SORTMODES::SM_USER));
+static_assert(static_cast<size_t>(panel_sort::BY_USER) == static_cast<size_t>(OPENPANELINFO_SORTMODES::SM_USER));
 
 
 constexpr auto operator+(panel_sort const Value) noexcept
@@ -6725,7 +6725,7 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 		}
 	}
 
-	error_state ErrorState;
+	std::optional<error_state> ErrorState;
 	const time_check TimeCheck;
 
 	for (const auto& fdata: Find)
@@ -6806,9 +6806,9 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	if (!ErrorState)
 		ErrorState = error_state::fetch();
 
-	if (!(ErrorState.Win32Error == ERROR_SUCCESS || ErrorState.Win32Error == ERROR_NO_MORE_FILES || ErrorState.Win32Error == ERROR_FILE_NOT_FOUND))
+	if (!(ErrorState->Win32Error == ERROR_SUCCESS || ErrorState->Win32Error == ERROR_NO_MORE_FILES || ErrorState->Win32Error == ERROR_FILE_NOT_FOUND))
 	{
-		Message(MSG_WARNING, ErrorState,
+		Message(MSG_WARNING, *ErrorState,
 			msg(lng::MError),
 			{
 				msg(lng::MReadFolderError),

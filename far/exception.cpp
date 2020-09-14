@@ -39,6 +39,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Platform:
 
 // Common:
+#include "common/string_utils.hpp"
 
 // External:
 #include "format.hpp"
@@ -52,13 +53,7 @@ error_state error_state::fetch()
 	State.Errno = errno;
 	State.Win32Error = GetLastError();
 	State.NtError = imports.RtlGetLastNtStatus();
-	State.m_Engaged = true;
 	return State;
-}
-
-error_state::operator bool() const
-{
-	return m_Engaged;
 }
 
 string error_state::ErrnoStr() const
@@ -76,14 +71,24 @@ string error_state::NtErrorStr() const
 	return os::GetErrorString(true, NtError);
 }
 
+std::array<string, 3> error_state::format_errors() const
+{
+	return
+	{
+		os::format_system_error(Errno, ErrnoStr()),
+		os::format_system_error(Win32Error, Win32ErrorStr()),
+		os::format_system_error(NtError, NtErrorStr())
+	};
+}
+
 
 namespace detail
 {
-	far_base_exception::far_base_exception(const char* const Function, string_view const File, int const Line, string_view const Message):
+	far_base_exception::far_base_exception(string_view const Message, const char* const Function, string_view const File, int const Line):
+		error_state_ex(fetch(), Message),
 		m_Function(Function),
 		m_Location(format(FSTR(L"{0}:{1}"), File, Line)),
-		m_FullMessage(format(FSTR(L"{0} (at {1}, {2})"), Message, encoding::utf8::get_chars(m_Function), m_Location)),
-		m_ErrorState(error_state::fetch(), Message)
+		m_FullMessage(format(FSTR(L"{0} (at {1}, {2})"), Message, encoding::utf8::get_chars(m_Function), m_Location))
 	{
 	}
 
@@ -108,20 +113,34 @@ namespace detail
 
 	seh_exception_context::~seh_exception_context()
 	{
-		if (m_ResumeThread)
-			ResumeThread(thread_handle());
+		ResumeThread(thread_handle());
 	}
 }
 
+string error_state_ex::format_error() const
+{
+	auto Str = What;
+	if (!Str.empty())
+		append(Str, L": "sv);
+
+	constexpr auto UseNtMessages = false;
+
+	return Str + os::format_system_error(
+		UseNtMessages? NtError : Win32Error,
+		UseNtMessages? NtErrorStr() : Win32ErrorStr());
+}
+
+
 far_wrapper_exception::far_wrapper_exception(const char* const Function, string_view const File, int const Line):
-	far_exception(Function, File, Line, L"exception_ptr"sv),
+	far_exception(L"exception_ptr"sv, Function, File, Line),
 	m_ThreadHandle(std::make_shared<os::handle>(os::OpenCurrentThread())),
 	m_Stack(tracer::get({}, tracer::get_pointers(), m_ThreadHandle->native_handle()))
 {
 }
 
-seh_exception::seh_exception(DWORD const Code, EXCEPTION_POINTERS& Pointers, os::handle&& ThreadHandle, DWORD const ThreadId, bool const ResumeThread):
-	m_Context(std::make_shared<detail::seh_exception_context>(Code, Pointers, std::move(ThreadHandle), ThreadId, ResumeThread))
+seh_exception::seh_exception(DWORD const Code, EXCEPTION_POINTERS& Pointers, os::handle&& ThreadHandle, DWORD const ThreadId):
+	error_state_ex(fetch()),
+	m_Context(std::make_shared<detail::seh_exception_context>(Code, Pointers, std::move(ThreadHandle), ThreadId))
 {
 }
 

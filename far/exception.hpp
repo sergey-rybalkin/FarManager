@@ -46,7 +46,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 struct error_state
 {
 	static error_state fetch();
-	explicit operator bool() const;
 
 	int Errno = 0;
 	DWORD Win32Error = ERROR_SUCCESS;
@@ -56,8 +55,7 @@ struct error_state
 	string Win32ErrorStr() const;
 	string NtErrorStr() const;
 
-private:
-	bool m_Engaged = false;
+	std::array<string, 3> format_errors() const;
 };
 
 struct error_state_ex: public error_state
@@ -70,28 +68,28 @@ struct error_state_ex: public error_state
 	{
 	}
 
+	string format_error() const;
+
 	string What;
 };
 
 namespace detail
 {
-	class far_base_exception
+	class far_base_exception: public error_state_ex
 	{
 	public:
-		[[nodiscard]] const auto& message() const noexcept { return m_ErrorState.What; }
+		[[nodiscard]] const auto& message() const noexcept { return What; }
 		[[nodiscard]] const auto& full_message() const noexcept { return m_FullMessage; }
-		[[nodiscard]] const auto& error_state() const noexcept { return m_ErrorState; }
 		[[nodiscard]] const auto& function() const noexcept { return m_Function; }
 		[[nodiscard]] const auto& location() const noexcept { return m_Location; }
 
 	protected:
-		far_base_exception(const char* Function, string_view File, int Line, string_view Message);
+		far_base_exception(string_view Message, const char* Function, string_view File, int Line);
 
 	private:
 		std::string m_Function;
 		string m_Location;
 		string m_FullMessage;
-		error_state_ex m_ErrorState;
 	};
 
 	class far_std_exception : public far_base_exception, public std::runtime_error
@@ -168,16 +166,12 @@ namespace detail
 	class seh_exception_context : public exception_context
 	{
 	public:
-		explicit seh_exception_context(DWORD const Code, const EXCEPTION_POINTERS& Pointers, os::handle&& ThreadHandle, DWORD const ThreadId, bool const ResumeThread) :
-			exception_context(Code, Pointers, std::move(ThreadHandle), ThreadId),
-			m_ResumeThread(ResumeThread)
+		explicit seh_exception_context(DWORD const Code, const EXCEPTION_POINTERS& Pointers, os::handle&& ThreadHandle, DWORD const ThreadId):
+			exception_context(Code, Pointers, std::move(ThreadHandle), ThreadId)
 		{
 		}
 
 		~seh_exception_context();
-
-	private:
-		bool m_ResumeThread;
 	};
 
 }
@@ -193,10 +187,10 @@ private:
 	std::vector<DWORD64> m_Stack;
 };
 
-class seh_exception : public std::exception
+class seh_exception : public error_state_ex, public std::exception
 {
 public:
-	seh_exception(DWORD Code, EXCEPTION_POINTERS& Pointers, os::handle&& ThreadHandle, DWORD ThreadId, bool ResumeThread);
+	seh_exception(DWORD Code, EXCEPTION_POINTERS& Pointers, os::handle&& ThreadHandle, DWORD ThreadId);
 
 	const auto& context() const noexcept { return *m_Context; }
 
@@ -211,15 +205,12 @@ std::exception_ptr wrap_currrent_exception(const char* Function, string_view Fil
 void rethrow_if(std::exception_ptr& Ptr);
 
 
-#define MAKE_EXCEPTION(ExceptionType, ...) ExceptionType(__FUNCTION__, WIDE_SV(__FILE__), __LINE__, ##__VA_ARGS__)
+#define MAKE_EXCEPTION(ExceptionType, ...) ExceptionType(__VA_ARGS__, __FUNCTION__, WIDE_SV(__FILE__), __LINE__)
 #define MAKE_FAR_FATAL_EXCEPTION(...) MAKE_EXCEPTION(far_fatal_exception, __VA_ARGS__)
 #define MAKE_FAR_EXCEPTION(...) MAKE_EXCEPTION(far_exception, __VA_ARGS__)
 #define MAKE_FAR_KNOWN_EXCEPTION(...) MAKE_EXCEPTION(far_known_exception, __VA_ARGS__)
 
-#define CATCH_AND_SAVE_EXCEPTION_TO(ExceptionPtr) \
-	catch (...) \
-	{ \
-		ExceptionPtr = wrap_currrent_exception(__FUNCTION__, WIDE_SV(__FILE__), __LINE__); \
-	}
+#define SAVE_EXCEPTION_TO(ExceptionPtr) \
+	ExceptionPtr = wrap_currrent_exception(__FUNCTION__, WIDE_SV(__FILE__), __LINE__)
 
 #endif // EXCEPTION_HPP_2CD5B7D1_D39C_4CAF_858A_62496C9221DF

@@ -1,3 +1,23 @@
+shmuel 09.09.2020 21:29:21 +0300 - build 760
+
+1. LuaFAR: continued 751 (minor changes).
+
+shmuel 06.09.2020 22:56:38 +0300 - build 759
+
+1. LuaFAR: revert 756.
+
+shmuel 05.09.2020 16:53:54 +0300 - build 758
+
+1. LuaFAR: continued 751.
+
+shmuel 31.08.2020 12:07:03 +0300 - build 757
+
+1. LuaFAR: continued 751.
+
+shmuel 26.08.2020 17:44:40 +0200 - build 756
+
+1. LuaFAR: refactoring.
+
 shmuel 20.08.2020 20:11:34 +0300 - build 755
 
 1. Correct argument safety check in LoadCustomSortMode().

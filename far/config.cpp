@@ -1849,7 +1849,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyInterface,              L"ShowDotsInRoot"sv,                ShowDotsInRoot, false},
 		{FSSF_INTERFACE,         NKeyInterface,              L"ShowMenuBar"sv,                   ShowMenuBar, false},
 		{FSSF_PRIVATE,           NKeyInterface,              L"RedrawTimeout"sv,                 RedrawTimeout, 200},
-		{FSSF_PRIVATE,           NKeyInterface,              L"TitleAddons"sv,                   strTitleAddons, L"%Ver.%Build %Platform %Admin"sv},
+		{FSSF_PRIVATE,           NKeyInterface,              L"TitleAddons"sv,                   strTitleAddons, L"%Ver %Platform %Admin"sv},
 		{FSSF_PRIVATE,           NKeyInterface,              L"ViewerTitleFormat"sv,             strViewerTitleFormat, L"%Lng %File"sv},
 		{FSSF_PRIVATE,           NKeyInterfaceCompletion,    L"Append"sv,                        AutoComplete.AppendCompletion, false},
 		{FSSF_PRIVATE,           NKeyInterfaceCompletion,    L"ModalList"sv,                     AutoComplete.ModalList, false},
@@ -3341,7 +3341,7 @@ void Options::ShellOptions(bool LastCommand, const MOUSE_EVENT_RECORD *MouseEven
 			case MENU_OPTIONS_CODEPAGESSETTINGS: // Code pages
 				{
 					uintptr_t CodePage = CP_DEFAULT;
-					codepages::instance().SelectCodePage(CodePage, true, false, true);
+					codepages::instance().SelectCodePage(CodePage, false, true);
 				}
 				break;
 			case MENU_OPTIONS_COLORS:  // Colors
