@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "flink.hpp"
 
@@ -38,7 +41,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "imports.hpp"
 #include "config.hpp"
 #include "pathmix.hpp"
-#include "drivemix.hpp"
 #include "message.hpp"
 #include "lang.hpp"
 #include "dirmix.hpp"
@@ -47,6 +49,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cvtname.hpp"
 #include "global.hpp"
 #include "stddlg.hpp"
+#include "string_utils.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -69,6 +72,35 @@ bool CreateVolumeMountPoint(string_view const TargetVolume, const string& Object
 
 static bool FillREPARSE_DATA_BUFFER(REPARSE_DATA_BUFFER& rdb, string_view const PrintName, string_view const SubstituteName)
 {
+	struct name_data
+	{
+		size_t Offset, Length;
+	};
+
+	const auto fill_header = [&](size_t const DataLength)
+	{
+		if (DataLength + REPARSE_DATA_BUFFER_HEADER_SIZE > MAXIMUM_REPARSE_DATA_BUFFER_SIZE)
+			return false;
+
+		rdb.ReparseDataLength = static_cast<USHORT>(DataLength);
+		rdb.Reserved = 0;
+		return true;
+	};
+
+	const auto fill = [&](auto& Buffer, name_data const Substitute, name_data const Print)
+	{
+		Buffer.SubstituteNameOffset = static_cast<USHORT>(Substitute.Offset);
+		Buffer.SubstituteNameLength = static_cast<USHORT>(Substitute.Length);
+		Buffer.PrintNameOffset = static_cast<USHORT>(Print.Offset);
+		Buffer.PrintNameLength = static_cast<USHORT>(Print.Length);
+
+		return std::pair
+		{
+			copy_string(SubstituteName, Buffer.PathBuffer + Substitute.Offset / sizeof(wchar_t)),
+			copy_string(PrintName, Buffer.PathBuffer + Print.Offset / sizeof(wchar_t))
+		};
+	};
+
 	switch (rdb.ReparseTag)
 	{
 	// IO_REPARSE_TAG_MOUNT_POINT and IO_REPARSE_TAG_SYMLINK buffers are filled differently:
@@ -78,49 +110,32 @@ static bool FillREPARSE_DATA_BUFFER(REPARSE_DATA_BUFFER& rdb, string_view const 
 
 	case IO_REPARSE_TAG_MOUNT_POINT:
 		{
-			const size_t SubstituteNameOffset = 0;
-			const size_t SubstituteNameLength = SubstituteName.size() * sizeof(wchar_t);
-			const size_t PrintNameOffset = SubstituteNameLength + 1 * sizeof(wchar_t);
-			const size_t PrintNameLength = PrintName.size() * sizeof(wchar_t);
-			const size_t ReparseDataLength = offsetof(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) - REPARSE_DATA_BUFFER_HEADER_SIZE + PrintNameOffset + PrintNameLength + 1 * sizeof(wchar_t);
+			name_data const Substitute{ 0, SubstituteName.size() * sizeof(wchar_t) };
+			name_data const Print{ Substitute.Length + 1 * sizeof(wchar_t), PrintName.size() * sizeof(wchar_t) };
 
-			if (ReparseDataLength + REPARSE_DATA_BUFFER_HEADER_SIZE > MAXIMUM_REPARSE_DATA_BUFFER_SIZE)
+			const size_t ReparseDataLength = offsetof(REPARSE_DATA_BUFFER, MountPointReparseBuffer.PathBuffer) - REPARSE_DATA_BUFFER_HEADER_SIZE + Print.Offset + Print.Length + 1 * sizeof(wchar_t);
+
+			if (!fill_header(ReparseDataLength))
 				return false;
 
-			rdb.ReparseDataLength = static_cast<USHORT>(ReparseDataLength);
-			rdb.Reserved = 0;
+			const auto [End1, End2] = fill(rdb.MountPointReparseBuffer, Substitute, Print);
+			*End1 = *End2 = {};
 
-			auto& Buffer = rdb.MountPointReparseBuffer;
-			Buffer.SubstituteNameOffset = static_cast<USHORT>(SubstituteNameOffset);
-			Buffer.SubstituteNameLength = static_cast<USHORT>(SubstituteNameLength);
-			Buffer.PrintNameOffset = static_cast<USHORT>(PrintNameOffset);
-			Buffer.PrintNameLength = static_cast<USHORT>(PrintNameLength);
-			*copy_string(SubstituteName, Buffer.PathBuffer + SubstituteNameOffset / sizeof(wchar_t)) = {};
-			*copy_string(PrintName, Buffer.PathBuffer + PrintNameOffset / sizeof(wchar_t)) = {};
 			return true;
 		}
 
 	case IO_REPARSE_TAG_SYMLINK:
 		{
-			const size_t PrintNameOffset = 0;
-			const size_t PrintNameLength = PrintName.size() * sizeof(wchar_t);
-			const size_t SubstituteNameOffset = PrintNameLength;
-			const size_t SubstituteNameLength = SubstituteName.size() * sizeof(wchar_t);
-			const size_t ReparseDataLength = offsetof(REPARSE_DATA_BUFFER, SymbolicLinkReparseBuffer.PathBuffer) - REPARSE_DATA_BUFFER_HEADER_SIZE + SubstituteNameOffset + SubstituteNameLength;
+			name_data const Print { 0, PrintName.size() * sizeof(wchar_t) };
+			name_data const Substitute { Print.Length, SubstituteName.size() * sizeof(wchar_t) };
 
-			if (ReparseDataLength + REPARSE_DATA_BUFFER_HEADER_SIZE > MAXIMUM_REPARSE_DATA_BUFFER_SIZE)
+			const size_t ReparseDataLength = offsetof(REPARSE_DATA_BUFFER, SymbolicLinkReparseBuffer.PathBuffer) - REPARSE_DATA_BUFFER_HEADER_SIZE + Substitute.Offset + Substitute.Length;
+
+			if (!fill_header(ReparseDataLength))
 				return false;
 
-			rdb.ReparseDataLength = static_cast<USHORT>(ReparseDataLength);
-			rdb.Reserved = 0;
+			fill(rdb.SymbolicLinkReparseBuffer, Substitute, Print);
 
-			auto& Buffer = rdb.SymbolicLinkReparseBuffer;
-			Buffer.SubstituteNameOffset = static_cast<USHORT>(SubstituteNameOffset);
-			Buffer.SubstituteNameLength = static_cast<USHORT>(SubstituteNameLength);
-			Buffer.PrintNameOffset = static_cast<USHORT>(PrintNameOffset);
-			Buffer.PrintNameLength = static_cast<USHORT>(PrintNameLength);
-			copy_string(SubstituteName, Buffer.PathBuffer + SubstituteNameOffset / sizeof(wchar_t));
-			copy_string(PrintName, Buffer.PathBuffer + PrintNameOffset / sizeof(wchar_t));
 			return true;
 		}
 
@@ -137,12 +152,12 @@ static auto GetDesiredAccessForReparsePointChange()
 
 static bool SetREPARSE_DATA_BUFFER(const string_view Object, REPARSE_DATA_BUFFER& rdb)
 {
-	if (!IsReparseTagValid(rdb.ReparseTag))
-		return false;
-
 	SCOPED_ACTION(os::security::privilege){ SE_CREATE_SYMBOLIC_LINK_NAME };
 
 	const auto Attributes = os::fs::get_file_attributes(Object);
+	if (Attributes == INVALID_FILE_ATTRIBUTES)
+		return false;
+
 	if(Attributes&FILE_ATTRIBUTE_READONLY)
 	{
 		(void)os::fs::set_file_attributes(Object, Attributes&~FILE_ATTRIBUTE_READONLY); //BUGBUG
@@ -153,6 +168,9 @@ static bool SetREPARSE_DATA_BUFFER(const string_view Object, REPARSE_DATA_BUFFER
 		if (Attributes&FILE_ATTRIBUTE_READONLY)
 		(void)os::fs::set_file_attributes(Object, Attributes); //BUGBUG
 	};
+
+	if (Attributes & FILE_ATTRIBUTE_REPARSE_POINT)
+		DeleteReparsePoint(Object);
 
 	const auto SetBuffer = [&](bool ForceElevation)
 	{
@@ -273,7 +291,7 @@ static bool GetREPARSE_DATA_BUFFER(string_view const Object, REPARSE_DATA_BUFFER
 	if (!fObject)
 		return false;
 
-	return fObject.IoControl(FSCTL_GET_REPARSE_POINT, nullptr, 0, &rdb, MAXIMUM_REPARSE_DATA_BUFFER_SIZE) && IsReparseTagValid(rdb.ReparseTag);
+	return fObject.IoControl(FSCTL_GET_REPARSE_POINT, nullptr, 0, &rdb, MAXIMUM_REPARSE_DATA_BUFFER_SIZE);
 }
 
 bool DeleteReparsePoint(string_view const Object)
@@ -389,16 +407,15 @@ bool EnumStreams(string_view const FileName, unsigned long long& StreamsSize, si
 	return Result;
 }
 
-bool DelSubstDrive(const string& DeviceName)
+bool DelSubstDrive(string_view const DeviceName)
 {
 	string strTargetPath;
 	return os::fs::QueryDosDevice(DeviceName, strTargetPath) &&
-		DefineDosDevice(DDD_RAW_TARGET_PATH | DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE, DeviceName.c_str(), strTargetPath.c_str()) != FALSE;
+		DefineDosDevice(DDD_RAW_TARGET_PATH | DDD_REMOVE_DEFINITION | DDD_EXACT_MATCH_ON_REMOVE, null_terminated(DeviceName).c_str(), strTargetPath.c_str()) != FALSE;
 }
 
-bool GetSubstName(int DriveType,const string& DeviceName, string &strTargetPath)
+bool GetSubstName(int DriveType, string_view const Path, string &strTargetPath)
 {
-	bool Ret=false;
 	/*
 	+ Обработка в зависимости от Global->Opt->SubstNameRule
 	битовая маска:
@@ -407,36 +424,42 @@ bool GetSubstName(int DriveType,const string& DeviceName, string &strTargetPath)
 	*/
 	const auto DriveRemovable = DriveType == DRIVE_REMOVABLE || DriveType == DRIVE_CDROM;
 
-	if (((Global->Opt->SubstNameRule & 1) || !DriveRemovable) && ((Global->Opt->SubstNameRule & 2) || DriveRemovable))
+	const auto
+		CheckRemovable = Global->Opt->SubstNameRule & 0b01,
+		CheckOther = Global->Opt->SubstNameRule & 0b10;
+
+	if ((DriveRemovable && !CheckRemovable) || (!DriveRemovable && !CheckOther))
+		return false;
+
+	const auto Type = ParsePath(Path);
+	if (Type != root_type::drive_letter)
+		return false;
+
+	const auto Drive = Path.substr(0, 2);
+
+	string Device;
+	if (!os::fs::QueryDosDevice(Drive, Device))
+		return false;
+
+	if (starts_with_icase(Device, L"\\??\\UNC\\"sv))
 	{
-		const auto Type = ParsePath(DeviceName);
-		if (Type == root_type::drive_letter)
-		{
-			string Name;
-			if (os::fs::QueryDosDevice(DeviceName, Name))
-			{
-				if (starts_with(Name, L"\\??\\UNC\\"sv))
-				{
-					strTargetPath = concat(L"\\\\"sv, string_view(Name).substr(8));
-					Ret = true;
-				}
-				else if (starts_with(Name, L"\\??\\"sv))
-				{
-					strTargetPath.assign(Name, 4, string::npos); // gcc 7.3-8.1 bug: npos required. TODO: Remove after we move to 8.2 or later
-					Ret=true;
-				}
-			}
-		}
+		strTargetPath = concat(L"\\\\"sv, string_view(Device).substr(8));
+		return true;
 	}
 
-	return Ret;
+	if (starts_with(Device, L"\\??\\"sv))
+	{
+		strTargetPath.assign(Device, 4, string::npos); // gcc 7.3-8.1 bug: npos required. TODO: Remove after we move to 8.2 or later
+		return true;
+	}
+
+	return false;
 }
 
-bool GetVHDInfo(string_view const DeviceName, string &strVolumePath, VIRTUAL_STORAGE_TYPE* StorageType)
+bool GetVHDInfo(string_view const RootDirectory, string &strVolumePath, VIRTUAL_STORAGE_TYPE* StorageType)
 {
-	const auto IsDosDevice = DeviceName.size() == 2 && ends_with(DeviceName, L':');
-	const os::fs::file Device(IsDosDevice? os::fs::get_unc_drive(DeviceName.front()) : DeviceName, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING);
-	if (!Device)
+	const os::fs::file Root(RootDirectory, FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING);
+	if (!Root)
 		return false;
 
 	block_ptr<STORAGE_DEPENDENCY_INFO> StorageDependencyInfo;
@@ -452,7 +475,7 @@ bool GetVHDInfo(string_view const DeviceName, string &strVolumePath, VIRTUAL_STO
 	for (;;)
 	{
 		InitStorage(Size);
-		if (Device.GetStorageDependencyInformation(GET_STORAGE_DEPENDENCY_FLAG_HOST_VOLUMES, Size, StorageDependencyInfo.data(), &Size))
+		if (Root.GetStorageDependencyInformation(GET_STORAGE_DEPENDENCY_FLAG_HOST_VOLUMES, Size, StorageDependencyInfo.data(), &Size))
 			break;
 		if (GetLastError() != ERROR_INSUFFICIENT_BUFFER)
 			return false;
@@ -464,15 +487,28 @@ bool GetVHDInfo(string_view const DeviceName, string &strVolumePath, VIRTUAL_STO
 	if(StorageType)
 		*StorageType = StorageDependencyInfo->Version2Entries[0].VirtualStorageType;
 
-	// trick: ConvertNameToReal also converts \\?\{GUID} to drive letter, if possible.
+	// trick: ConvertNameToReal also converts \\?\{UUID} to drive letter, if possible.
 	strVolumePath = ConvertNameToReal(concat(StorageDependencyInfo->Version2Entries[0].HostVolumeName, StorageDependencyInfo->Version2Entries[0].DependentVolumeRelativePath));
 
 	return true;
 }
 
+bool detach_vhd(string_view const RootDirectory, bool& IsVhd)
+{
+	IsVhd = false;
+
+	string VhdFileName;
+	VIRTUAL_STORAGE_TYPE VirtualStorageType;
+	if (!GetVHDInfo(RootDirectory, VhdFileName, &VirtualStorageType))
+		return false;
+
+	IsVhd = true;
+	return os::fs::detach_virtual_disk(VhdFileName, VirtualStorageType);
+}
+
 string GetPathRoot(string_view const Path)
 {
-	return ExtractPathRoot(ConvertNameToReal(Path));
+	return extract_root_directory(ConvertNameToReal(Path));
 }
 
 bool ModifyReparsePoint(string_view const Object, string_view const Target)
@@ -492,7 +528,7 @@ void NormalizeSymlinkName(string &strLinkName)
 	if (!starts_with(strLinkName, L"\\??\\"sv))
 		return;
 
-	if (ParsePath(strLinkName) != root_type::unc_drive_letter)
+	if (ParsePath(strLinkName) != root_type::win32nt_drive_letter)
 		return;
 
 	strLinkName.erase(0, 4);
@@ -718,3 +754,95 @@ bool reparse_tag_to_string(DWORD ReparseTag, string& Str)
 	Str = format(FSTR(L":{0:0>8X}"), ReparseTag);
 	return false;
 }
+
+#ifdef ENABLE_TESTS
+
+#include "testing.hpp"
+
+TEST_CASE("flink.fill.reparse.buffer")
+{
+	const auto BufferSize = 100;
+	block_ptr<REPARSE_DATA_BUFFER> const Buffer(BufferSize);
+
+	{
+		char const ExpectedData[]
+		{
+			// ReparseTag
+			0x03, 0x00, 0x00, 0xa0,
+			// ReparseDataLength
+			0x3c, 0x00,
+			// Reserved
+			0x00, 0x00,
+			// SubstituteNameOffset
+			0x00, 0x00,
+			// SubstituteNameLength
+			0x1c, 0x00,
+			// PrintNameOffset
+			0x1e, 0x00,
+			// PrintNameLength
+			0x14, 0x00,
+			// PathBuffer
+			0x5c, 0x00, 0x3f, 0x00, 0x3f, 0x00, 0x5c, 0x00, 0x63, 0x00, 0x3a, 0x00, 0x5c, 0x00, 0x77, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x64, 0x00, 0x6f, 0x00, 0x77, 0x00, 0x73, 0x00, 0x00, 0x00,
+			0x63, 0x00, 0x3a, 0x00, 0x5c, 0x00, 0x77, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x64, 0x00, 0x6f, 0x00, 0x77, 0x00, 0x73, 0x00, 0x00, 0x00,
+
+		};
+
+		static_assert(BufferSize >= std::size(ExpectedData));
+
+		Buffer->ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+		FillREPARSE_DATA_BUFFER(*Buffer, L"c:\\windows"sv, L"\\??\\c:\\windows"sv);
+
+		REQUIRE(Buffer->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT);
+		REQUIRE(Buffer->ReparseDataLength == 60);
+		REQUIRE(Buffer->Reserved == 0);
+		REQUIRE(Buffer->MountPointReparseBuffer.SubstituteNameOffset == 0);
+		REQUIRE(Buffer->MountPointReparseBuffer.SubstituteNameLength == 28);
+		REQUIRE(Buffer->MountPointReparseBuffer.PrintNameOffset == 30);
+		REQUIRE(Buffer->MountPointReparseBuffer.PrintNameLength == 20);
+
+		REQUIRE(std::equal(ALL_CONST_RANGE(ExpectedData), static_cast<char const*>(static_cast<void const*>(Buffer.data()))));
+	}
+
+	{
+		char const ExpectedData[]
+		{
+			// ReparseTag
+			0x0c, 0x00, 0x00, 0xa0,
+			// ReparseDataLength
+			0x3c, 0x00,
+			// Reserved
+			0x00, 0x00,
+			// SubstituteNameOffset
+			0x14, 0x00,
+			// SubstituteNameLength
+			0x1c, 0x00,
+			// PrintNameOffset
+			0x00, 0x00,
+			// PrintNameLength
+			0x14, 0x00,
+			// Flags
+			0x00, 0x00, 0x00, 0x00,
+			// PathBuffer
+			0x63, 0x00, 0x3a, 0x00, 0x5c, 0x00, 0x77, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x64, 0x00, 0x6f, 0x00, 0x77, 0x00, 0x73, 0x00,
+			0x5c, 0x00, 0x3f, 0x00, 0x3f, 0x00, 0x5c, 0x00, 0x63, 0x00, 0x3a, 0x00, 0x5c, 0x00, 0x77, 0x00, 0x69, 0x00, 0x6e, 0x00, 0x64, 0x00, 0x6f, 0x00, 0x77, 0x00, 0x73, 0x00,
+		};
+
+		static_assert(BufferSize >= std::size(ExpectedData));
+
+		Buffer->ReparseTag = IO_REPARSE_TAG_SYMLINK;
+		Buffer->SymbolicLinkReparseBuffer.Flags = 0;
+		FillREPARSE_DATA_BUFFER(*Buffer, L"c:\\windows"sv, L"\\??\\c:\\windows"sv);
+
+		REQUIRE(Buffer->ReparseTag == IO_REPARSE_TAG_SYMLINK);
+		REQUIRE(Buffer->ReparseDataLength == 60);
+		REQUIRE(Buffer->Reserved == 0);
+		REQUIRE(Buffer->SymbolicLinkReparseBuffer.SubstituteNameOffset == 20);
+		REQUIRE(Buffer->SymbolicLinkReparseBuffer.SubstituteNameLength == 28);
+		REQUIRE(Buffer->SymbolicLinkReparseBuffer.PrintNameOffset == 0);
+		REQUIRE(Buffer->SymbolicLinkReparseBuffer.PrintNameLength == 20);
+		REQUIRE(Buffer->SymbolicLinkReparseBuffer.Flags == 0);
+
+		REQUIRE(std::equal(ALL_CONST_RANGE(ExpectedData), static_cast<char const*>(static_cast<void const*>(Buffer.data()))));
+	}
+}
+#endif

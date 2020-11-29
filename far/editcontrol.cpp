@@ -33,6 +33,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "editcontrol.hpp"
 
@@ -545,7 +548,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,Manager::Key& BackKe
 				int PrevPos=0;
 
 				bool Visible;
-				DWORD Size;
+				size_t Size;
 				::GetCursorType(Visible, Size);
 				ComplMenu->Key(KEY_NONE);
 				bool IsChanged = false;
@@ -570,7 +573,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,Manager::Key& BackKe
 					else if(MenuKey!=KEY_NONE)
 					{
 						// ввод
-						if((MenuKey>=L' ' && MenuKey<=static_cast<int>(WCHAR_MAX)) || MenuKey==KEY_BS || MenuKey==KEY_DEL || MenuKey==KEY_NUMDEL)
+						if(in_closed_range(L' ', MenuKey, std::numeric_limits<wchar_t>::max()) || any_of(MenuKey, KEY_BS, KEY_DEL, KEY_NUMDEL))
 						{
 							DeleteBlock();
 							const auto strPrev = GetString();
@@ -587,7 +590,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,Manager::Key& BackKe
 
 								if (ComplMenu->size() > 1 || (ComplMenu->size() == 1 && !equal_icase(CurrentInput, ComplMenu->at(0).Name)))
 								{
-									if(MenuKey!=KEY_BS && MenuKey!=KEY_DEL && MenuKey!=KEY_NUMDEL && Global->Opt->AutoComplete.AppendCompletion)
+									if(none_of(MenuKey, KEY_BS, KEY_DEL, KEY_NUMDEL) && Global->Opt->AutoComplete.AppendCompletion)
 									{
 										AppendCmd();
 									}
@@ -653,11 +656,11 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,Manager::Key& BackKe
 							case KEY_CTRLRIGHT: case KEY_RCTRLRIGHT:
 							case KEY_CTRLHOME:  case KEY_RCTRLHOME:
 								{
-									if(MenuKey == KEY_LEFT || MenuKey == KEY_NUMPAD4)
+									if(any_of(MenuKey, KEY_LEFT, KEY_NUMPAD4))
 									{
 										MenuKey = KEY_CTRLS;
 									}
-									else if(MenuKey == KEY_RIGHT || MenuKey == KEY_NUMPAD6)
+									else if(any_of(MenuKey, KEY_RIGHT, KEY_NUMPAD6))
 									{
 										MenuKey = KEY_CTRLD;
 									}
@@ -793,35 +796,84 @@ bool EditControl::ProcessKey(const Manager::Key& Key)
 
 bool EditControl::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 {
-	if(Edit::ProcessMouse(MouseEvent))
+	if (!Edit::ProcessMouse(MouseEvent))
+		return false;
+
+	const auto Scrolling = []
 	{
-		while(IsMouseButtonPressed()==FROM_LEFT_1ST_BUTTON_PRESSED)
+		return IsMouseButtonPressed() == FROM_LEFT_1ST_BUTTON_PRESSED;
+	};
+
+	const auto ToLeft = [&]
+	{
+		return IntKeyState.MousePos.x < m_Where.left;
+	};
+
+	const auto ToRight = [&]
+	{
+		return IntKeyState.MousePos.x > m_Where.right;
+	};
+
+	keyboard_repeat_emulation const Emulation;
+
+	while(Scrolling())
+	{
+		m_Flags.Clear(FEDITLINE_CLEARFLAG);
+
+		auto NewPos = GetTabCurPos();
+		const auto CurLeftPos = GetLeftPos();
+
+		if (ToLeft())
 		{
-			m_Flags.Clear(FEDITLINE_CLEARFLAG);
-			SetTabCurPos(IntKeyState.MousePos.x - m_Where.left + GetLeftPos());
-			if(IntKeyState.MouseEventFlags&MOUSE_MOVED)
+			if (NewPos && --NewPos < CurLeftPos)
 			{
-				if(!Selection)
-				{
-					Selection=true;
-					SelectionStart=-1;
-					Select(SelectionStart,0);
-				}
-				else
-				{
-					if(SelectionStart==-1)
-					{
-						SelectionStart=m_CurPos;
-					}
-					Select(std::min(SelectionStart, m_CurPos), std::min(m_Str.size(), std::max(SelectionStart, m_CurPos)));
-					Show();
-				}
+				if (CurLeftPos)
+					SetLeftPos(CurLeftPos - 1);
+
+				while (!Emulation.signaled() && Scrolling() && ToLeft())
+					std::this_thread::yield();
 			}
 		}
-		Selection=false;
-		return true;
+		else if (ToRight())
+		{
+			if (++NewPos >= CurLeftPos + m_Where.width())
+			{
+				SetLeftPos(CurLeftPos + 1);
+
+				while (!Emulation.signaled() && Scrolling() && ToRight())
+					std::this_thread::yield();
+			}
+		}
+		else
+		{
+			NewPos = CurLeftPos + IntKeyState.MousePos.x - m_Where.left;
+			Emulation.reset();
+		}
+
+		SetTabCurPos(NewPos);
+
+		if (!(IntKeyState.MouseEventFlags & MOUSE_MOVED))
+			continue;
+
+		if(!Selection)
+		{
+			Selection=true;
+			SelectionStart=-1;
+			Select(SelectionStart,0);
+		}
+		else
+		{
+			if(SelectionStart==-1)
+			{
+				SelectionStart=m_CurPos;
+			}
+			Select(std::min(SelectionStart, m_CurPos), std::min(m_Str.size(), std::max(SelectionStart, m_CurPos)));
+			Show();
+		}
 	}
-	return false;
+
+	Selection = false;
+	return true;
 }
 
 void EditControl::SetObjectColor(PaletteColors Color,PaletteColors SelColor,PaletteColors ColorUnChanged)

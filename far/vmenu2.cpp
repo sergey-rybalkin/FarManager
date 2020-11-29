@@ -30,6 +30,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "vmenu2.hpp"
 
@@ -196,7 +199,7 @@ int VMenu2::Call(int Msg, void *param)
 	const auto r = mfn(Msg, param);
 
 	bool Visible;
-	DWORD Size;
+	size_t Size;
 
 	GetCursorType(Visible, Size);
 	const auto CursorPos = GetCursorPos();
@@ -527,33 +530,33 @@ int VMenu2::SetSelectPos(int Pos, int Direct)
 	return ListBox().SetSelectPos(Pos, Direct);
 }
 
-int VMenu2::GetCheck(int Position)
+wchar_t VMenu2::GetCheck(int Position)
 {
 	const auto Flags = GetItemFlags(Position);
 
 	if ((Flags & LIF_SEPARATOR) || !(Flags & LIF_CHECKED))
 		return 0;
 
-	const auto Checked = Flags & 0xFFFF;
+	const auto Checked = Flags & std::numeric_limits<wchar_t>::max();
 
 	return Checked ? Checked : 1;
 }
 
 void VMenu2::SetCheck(int Position)
 {
-	const auto Flags = GetItemFlags(Position) & ~0xFFFF;
+	const auto Flags = GetItemFlags(Position) & ~std::numeric_limits<wchar_t>::max();
 	UpdateItemFlags(Position, Flags | LIF_CHECKED);
 }
 
 void VMenu2::SetCustomCheck(wchar_t Char, int Position)
 {
-	const auto Flags = GetItemFlags(Position) & ~0xFFFF;
+	const auto Flags = GetItemFlags(Position) & ~std::numeric_limits<wchar_t>::max();
 	UpdateItemFlags(Position, Flags | LIF_CHECKED | Char);
 }
 
 void VMenu2::ClearCheck(int Position)
 {
-	const auto Flags = GetItemFlags(Position) & ~0xFFFF;
+	const auto Flags = GetItemFlags(Position) & ~std::numeric_limits<wchar_t>::max();
 	UpdateItemFlags(Position, Flags & ~LIF_CHECKED);
 }
 
@@ -738,7 +741,7 @@ intptr_t VMenu2::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 	{
 		case DM_RESIZEDIALOG:
 		{
-			const auto fixSize = [](SHORT& size, SHORT min) { size = (size < min) ? min : size; };
+			const auto fixSize = [](short& Size, short const Min) { Size = std::max(Min, Size); };
 			const auto MarginsX = (m_BoxType == box_type::none? 0 : m_BoxType == box_type::thin? 1 : 3) * 2;
 			const auto MarginsY = (m_BoxType == box_type::none? 0 : m_BoxType == box_type::thin? 1 : 2) * 2;
 			fixSize(static_cast<COORD*>(Param2)->X, MarginsX + 1);

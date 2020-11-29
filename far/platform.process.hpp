@@ -1,14 +1,13 @@
-﻿#ifndef FARGUID_HPP_49C263EE_12A1_48FD_BA02_52CCE8950C28
-#define FARGUID_HPP_49C263EE_12A1_48FD_BA02_52CCE8950C28
+﻿#ifndef PLATFORM_PROCESS_HPP_234140CB_C857_40CF_901D_A10C5EBEA85B
+#define PLATFORM_PROCESS_HPP_234140CB_C857_40CF_901D_A10C5EBEA85B
 #pragma once
 
 /*
-FarGuid.hpp
+platform.process.hpp
 
-GUID'ы фара.
 */
 /*
-Copyright © 2010 Far Group
+Copyright © 2020 Far Group
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -41,20 +40,19 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Common:
 
 // External:
-#include "guid_parse.hpp"
 
 //----------------------------------------------------------------------------
 
-namespace guids::far
+namespace os::process
 {
-	constexpr inline auto
-		FarGuid = "00000000-0000-0000-0000-000000000000"_guid;
+	enum class image_type
+	{
+		unknown,
+		console,
+		graphical,
+	};
+
+	image_type get_process_subsystem(HANDLE Process);
 }
 
-// TODO: Use fully qualified names everywhere
-inline namespace guids_inline
-{
-	using namespace guids::far;
-}
-
-#endif // FARGUID_HPP_49C263EE_12A1_48FD_BA02_52CCE8950C28
+#endif // PLATFORM_PLATFORM_PROCESS_HPP_234140CB_C857_40CF_901D_A10C5EBEA85B

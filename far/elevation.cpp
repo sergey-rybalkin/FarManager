@@ -30,6 +30,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "elevation.hpp"
 
@@ -46,7 +49,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "scrbuf.hpp"
 #include "manager.hpp"
 #include "pipe.hpp"
-#include "console.hpp"
+#include "interf.hpp"
 #include "string_utils.hpp"
 #include "global.hpp"
 #include "exception.hpp"
@@ -61,6 +64,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Common:
 #include "common.hpp"
 #include "common/string_utils.hpp"
+#include "common/uuid.hpp"
 
 // External:
 #include "format.hpp"
@@ -418,7 +422,7 @@ bool elevation::Initialize()
 
 	if (!m_Pipe)
 	{
-		m_PipeName = GuidToStr(CreateUuid());
+		m_PipeName = uuid::str(os::uuid::generate());
 		m_Pipe = create_named_pipe(m_PipeName);
 		if (!m_Pipe)
 			return false;
@@ -536,7 +540,7 @@ static void ElevationApproveDlgSync(const EAData& Data)
 	const auto Lock = Global->ScrBuf->GetLockCount();
 	Global->ScrBuf->SetLockCount(0);
 
-	console.FlushInputBuffer();
+	FlushInputBuffer();
 
 	Dlg->Process();
 
@@ -711,7 +715,7 @@ bool elevation::replace_file(const string& To, const string& From, const string&
 }
 
 
-DWORD elevation::get_file_attributes(const string& Object)
+os::fs::attributes elevation::get_file_attributes(const string& Object)
 {
 	return execute(lng::MElevationRequiredGetAttributes, Object,
 		INVALID_FILE_ATTRIBUTES,
@@ -722,11 +726,11 @@ DWORD elevation::get_file_attributes(const string& Object)
 		[&]
 		{
 			Write(C_FUNCTION_GETFILEATTRIBUTES, Object);
-			return RetrieveLastErrorAndResult<DWORD>();
+			return RetrieveLastErrorAndResult<os::fs::attributes>();
 		});
 }
 
-bool elevation::set_file_attributes(const string& Object, DWORD FileAttributes)
+bool elevation::set_file_attributes(const string& Object, os::fs::attributes FileAttributes)
 {
 	return execute(lng::MElevationRequiredSetAttributes, Object,
 		false,

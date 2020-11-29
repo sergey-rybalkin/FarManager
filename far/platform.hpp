@@ -262,7 +262,11 @@ namespace os
 	bool GetWindowText(HWND Hwnd, string& Text);
 
 	[[nodiscard]]
+#ifdef _WIN64
+	constexpr bool IsWow64Process() { return false; }
+#else
 	bool IsWow64Process();
+#endif
 
 	[[nodiscard]]
 	DWORD GetAppPathsRedirectionFlag();
@@ -424,15 +428,20 @@ namespace os
 		template<typename T>
 		using memory = std::unique_ptr<std::remove_pointer_t<T>, detail::memory_releaser>;
 	}
+
+	namespace uuid
+	{
+		[[nodiscard]]
+		UUID generate();
+	}
+
+	namespace debug
+	{
+		bool debugger_present();
+		void breakpoint(bool Always = true);
+		void print(const wchar_t* Str);
+		void print(string const& Str);
+	}
 }
-
-[[nodiscard]]
-UUID CreateUuid();
-
-[[nodiscard]]
-string GuidToStr(const GUID& Guid);
-
-[[nodiscard]]
-bool StrToGuid(string_view Value, GUID& Guid);
 
 #endif // PLATFORM_HPP_632CB91D_08A9_4793_8FC7_2E38C30CE234

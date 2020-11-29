@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "hilight.hpp"
 
@@ -52,7 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "colormix.hpp"
 #include "filefilterparams.hpp"
 #include "lang.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "elevation.hpp"
 #include "filefilter.hpp"
 #include "lockscrn.hpp"
@@ -148,7 +151,7 @@ static void SetHighlighting(bool DeleteOld, HierarchicalConfig& cfg)
 	static const struct
 	{
 		string_view Mask;
-		DWORD IncludeAttr;
+		os::fs::attributes IncludeAttr;
 		FarColor NormalColor;
 		FarColor CursorColor;
 	}

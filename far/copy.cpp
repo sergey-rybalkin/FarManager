@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "copy.hpp"
 
@@ -47,7 +50,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filefilter.hpp"
 #include "fileview.hpp"
 #include "syslog.hpp"
-#include "cddrv.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
 #include "colormix.hpp"
@@ -61,7 +63,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "panelmix.hpp"
 #include "processname.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "console.hpp"
 #include "lang.hpp"
 #include "manager.hpp"
@@ -115,16 +117,16 @@ private:
 	void CopyFileTree(const string& Dest);
 	COPY_CODES ShellCopyOneFile(const string& Src, const os::fs::find_data& SrcData, string& strDest, int KeepPathPos, int Rename);
 	void CheckStreams(const string& Src, const string& DestPath);
-	int ShellCopyFile(const string& SrcName, const os::fs::find_data& SrcData, string& strDestName, DWORD& DestAttr, int Append, std::optional<error_state_ex>& ErrorState);
+	int ShellCopyFile(const string& SrcName, const os::fs::find_data& SrcData, string& strDestName, os::fs::attributes& DestAttr, int Append, std::optional<error_state_ex>& ErrorState);
 	int ShellSystemCopy(const string& SrcName, const string& DestName, const os::fs::find_data& SrcData);
-	int DeleteAfterMove(const string& Name, DWORD Attr);
-	bool AskOverwrite(const os::fs::find_data& SrcData, const string& SrcName, const string& DestName, DWORD DestAttr, int SameName, int Rename, int AskAppend, int& Append, string& strNewName, COPY_CODES& RetCode);
+	int DeleteAfterMove(const string& Name, os::fs::attributes Attr);
+	bool AskOverwrite(const os::fs::find_data& SrcData, const string& SrcName, const string& DestName, os::fs::attributes DestAttr, int SameName, int Rename, int AskAppend, int& Append, string& strNewName, COPY_CODES& RetCode);
 	os::security::descriptor GetSecurity(const string& FileName);
 	void SetSecurity(const string& FileName, const os::security::descriptor& sd);
 	void ResetSecurity(const string& FileName);
 	void ResetSecurityRecursively(const string& FileName);
 	void CalcTotalSize() const;
-	void ShellSetAttr(const string& Dest, DWORD Attr);
+	void ShellSetAttr(const string& Dest, os::fs::attributes Attr);
 	void SetDestDizPath(const string& DestPath);
 	static intptr_t WarnDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2);
 	intptr_t CopyDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2);
@@ -413,9 +415,9 @@ intptr_t ShellCopy::CopyDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 				const auto key = InputRecordToKey(&record);
 				if (!Global->Opt->Tree.TurnOffCompletely)
 				{
-					if (key == KEY_ALTF10 || key == KEY_RALTF10 || key == KEY_F10 || key == KEY_SHIFTF10)
+					if (any_of(key, KEY_ALTF10, KEY_RALTF10, KEY_F10, KEY_SHIFTF10))
 					{
-						AltF10 = (key == KEY_ALTF10 || key == KEY_RALTF10) ? 1 : (key == KEY_SHIFTF10 ? 2 : 0);
+						AltF10 = any_of(key, KEY_ALTF10, KEY_RALTF10)? 1 : key == KEY_SHIFTF10? 2 : 0;
 						Dlg->SendMessage(DM_CALLTREE, AltF10, nullptr);
 						return TRUE;
 					}
@@ -425,11 +427,12 @@ intptr_t ShellCopy::CopyDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 				{
 					if (Dlg->SendMessage(DM_LISTGETCURPOS, ID_SC_COMBO, nullptr) == CM_ASKRO)
 					{
-						if (key==KEY_ENTER || key==KEY_NUMENTER || key==KEY_INS || key==KEY_NUMPAD0 || key==KEY_SPACE)
+						if (any_of(key, KEY_ENTER, KEY_NUMENTER, KEY_INS, KEY_NUMPAD0, KEY_SPACE))
 						{
 							return Dlg->SendMessage(DM_SWITCHRO, 0, nullptr);
 						}
-						else if (key == KEY_TAB)
+
+						if (key == KEY_TAB)
 						{
 							Dlg->SendMessage(DM_SETDROPDOWNOPENED, 0, nullptr);
 							return TRUE;
@@ -583,7 +586,7 @@ ShellCopy::ShellCopy(
 		return;
 
 	string SingleSelName;
-	DWORD SingleSelAttributes = 0;
+	os::fs::attributes SingleSelAttributes = 0;
 	unsigned long long SingleSelectedFileSize = 0;
 
 	if (SelCount==1)
@@ -1307,7 +1310,7 @@ ShellCopy::ShellCopy(
 void ShellCopy::CopyFileTree(const string& Dest)
 {
 	//SaveScreen SaveScr;
-	DWORD DestAttr = INVALID_FILE_ATTRIBUTES;
+	os::fs::attributes DestAttr = INVALID_FILE_ATTRIBUTES;
 
 	if (Dest.empty() || IsCurrentDirectory(Dest))
 		return;
@@ -1380,13 +1383,13 @@ void ShellCopy::CopyFileTree(const string& Dest)
 		if (first || strSrcDriveRoot.empty() || (src_abspath && !starts_with_icase(i.FileName, strSrcDriveRoot)))
 		{
 			strSrcDriveRoot = GetPathRoot(src_abspath? i.FileName : SrcPanel->GetCurDir());
-			SrcDriveType = FAR_GetDriveType(strSrcDriveRoot);
+			SrcDriveType = os::fs::drive::get_type(strSrcDriveRoot);
 			check_samedisk = true;
 		}
 		if (!copy_to_null && (first || strDestDriveRoot.empty() || !starts_with_icase(strDest, strDestDriveRoot)))
 		{
 			strDestDriveRoot = GetPathRoot(strDest);
-			DestDriveType = FAR_GetDriveType(strDestDriveRoot);
+			DestDriveType = os::fs::drive::get_type(strDestDriveRoot);
 			check_samedisk = dest_changed = true;
 		}
 		if (move_rename && !copy_to_null && check_samedisk)
@@ -1747,7 +1750,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 
 	string strDestPath = strDest;
 
-	DWORD DestAttr=INVALID_FILE_ATTRIBUTES;
+	os::fs::attributes DestAttr = INVALID_FILE_ATTRIBUTES;
 
 	os::fs::find_data DestData;
 	if (!(Flags&FCOPY_COPYTONUL))
@@ -1856,7 +1859,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 			{
 				if ((DestAttr & FILE_ATTRIBUTE_DIRECTORY) && !SameName)
 				{
-					DWORD SetAttr=SrcData.Attributes;
+					auto SetAttr = SrcData.Attributes;
 
 					if (SrcDriveType == DRIVE_CDROM && (SetAttr & FILE_ATTRIBUTE_READONLY))
 						SetAttr&=~FILE_ATTRIBUTE_READONLY;
@@ -1976,7 +1979,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 				if (Global->Opt->CMOpt.PreserveTimestamps)
 					m_CreatedFolders.emplace_back(strDestPath, SrcData);
 
-				DWORD SetAttr=SrcData.Attributes;
+				auto SetAttr = SrcData.Attributes;
 
 				if (SrcDriveType == DRIVE_CDROM && (SetAttr & FILE_ATTRIBUTE_READONLY))
 					SetAttr&=~FILE_ATTRIBUTE_READONLY;
@@ -2121,7 +2124,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 					int CopyCode;
 					do
 					{
-						DWORD Attr=INVALID_FILE_ATTRIBUTES;
+						os::fs::attributes Attr = INVALID_FILE_ATTRIBUTES;
 						CopyCode = ShellCopyFile(Src, SrcData, strDestPath, Attr, Append, ErrorState);
 					}
 					while (CopyCode==COPY_RETRY);
@@ -2347,7 +2350,7 @@ void ShellCopy::CheckStreams(const string& Src, const string& DestPath)
 	}
 }
 
-int ShellCopy::DeleteAfterMove(const string& Name,DWORD Attr)
+int ShellCopy::DeleteAfterMove(const string& Name, os::fs::attributes Attr)
 {
 	const auto FullName = ConvertNameToFull(Name);
 	if (Attr & FILE_ATTRIBUTE_READONLY)
@@ -2430,8 +2433,14 @@ int ShellCopy::DeleteAfterMove(const string& Name,DWORD Attr)
 
 
 
-int ShellCopy::ShellCopyFile(const string& SrcName,const os::fs::find_data &SrcData,
-                             string &strDestName,DWORD &DestAttr,int Append, std::optional<error_state_ex>& ErrorState)
+int ShellCopy::ShellCopyFile(
+	string const& SrcName,
+	os::fs::find_data const& SrcData,
+	string& strDestName,
+	os::fs::attributes& DestAttr,
+	int Append,
+	std::optional<error_state_ex>& ErrorState
+)
 {
 	if ((Flags&FCOPY_LINK))
 	{
@@ -2739,7 +2748,7 @@ int ShellCopy::ShellCopyFile(const string& SrcName,const os::fs::find_data &SrcD
 
 		if (!IsWindowsVistaOrGreater() && IsWindowsServer()) // M#1607 WS2003-Share SetFileTime BUG
 		{
-			if (FAR_GetDriveType(GetPathRoot(strDestName)) == DRIVE_REMOTE)
+			if (os::fs::drive::get_type(GetPathRoot(strDestName)) == DRIVE_REMOTE)
 			{
 				if (DestFile.Open(strDestName, FILE_WRITE_ATTRIBUTES, FILE_SHARE_READ, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT))
 				{
@@ -2904,14 +2913,8 @@ intptr_t ShellCopy::WarnDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 		case DN_CONTROLINPUT:
 		{
 			const auto record = static_cast<const INPUT_RECORD*>(Param2);
-			if (record->EventType==KEY_EVENT)
-			{
-				const auto key = InputRecordToKey(record);
-				if ((Param1==WDLG_SRCFILEBTN || Param1==WDLG_DSTFILEBTN) && key==KEY_F3)
-				{
-					Dlg->SendMessage(DM_OPENVIEWER, Param1, nullptr);
-				}
-			}
+			if (record->EventType == KEY_EVENT && any_of(Param1, WDLG_SRCFILEBTN, WDLG_DSTFILEBTN) && InputRecordToKey(record) == KEY_F3)
+				Dlg->SendMessage(DM_OPENVIEWER, Param1, nullptr);
 		}
 		break;
 
@@ -2926,7 +2929,7 @@ bool ShellCopy::AskOverwrite(
 	const os::fs::find_data &SrcData,
 	const string& SrcName,
 	const string& DestName,
-	DWORD DestAttr,
+	os::fs::attributes DestAttr,
 	int SameName,
 	int Rename,
 	int AskAppend,
@@ -3465,7 +3468,7 @@ void ShellCopy::CalcTotalSize() const
   Оболочка вокруг SetFileAttributes() для
   корректного выставления атрибутов
 */
-void ShellCopy::ShellSetAttr(const string& Dest, DWORD Attr)
+void ShellCopy::ShellSetAttr(const string& Dest, os::fs::attributes Attr)
 {
 	DWORD FileSystemFlagsDst=0;
 	if ((Attr & (FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED)) && os::fs::GetVolumeInformation(GetPathRoot(Dest), nullptr, nullptr, nullptr, &FileSystemFlagsDst, nullptr))

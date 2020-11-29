@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "infolist.hpp"
 
@@ -63,6 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cvtname.hpp"
 #include "vmenu.hpp"
 #include "global.hpp"
+#include "network.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -97,7 +101,7 @@ enum InfoListSectionStateIndex
 struct InfoList::InfoListSectionState
 {
 	bool Show;   // раскрыть/свернуть?
-	SHORT Y;     // Где?
+	int Y;     // Где?
 };
 
 info_panel_ptr InfoList::create(window_ptr Owner)
@@ -304,14 +308,19 @@ void InfoList::DisplayObject()
 			}
 		}
 		else
-			strDriveRoot = GetPathRoot(m_CurDir);
+		{
+			// GetPathRoot expands network drives, it's too early for that
+			strDriveRoot = os::fs::drive::get_type(m_CurDir) == DRIVE_REMOTE?
+				extract_root_directory(m_CurDir) :
+				GetPathRoot(m_CurDir);
+		}
 
 		if (os::fs::GetVolumeInformation(strDriveRoot,&strVolumeName,
 		                            &VolumeNumber,&MaxNameLength,&FileSystemFlags,
 		                            &strFileSystemName))
 		{
 			auto DiskTypeId = lng::MInfoUnknown;
-			int DriveType=FAR_GetDriveType(strDriveRoot);
+			const auto DriveType = os::fs::drive::get_type(strDriveRoot);
 			string strAssocPath;
 			bool UseAssocPath = false;
 
@@ -328,10 +337,7 @@ void InfoList::DisplayObject()
 				case DRIVE_REMOTE:
 					{
 						DiskTypeId = lng::MInfoNetwork;
-						auto DeviceName = strDriveRoot;
-						DeleteEndSlash(DeviceName);
-						os::WNetGetConnection(DeviceName, strAssocPath);
-						UseAssocPath = true;
+						UseAssocPath = DriveLocalToRemoteName(false, strDriveRoot, strAssocPath);
 					}
 					break;
 
@@ -624,11 +630,6 @@ void InfoList::SelectShowMode()
 	int ShowMode=-1;
 
 	{
-		// ?????
-		// {BFC64A26-F433-4cf3-A1DE-8361CF762F68}
-		//DEFINE_GUID(InfoListSelectShowModeId,0xbfc64a26, 0xf433, 0x4cf3, 0xa1, 0xde, 0x83, 0x61, 0xcf, 0x76, 0x2f, 0x68);
-		// ?????
-
 		const auto ShowModeMenu = VMenu2::create(msg(lng::MMenuInfoShowModeTitle), std::as_const(ShowModeMenuItem), 0);
 		ShowModeMenu->SetHelp(L"InfoPanelShowMode"sv);
 		ShowModeMenu->SetPosition({ m_Where.left + 4, -1, 0, 0 });
@@ -773,15 +774,13 @@ bool InfoList::ProcessKey(const Manager::Key& Key)
 		{
 			const auto ret = DizView->ProcessKey(Key);
 
-			if (LocalKey == KEY_F2 || LocalKey == KEY_SHIFTF2
-			 || LocalKey == KEY_F4 || LocalKey == KEY_SHIFTF4
-			 || LocalKey == KEY_F8 || LocalKey == KEY_SHIFTF8)
+			if (any_of(LocalKey, KEY_F2, KEY_SHIFTF2, KEY_F4, KEY_SHIFTF4, KEY_F8, KEY_SHIFTF8))
 			{
 				DynamicUpdateKeyBar();
 				Parent()->GetKeybar().Redraw();
 			}
 
-			if (LocalKey == KEY_F7 || LocalKey == KEY_SHIFTF7)
+			if (any_of(LocalKey, KEY_F7, KEY_SHIFTF7))
 			{
 				long long Pos, Length;
 				DWORD Flags;

@@ -30,6 +30,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "filesystemwatcher.hpp"
 
@@ -89,7 +92,7 @@ void FileSystemWatcher::Watch(bool got_focus, bool check_time)
 	SCOPED_ACTION(elevation::suppress);
 
 	if(!m_RegistrationThread)
-		m_RegistrationThread = os::thread(&os::thread::join, &FileSystemWatcher::Register, this);
+		m_RegistrationThread = os::thread(os::thread::mode::join, &FileSystemWatcher::Register, this);
 
 	if (got_focus)
 	{

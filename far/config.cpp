@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "config.hpp"
 
@@ -55,10 +58,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarDlgBuilder.hpp"
 #include "elevation.hpp"
 #include "configdb.hpp"
-#include "KnownGuids.hpp"
+#include "uuids.plugins.hpp"
 #include "vmenu.hpp"
 #include "vmenu2.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "hmenu.hpp"
 #include "usermenu.hpp"
 #include "filetype.hpp"
@@ -89,12 +92,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Common:
 #include "common/algorithm.hpp"
 #include "common/from_string.hpp"
+#include "common/uuid.hpp"
 #include "common/view/enumerate.hpp"
 #include "common/view/zip.hpp"
 
 // External:
 #include "format.hpp"
-#include "guid_parse.hpp"
 
 //----------------------------------------------------------------------------
 
@@ -453,7 +456,7 @@ static void ApplyDefaultMaskGroups()
 {
 	static const std::pair<string_view, string_view> Sets[] =
 	{
-		{ L"arc"sv,  L"*.zip,*.rar,*.[7bgx]z,*.[bg]zip,*.tar,*.t[agbx]z,*.z,*.ar[cj],*.r[0-9][0-9],*.a[0-9][0-9],*.bz2,*.cab,*.jar,*.lha,*.lzh,*.ha,*.ac[bei],*.pa[ck],*.rk,*.cpio,*.rpm,*.zoo,*.hqx,*.sit,*.ice,*.uc2,*.ain,*.imp,*.777,*.ufa,*.boa,*.bs[2a],*.sea,*.[ah]pk,*.ddi,*.x2,*.rkv,*.[lw]sz,*.h[ay]p,*.lim,*.sqz,*.chz,*.aa[br]"sv },
+		{ L"arc"sv,  L"*.zip,*.rar,*.[7bgxl]z,*.[bg]zip,*.tar,*.t[agbxl]z,*.z,*.ar[cj],*.r[0-9][0-9],*.a[0-9][0-9],*.bz2,*.cab,*.jar,*.lha,*.lzh,*.ha,*.ac[bei],*.pa[ck],*.rk,*.cpio,*.rpm,*.zoo,*.hqx,*.sit,*.ice,*.uc2,*.ain,*.imp,*.777,*.ufa,*.boa,*.bs[2a],*.sea,*.[ah]pk,*.ddi,*.x2,*.rkv,*.[lw]sz,*.h[ay]p,*.lim,*.sqz,*.chz,*.aa[br],*.msi"sv },
 		{ L"temp"sv, L"*.bak,*.tmp"sv },
 		{ L"exec"sv, L"*.exe,*.cmd,*.bat,*.com,%PATHEXT%"sv },
 	};
@@ -482,7 +485,7 @@ static void FillMasksMenu(VMenu2& MasksMenu, int SelPos = 0)
 
 void Options::MaskGroupsSettings()
 {
-	const auto MasksMenu = VMenu2::create(msg(lng::MMenuMaskGroups), {}, 0, VMENU_WRAPMODE | VMENU_SHOWAMPERSAND);
+	const auto MasksMenu = VMenu2::create(msg(lng::MMaskGroupTitle), {}, 0, VMENU_WRAPMODE | VMENU_SHOWAMPERSAND);
 	const auto BottomTitle = KeysToLocalizedText(KEY_INS, KEY_DEL, KEY_F4, KEY_F7, KEY_CTRLR);
 	MasksMenu->SetBottomTitle(BottomTitle);
 	MasksMenu->SetHelp(L"MaskGroupsSettings"sv);
@@ -496,19 +499,15 @@ void Options::MaskGroupsSettings()
 		MasksMenu->Run([&](const Manager::Key& RawKey)
 		{
 			const auto Key=RawKey();
-			if(Filter)
+			if(Filter && any_of(Key, KEY_ESC, KEY_F10, KEY_ENTER, KEY_NUMENTER))
 			{
-				if(Key == KEY_ESC || Key == KEY_F10 || Key == KEY_ENTER || Key == KEY_NUMENTER)
+				Filter = false;
+				for (size_t i = 0, size = MasksMenu->size(); i != size;  ++i)
 				{
-					Filter = false;
-					for (size_t i = 0, size = MasksMenu->size(); i != size;  ++i)
-					{
-						MasksMenu->UpdateItemFlags(static_cast<int>(i), MasksMenu->at(i).Flags & ~MIF_HIDDEN);
-					}
-					MasksMenu->SetPosition({ -1, -1, -1, -1 });
-					MasksMenu->SetTitle(msg(lng::MMenuMaskGroups));
-					MasksMenu->SetBottomTitle(BottomTitle);
+					MasksMenu->UpdateItemFlags(static_cast<int>(i), MasksMenu->at(i).Flags & ~MIF_HIDDEN);
 				}
+				MasksMenu->SetPosition({ -1, -1, -1, -1 });
+				MasksMenu->SetBottomTitle(BottomTitle);
 				return 1;
 			}
 			int ItemPos = MasksMenu->GetSelectPos();
@@ -520,7 +519,7 @@ void Options::MaskGroupsSettings()
 			case KEY_NUMDEL:
 			case KEY_DEL:
 				if(Item && Message(0,
-					msg(lng::MMenuMaskGroups),
+					msg(lng::MMaskGroupTitle),
 					{
 						msg(lng::MMaskGroupAskDelete),
 						*Item
@@ -549,7 +548,7 @@ void Options::MaskGroupsSettings()
 							Name = *Item;
 							Value = ConfigProvider().GeneralCfg()->GetValue<string>(L"Masks"sv, Name);
 						}
-						DialogBuilder Builder(lng::MMenuMaskGroups, L"MaskGroupsSettings"sv);
+						DialogBuilder Builder(lng::MMaskGroupTitle, L"MaskGroupsSettings"sv);
 						Builder.AddText(lng::MMaskGroupName);
 						Builder.AddEditField(Name, 60);
 						Builder.AddText(lng::MMaskGroupMasks);
@@ -572,7 +571,7 @@ void Options::MaskGroupsSettings()
 			case KEY_RCTRLR:
 				{
 					if (Message(MSG_WARNING,
-						msg(lng::MMenuMaskGroups),
+						msg(lng::MMaskGroupTitle),
 						{
 							msg(lng::MMaskGroupRestore),
 						},
@@ -596,8 +595,8 @@ void Options::MaskGroupsSettings()
 						for (size_t i = 0, size = MasksMenu->size(); i != size; ++i)
 						{
 							filemasks Masks;
-							Masks.Set(ConfigProvider().GeneralCfg()->GetValue<string>(L"Masks"sv, *MasksMenu->GetComplexUserDataPtr<string>(i)));
-							if(!Masks.Compare(Value))
+							Masks.assign(ConfigProvider().GeneralCfg()->GetValue<string>(L"Masks"sv, *MasksMenu->GetComplexUserDataPtr<string>(i)));
+							if(!Masks.check(Value))
 							{
 								MasksMenu->UpdateItemFlags(static_cast<int>(i), MasksMenu->at(i).Flags | MIF_HIDDEN);
 							}
@@ -1644,7 +1643,7 @@ Options::Options():
 {
 	const auto& TabSizeValidator = option::validator([](long long TabSize)
 	{
-		return in_range(1, TabSize, 512)? TabSize : DefaultTabSize;
+		return in_closed_range(1, TabSize, 512)? TabSize : DefaultTabSize;
 	});
 
 	EdOpt.TabSize.SetCallback(TabSizeValidator);
@@ -1668,7 +1667,7 @@ Options::Options():
 
 	HelpTabSize.SetCallback(option::validator([](long long Value) { return DefaultTabSize; })); // пока жестко пропишем...
 
-	const auto MacroKeyValidator = [](const string& Value, DWORD& Key, string_view const DefaultValue, DWORD DefaultKey)
+	const auto MacroKeyValidator = [](const string& Value, unsigned& Key, string_view const DefaultValue, unsigned DefaultKey)
 	{
 		Key = KeyNameToKey(Value);
 		if (!Key)
@@ -2024,13 +2023,12 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeySystemException,        L"Used"sv,                          ExceptUsed, false},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"~"sv,                             Exec.strHomeDir, L"%FARHOME%"sv},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"ExcludeCmds"sv,                   Exec.strExcludeCmds, L""sv},
-		{FSSF_PRIVATE,           NKeySystemExecutor,         L"FullTitle"sv,                     Exec.ExecuteFullTitle, false},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"RestoreCP"sv,                     Exec.RestoreCPAfterExecute, true},
-		{FSSF_PRIVATE,           NKeySystemExecutor,         L"UseAppPath"sv,                    Exec.ExecuteUseAppPath, true},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"UseHomeDir"sv,                    Exec.UseHomeDir, true},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"Comspec"sv,                       Exec.Comspec, L"%COMSPEC%"sv},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"ComspecArguments"sv,              Exec.ComspecArguments, L"/S /C \"{0}\""sv},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"ComspecCondition"sv,              Exec.ComspecCondition, L""sv},
+		{FSSF_PRIVATE,           NKeySystemExecutor,         L"UseAssociations"sv,               Exec.UseAssociations, false},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"AutoDetectCodePage"sv,            ViOpt.AutoDetectCodePage, true},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"DefaultCodePage"sv,               ViOpt.DefaultCodePage, encoding::codepage::ansi()},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"DetectDumpMode"sv,                ViOpt.DetectDumpMode, true},
@@ -2137,16 +2135,16 @@ void Options::SetDriveMenuHotkeys()
 
 	static constexpr struct
 	{
-		KnownModulesIDs::GuidOption KnownModulesIDs::* Option;
-		GUID MenuId;
+		KnownModulesIDs::UuidOption KnownModulesIDs::* Option;
+		UUID MenuId;
 		string_view Hotkey;
 	}
 	DriveMenuHotkeys[]
 	{
-		{ &KnownModulesIDs::ProcList, "61026851-2643-4C67-BF80-D3C77A3AE830"_guid, L"0"sv },
-		{ &KnownModulesIDs::TmpPanel, "F98C70B3-A1AE-4896-9388-C5C8E05013B7"_guid, L"1"sv },
-		{ &KnownModulesIDs::Netbox,   "C9FB4F53-54B5-48FF-9BA2-E8EB27F012A2"_guid, L"2"sv },
-		{ &KnownModulesIDs::Network,  "24B6DD41-DF12-470A-A47C-8675ED8D2ED4"_guid, L"3"sv },
+		{ &KnownModulesIDs::ProcList, "61026851-2643-4C67-BF80-D3C77A3AE830"_uuid, L"0"sv },
+		{ &KnownModulesIDs::TmpPanel, "F98C70B3-A1AE-4896-9388-C5C8E05013B7"_uuid, L"1"sv },
+		{ &KnownModulesIDs::Netbox,   "C9FB4F53-54B5-48FF-9BA2-E8EB27F012A2"_uuid, L"2"sv },
+		{ &KnownModulesIDs::Network,  "24B6DD41-DF12-470A-A47C-8675ED8D2ED4"_uuid, L"3"sv },
 	};
 
 	for (const auto& i: DriveMenuHotkeys)
@@ -2167,12 +2165,12 @@ static std::optional<std::pair<panel_sort, sort_order>> deserialise_sort_layer(s
 		switch (Str.front())
 		{
 		case L'S':
-			if (!from_string(Str.substr(1), Sort) || !in_range(0, Sort, static_cast<int>(panel_sort::COUNT)))
+			if (!from_string(Str.substr(1), Sort) || !in_closed_range(0, Sort, static_cast<int>(panel_sort::COUNT)))
 				return {};
 			break;
 
 		case L'O':
-			if (!from_string(Str.substr(1), Order) || !in_range(static_cast<int>(sort_order::first), Order, static_cast<int>(sort_order::last)))
+			if (!from_string(Str.substr(1), Order) || !in_closed_range(static_cast<int>(sort_order::first), Order, static_cast<int>(sort_order::last)))
 				return {};
 			break;
 		}
@@ -2246,34 +2244,34 @@ void Options::SaveSortLayers(bool const Always)
 
 void Options::Load(overrides&& Overrides)
 {
-	// KnownModulesIDs::GuidOption::Default pointer is used in the static config structure, so it MUST be initialized before calling InitConfig()
+	// KnownModulesIDs::UuidOption::Default pointer is used in the static config structure, so it MUST be initialized before calling InitConfig()
 	static struct
 	{
-		KnownModulesIDs::GuidOption KnownModulesIDs::* Option;
-		const GUID& Id;
+		KnownModulesIDs::UuidOption KnownModulesIDs::* Option;
+		const UUID& Id;
 		string StrId;
 	}
-	DefaultKnownGuids[]
+	DefaultKnownIds[]
 	{
-		{ &KnownModulesIDs::Network,  NetworkGuid,  },
-		{ &KnownModulesIDs::Emenu,    EMenuGuid,    },
-		{ &KnownModulesIDs::Arclite,  ArcliteGuid,  },
-		{ &KnownModulesIDs::Luamacro, LuamacroGuid, },
-		{ &KnownModulesIDs::Netbox,   NetBoxGuid,   },
-		{ &KnownModulesIDs::ProcList, ProcListGuid, },
-		{ &KnownModulesIDs::TmpPanel, TmpPanelGuid, },
+		{ &KnownModulesIDs::Network,  NetworkId,  },
+		{ &KnownModulesIDs::Emenu,    EMenuId,    },
+		{ &KnownModulesIDs::Arclite,  ArcliteId,  },
+		{ &KnownModulesIDs::Luamacro, LuamacroId, },
+		{ &KnownModulesIDs::Netbox,   NetBoxId,   },
+		{ &KnownModulesIDs::ProcList, ProcListId, },
+		{ &KnownModulesIDs::TmpPanel, TmpPanelId, },
 	};
 
-	static_assert(std::size(DefaultKnownGuids) == sizeof(KnownModulesIDs) / sizeof(KnownModulesIDs::GuidOption));
+	static_assert(std::size(DefaultKnownIds) == sizeof(KnownModulesIDs) / sizeof(KnownModulesIDs::UuidOption));
 
-	for(auto& i: DefaultKnownGuids)
+	for(auto& i: DefaultKnownIds)
 	{
-		i.StrId = GuidToStr(i.Id);
+		i.StrId = uuid::str(i.Id);
 
-		auto& GuidOption = std::invoke(i.Option, KnownIDs);
-		GuidOption.Id = i.Id;
-		GuidOption.StrId = i.StrId;
-		GuidOption.Default = i.StrId;
+		auto& UuidOption = std::invoke(i.Option, KnownIDs);
+		UuidOption.Id = i.Id;
+		UuidOption.StrId = i.StrId;
+		UuidOption.Default = i.StrId;
 	}
 
 	InitConfigs();
@@ -2338,13 +2336,14 @@ void Options::Load(overrides&& Overrides)
 			ApplyDefaultMaskGroups();
 	}
 
-	for (auto& [Ptr, Id, Str]: DefaultKnownGuids)
+	for (auto& [Ptr, Id, Str]: DefaultKnownIds)
 	{
-		auto& GuidOption = std::invoke(Ptr, KnownIDs);
-		if (GuidOption.StrId.empty() || !StrToGuid(GuidOption.StrId, GuidOption.Id))
-		{
-			GuidOption.Id = GUID_NULL;
-		}
+		auto& UuidOption = std::invoke(Ptr, KnownIDs);
+
+		if (const auto Result = uuid::try_parse(UuidOption.StrId.Get()))
+			UuidOption.Id = *Result;
+		else
+			UuidOption.Id = {};
 	}
 
 	SetDriveMenuHotkeys();
@@ -2480,9 +2479,9 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 		{
 			SCOPED_ACTION(Dialog::suppress_redraw)(Dlg);
 
-			COORD Size{ static_cast<SHORT>(std::max(ScrX - 4, 60)), static_cast<SHORT>(std::max(ScrY - 2, 20)) };
+			COORD Size{ static_cast<short>(std::max(ScrX - 4, 60)), static_cast<short>(std::max(ScrY - 2, 20)) };
 			Dlg->SendMessage(DM_RESIZEDIALOG, 0, &Size);
-			SMALL_RECT ListPos{ 3, 1, static_cast<SHORT>(Size.X - 4), static_cast<SHORT>(Size.Y - 2) };
+			SMALL_RECT ListPos{ 3, 1, static_cast<short>(Size.X - 4), static_cast<short>(Size.Y - 2) };
 			Dlg->SendMessage(DM_SETITEMPOSITION, ac_item_listbox, &ListPos);
 		}
 		break;
@@ -2663,11 +2662,11 @@ void Options::ReadPanelModes()
 		}
 	};
 
-	for_each_cnt(m_ViewSettings.begin(), m_ViewSettings.begin() + predefined_panel_modes_count, [&](PanelViewSettings& i, size_t Index)
+	for (auto& [Item, Index]: enumerate(span(m_ViewSettings).subspan(0, predefined_panel_modes_count)))
 	{
 		if (const auto Key = cfg->FindByName(cfg->root_key, str(Index)))
-			ReadMode(Key, i);
-	});
+			ReadMode(Key, Item);
+	}
 
 	if (const auto CustomModesRoot = cfg->FindByName(cfg->root_key, CustomModesKeyName))
 	{

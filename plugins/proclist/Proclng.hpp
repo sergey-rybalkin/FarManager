@@ -93,7 +93,6 @@ enum
 
 	MConfigTitle,
 	MConfigAddToDisksMenu,
-	MConfigDisksMenuDigit,
 	MConfigAddToPluginMenu,
 
 	MIncludeAdditionalInfo,
@@ -167,9 +166,9 @@ enum
 	MSortBy,
 	MSortByName,
 	MSortByExt,
-	MSortByTime,
 	MSortBySize,
 	MSortByUnsorted,
+	MSortByTime,
 	MSortByDescriptions,
 	MSortByOwner,
 	MUseSortGroups,

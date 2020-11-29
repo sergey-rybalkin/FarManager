@@ -29,6 +29,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "platform.chrono.hpp"
 
@@ -82,7 +85,7 @@ namespace os::chrono
 
 	time_point nt_clock::from_hectonanoseconds(int64_t const Time) noexcept
 	{
-		return os::chrono::time_point(hectonanoseconds(Time));
+		return time_point(hectonanoseconds(Time));
 	}
 
 	int64_t nt_clock::to_hectonanoseconds(time_point const Time) noexcept

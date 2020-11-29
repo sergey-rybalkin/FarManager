@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "fileedit.hpp"
 
@@ -68,7 +71,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "exitcode.hpp"
 #include "constitle.hpp"
 #include "wakeful.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "stddlg.hpp"
 #include "plugins.hpp"
 #include "lang.hpp"
@@ -760,23 +763,32 @@ void FileEditor::ReadEvent()
 
 void FileEditor::InitKeyBar()
 {
-	m_windowKeyBar->SetLabels(Global->OnlyEditorViewerUsed ? lng::MSingleEditF1 : lng::MEditF1);
+	auto& Keybar = *m_windowKeyBar;
+
+	Keybar.SetLabels(lng::MEditF1);
+
+	if (Global->OnlyEditorViewerUsed)
+	{
+		Keybar[KBL_SHIFT][F4].clear();
+		Keybar[KBL_CTRL][F10].clear();
+	}
 
 	if (!GetCanLoseFocus())
 	{
-		(*m_windowKeyBar)[KBL_MAIN][F12].clear();
-		(*m_windowKeyBar)[KBL_ALT][F11].clear();
-		(*m_windowKeyBar)[KBL_SHIFT][F4].clear();
+		Keybar[KBL_MAIN][F12].clear();
+		Keybar[KBL_ALT][F11].clear();
+		Keybar[KBL_SHIFT][F4].clear();
 	}
+
 	if (m_Flags.Check(FFILEEDIT_SAVETOSAVEAS))
-		(*m_windowKeyBar)[KBL_MAIN][F2] = msg(lng::MEditShiftF2);
+		Keybar[KBL_MAIN][F2] = msg(lng::MEditShiftF2);
 
 	if (!m_Flags.Check(FFILEEDIT_ENABLEF6))
-		(*m_windowKeyBar)[KBL_MAIN][F6].clear();
+		Keybar[KBL_MAIN][F6].clear();
 
-	(*m_windowKeyBar)[KBL_MAIN][F8] = f8cps.NextCPname(m_codepage);
+	Keybar[KBL_MAIN][F8] = f8cps.NextCPname(m_codepage);
 
-	m_windowKeyBar->SetCustomLabels(KBA_EDITOR);
+	Keybar.SetCustomLabels(KBA_EDITOR);
 }
 
 void FileEditor::SetNamesList(NamesList& Names)
@@ -880,7 +892,7 @@ bool FileEditor::ProcessKey(const Manager::Key& Key)
 bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 {
 	const auto LocalKey = Key();
-	if (LocalKey!=KEY_F4 && LocalKey!=KEY_IDLE)
+	if (none_of(LocalKey, KEY_F4, KEY_IDLE))
 		F4KeyOnly=false;
 
 	if (m_Flags.Check(FFILEEDIT_REDRAWTITLE) && ((LocalKey & 0x00ffffff) < KEY_END_FKEY || IsInternalKeyReal(LocalKey & 0x00ffffff)))
@@ -892,7 +904,7 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 	   никак не соответствует обрабатываемой клавише, возникают разномастные
 	   глюки
 	*/
-	if ((LocalKey >= KEY_MACRO_BASE && LocalKey <= KEY_MACRO_ENDBASE) || (LocalKey>=KEY_OP_BASE && LocalKey <=KEY_OP_ENDBASE)) // исключаем MACRO
+	if (in_closed_range(KEY_MACRO_BASE, LocalKey, KEY_MACRO_ENDBASE) || in_closed_range(KEY_OP_BASE, LocalKey, KEY_OP_ENDBASE)) // исключаем MACRO
 	{
 		// ; //
 	}
@@ -904,7 +916,7 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 			if (m_Flags.Check(FFILEEDIT_ENABLEF6))
 			{
 				int FirstSave=1;
-				UINT cp=m_codepage;
+				auto cp = m_codepage;
 
 				// проверка на "а может это говно удалили уже?"
 				// возможно здесь она и не нужна!
@@ -1285,10 +1297,6 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 								return false;
 							}
 						}
-						else
-						{
-							FirstSave = NeedQuestion = true;
-						}
 					}
 					else if (!m_editor->m_Flags.Check(Editor::FEDITOR_MODIFIED)) //????
 						NeedQuestion = false;
@@ -1589,7 +1597,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 		{
 			if (testBOM && IsUnicodeOrUtfCodePage(m_codepage))
 			{
-				if (starts_with(Str.Str, Utf::BOM_CHAR))
+				if (starts_with(Str.Str, encoding::bom_char))
 				{
 					Str.Str.remove_prefix(1);
 					m_bAddSignature = true;
@@ -1904,6 +1912,7 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 	if (!IsUnicodeOrUtfCodePage(Codepage))
 	{
 		int LineNumber=-1;
+		encoding::error_position ErrorPosition;
 
 		for(auto& Line: m_editor->Lines)
 		{
@@ -1911,24 +1920,12 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 			const auto& SaveStr = Line.GetString();
 			auto LineEol = Line.GetEOL();
 
-			size_t ErrorPos;
+			(void)encoding::get_bytes_count(Codepage, SaveStr, &ErrorPosition);
+			const auto ValidStr = !ErrorPosition;
+			if (ValidStr)
+				(void)encoding::get_bytes_count(Codepage, LineEol.str(), &ErrorPosition);
 
-			const auto validate = [&](string_view const Str)
-			{
-				try
-				{
-					(void)encoding::get_bytes_count_strict(Codepage, Str);
-					return true;
-				}
-				catch (encoding::exception const& e)
-				{
-					ErrorPos = e.position();
-					return false;
-				}
-			};
-
-			const auto ValidStr = validate(SaveStr);
-			if (!ValidStr || !validate(LineEol.str()))
+			if (ErrorPosition)
 			{
 				//SetMessageHelp(L"EditorDataLostWarning")
 				const int Result = Message(MSG_WARNING,
@@ -1947,7 +1944,7 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 					m_editor->GoToLine(LineNumber);
 					if(!ValidStr)
 					{
-						Line.SetCurPos(static_cast<int>(ErrorPos));
+						Line.SetCurPos(static_cast<int>(*ErrorPosition));
 					}
 					else
 					{
@@ -2214,8 +2211,8 @@ static std::pair<string, size_t> ansi_char_code(std::optional<wchar_t> const& Ch
 		std::optional<unsigned> CharCode;
 
 		char Buffer;
-		bool UsedDefaultChar;
-		if (Char.has_value() && encoding::get_bytes(Codepage, { &*Char, 1 }, { &Buffer, 1 }, &UsedDefaultChar) == 1 && !UsedDefaultChar)
+		encoding::error_position ErrorPosition;
+		if (Char.has_value() && encoding::get_bytes(Codepage, { &*Char, 1 }, { &Buffer, 1 }, &ErrorPosition) == 1 && !ErrorPosition)
 		{
 			const unsigned AnsiCode = Buffer;
 			if (AnsiCode != *Char)
@@ -2319,7 +2316,7 @@ void FileEditor::ShowStatus() const
      Узнаем атрибуты файла и заодно сформируем готовую строку атрибутов для
      статуса.
 */
-DWORD FileEditor::EditorGetFileAttributes(string_view const Name)
+os::fs::attributes FileEditor::EditorGetFileAttributes(string_view const Name)
 {
 	m_FileAttributes = os::fs::get_file_attributes(Name);
 	int ind=0;

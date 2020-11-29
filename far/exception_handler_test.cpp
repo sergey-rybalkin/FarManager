@@ -28,6 +28,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "exception_handler_test.hpp"
 
@@ -76,8 +79,7 @@ namespace tests
 
 	static void cpp_std_lib()
 	{
-		string s;
-		s.at(42) = 0;
+		string().at(42) = 0;
 	}
 
 	static void cpp_std_nested()
@@ -145,6 +147,34 @@ namespace tests
 		rethrow_if(Ptr);
 	}
 
+	[[noreturn]]
+	static void cpp_terminate()
+	{
+		std::terminate();
+	}
+
+	static void cpp_terminate_unwind()
+	{
+		struct c
+		{
+			~c() noexcept(false)
+			{
+				volatile const auto Throw = true;
+				if (Throw)
+					throw MAKE_FAR_EXCEPTION(L"Dtor exception"s);
+			}
+		};
+
+		try
+		{
+			c C;
+			throw MAKE_FAR_EXCEPTION(L"Regular exception"s);
+		}
+		catch(...)
+		{
+		}
+	}
+
 	static void cpp_memory_leak()
 	{
 		const auto Str1 = "We're walking in the air"sv;
@@ -188,7 +218,7 @@ namespace tests
 	static void seh_divide_by_zero_thread()
 	{
 		std::exception_ptr Ptr;
-		os::thread Thread(&os::thread::join, [&]
+		os::thread Thread(os::thread::mode::join, [&]
 		{
 			seh_try_thread(Ptr, []
 			{
@@ -212,8 +242,7 @@ namespace tests
 
 	static void seh_int_overflow()
 	{
-		// Deliberately non-const to prevent compilers from detecting the owerflow at compile time
-		auto Denominator = -1;
+		volatile const auto Denominator = -1;
 		[[maybe_unused]]
 		volatile const auto Result = std::numeric_limits<int>::min() / Denominator;
 	}
@@ -269,7 +298,7 @@ namespace tests
 
 	static void seh_breakpoint()
 	{
-		DebugBreak();
+		os::debug::breakpoint();
 	}
 
 	static void seh_alignment_fault()
@@ -282,16 +311,16 @@ namespace tests
 		[[maybe_unused]]
 		volatile const auto Result = *reinterpret_cast<volatile const double*>(Data.Data + 3);
 	}
+
+	static void seh_unknown()
+	{
+		RaiseException(-1, 0, 0, {});
+	}
 }
 
 static bool ExceptionTestHook(Manager::Key const& key)
 {
-	if (
-		key() != KEY_CTRLALTAPPS &&
-		key() != KEY_RCTRLRALTAPPS &&
-		key() != KEY_CTRLRALTAPPS &&
-		key() != KEY_RCTRLALTAPPS
-		)
+	if (none_of(key(), KEY_CTRLALTAPPS, KEY_RCTRLRALTAPPS, KEY_CTRLRALTAPPS, KEY_RCTRLALTAPPS))
 		return false;
 
 	static const std::pair<void(*)(), string_view> Tests[]
@@ -305,6 +334,8 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::cpp_std_bad_alloc,            L"C++ std::bad_alloc"sv },
 		{ tests::cpp_unknown,                  L"C++ unknown exception"sv },
 		{ tests::cpp_unknown_nested,           L"C++ unknown exception (nested)"sv },
+		{ tests::cpp_terminate,                L"C++ terminate"sv },
+		{ tests::cpp_terminate_unwind,         L"C++ terminate unwind"sv },
 		{ tests::cpp_memory_leak,              L"C++ memory leak"sv },
 		{ tests::seh_access_violation_read,    L"SEH access violation (read)"sv },
 		{ tests::seh_access_violation_write,   L"SEH access violation (write)"sv },
@@ -319,6 +350,7 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::seh_fp_inexact_result,        L"SEH floating-point inexact result"sv },
 		{ tests::seh_breakpoint,               L"SEH breakpoint"sv },
 		{ tests::seh_alignment_fault,          L"SEH alignment fault"sv },
+		{ tests::seh_unknown,                  L"SEH unknown"sv },
 	};
 
 	const auto ModalMenu = VMenu2::create(L"Test Exceptions"s, {}, ScrY - 4);
@@ -330,9 +362,22 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		ModalMenu->AddItem(string(Description));
 	}
 
+	static auto ForceStderrUI = false;
+
+	ModalMenu->AddItem(MenuItemEx{ {}, LIF_SEPARATOR });
+	ModalMenu->AddItem(MenuItemEx{ L"Use stderr UI"s, ForceStderrUI ? LIF_CHECKED : LIF_NONE });
+
 	const auto ExitCode = ModalMenu->Run();
-	if (ExitCode == -1)
+	if (ExitCode < 0)
 		return true;
+
+	if (static_cast<size_t>(ExitCode) == ModalMenu->size() - 1)
+	{
+		ForceStderrUI = !ForceStderrUI;
+		return true;
+	}
+
+	force_stderr_exception_ui(ForceStderrUI);
 
 	Tests[ExitCode].first();
 

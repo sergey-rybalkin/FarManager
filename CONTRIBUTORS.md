@@ -115,6 +115,9 @@
 * Szabolcs Szász
 * HamRusTal
 * Michal Zobec
+* Gerardo Garcia
+* Bernd Giesen
+* Juri Petrashko
  
 > And special thanks to all of our community members!  
 > You are not less important than the people mentioned here.

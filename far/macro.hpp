@@ -67,13 +67,13 @@ enum MACRODISABLEONLOAD
 };
 
 class TVar;
+struct point;
 
 struct MacroPanelSelect
 {
 	string Item;
 	long long Index;
 	int     Action;
-	DWORD   ActionFlags;
 	int     Mode;
 };
 
@@ -84,8 +84,8 @@ class KeyMacro: noncopyable
 public:
 	KeyMacro();
 
-	static bool AddMacro(const GUID& PluginId,const MacroAddMacroV1* Data);
-	static bool DelMacro(const GUID& PluginId,void* Id);
+	static bool AddMacro(const UUID& PluginId, const MacroAddMacroV1* Data);
+	static bool DelMacro(const UUID& PluginId, void* Id);
 	static bool ExecuteString(MacroExecuteString *Data);
 	static bool GetMacroKeyInfo(const string& StrArea,int Pos,string &strKeyName,string &strDescription);
 	static bool IsOutputDisabled();
@@ -101,7 +101,7 @@ public:
 	bool CheckWaitKeyFunc() const;
 	int  GetState() const;
 	int  GetKey();
-	static DWORD GetMacroParseError(COORD* ErrPos, string& ErrSrc);
+	static DWORD GetMacroParseError(point& ErrPos, string& ErrSrc);
 	FARMACROAREA GetArea() const { return m_Area; }
 	string_view GetStringToPrint() const { return m_StringToPrint; }
 	bool IsRecording() const { return m_Recording != MACROSTATE_NOMACRO; }

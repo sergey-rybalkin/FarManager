@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "usermenu.hpp"
 
@@ -55,9 +58,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "string_utils.hpp"
 #include "exception.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "global.hpp"
-#include "delete.hpp"
 #include "file_io.hpp"
 #include "keyboard.hpp"
 
@@ -488,7 +490,7 @@ static void FillUserMenu(VMenu2& FarUserMenu, UserMenu::menu_container& Menu, in
 		else
 		{
 			string strLabel = MenuItem->strLabel;
-			SubstFileName(strLabel, SubstContext, nullptr, nullptr, true, {}, true);
+			SubstFileName(strLabel, SubstContext, {}, true, {}, true);
 			strLabel = os::env::expand(strLabel);
 			string strHotKey = MenuItem->strHotKey;
 			FuncNum = PrepareHotKey(strHotKey);
@@ -604,7 +606,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 				case KEY_SHIFTF4:
 				case KEY_NUMPAD0:
 				{
-					const auto IsNew = Key == KEY_INS || Key == KEY_NUMPAD0;
+					const auto IsNew = any_of(Key, KEY_INS, KEY_NUMPAD0);
 					if (!IsNew && !CurrentMenuItem)
 						break;
 
@@ -618,30 +620,31 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 				case KEY_CTRLDOWN:
 				case KEY_RCTRLDOWN:
 				{
+					if (!CurrentMenuItem)
+						break;
 
-					if (CurrentMenuItem)
+					const auto Up = any_of(Key, KEY_CTRLUP, KEY_RCTRLUP);
+					const auto Pos = UserMenu->GetSelectPos();
+
+					if ((Up && !Pos) || (!Up && Pos == static_cast<int>(UserMenu->size() - 1)))
+						break;
+
+					m_MenuModified = true;
+					auto Other = *CurrentMenuItem;
+
+					if (Up)
 					{
-						const auto Pos = UserMenu->GetSelectPos();
-						if (!((Key == KEY_CTRLUP || Key == KEY_RCTRLUP) && !Pos) && !((Key == KEY_CTRLDOWN || Key == KEY_RCTRLDOWN) && Pos == static_cast<int>(UserMenu->size() - 1)))
-						{
-							m_MenuModified = true;
-							auto Other = *CurrentMenuItem;
-
-							if (Key==KEY_CTRLUP || Key==KEY_RCTRLUP)
-							{
-								--Other;
-								--MenuPos;
-							}
-							else
-							{
-								++Other;
-								++MenuPos;
-							}
-							node_swap(Menu, *CurrentMenuItem, Other);
-
-							FillUserMenu(*UserMenu, Menu, MenuPos, FuncPos, Context);
-						}
+						--Other;
+						--MenuPos;
 					}
+					else
+					{
+						++Other;
+						++MenuPos;
+					}
+					node_swap(Menu, *CurrentMenuItem, Other);
+
+					FillUserMenu(*UserMenu, Menu, MenuPos, FuncPos, Context);
 				}
 				break;
 
@@ -705,7 +708,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
  		const auto CurrentMenuItem = UserMenu->GetComplexUserDataPtr<ITERATOR(Menu)>(UserMenu->GetSelectPos());
 
 		auto CurrentLabel = (*CurrentMenuItem)->strLabel;
-		SubstFileName(CurrentLabel, Context, nullptr, nullptr, true, {}, true);
+		SubstFileName(CurrentLabel, Context, {}, true, {}, true);
 		CurrentLabel = os::env::expand(CurrentLabel);
 
 		if ((*CurrentMenuItem)->Submenu)
@@ -757,16 +760,14 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 					}
 					*/
 
-					delayed_deleter ListNames(false);
 					bool PreserveLFN = false;
-					if (SubstFileName(strCommand, Context, &ListNames, &PreserveLFN, false, CurrentLabel) && !strCommand.empty())
+					if (SubstFileName(strCommand, Context, &PreserveLFN, false, CurrentLabel) && !strCommand.empty())
 					{
 						SCOPED_ACTION(PreserveLongName)(strName, PreserveLFN);
 
 						execute_info Info;
 						Info.DisplayCommand = strCommand;
 						Info.Command = strCommand;
-						Info.WaitMode = ListNames.any()? execute_info::wait_mode::wait_idle : execute_info::wait_mode::no_wait;
 
 						Global->CtrlObject->CmdLine()->ExecString(Info);
 					}
@@ -843,7 +844,7 @@ intptr_t UserMenu::EditMenuDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, v
 
 			if (Param1==EM_BUTTON_OK)
 			{
-				BOOL Result=TRUE;
+				bool Result = true;
 				const string_view HotKey = reinterpret_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, EM_HOTKEY_EDIT, nullptr));
 				const string_view Label = reinterpret_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, EM_LABEL_EDIT, nullptr));
 				int FocusPos=-1;
@@ -860,7 +861,7 @@ intptr_t UserMenu::EditMenuDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, v
 
 						if (upper(HotKey.front()) == L'F')
 						{
-							if (in_range(1, from_string<int>(HotKey.substr(1)), 24))
+							if (in_closed_range(1, from_string<int>(HotKey.substr(1)), 24))
 								FocusPos=-1;
 						}
 					}
@@ -875,7 +876,7 @@ intptr_t UserMenu::EditMenuDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, v
 						},
 						{ lng::MOk });
 					Dlg->SendMessage(DM_SETFOCUS, FocusPos, nullptr);
-					Result=FALSE;
+					Result = false;
 				}
 
 				return Result;
@@ -894,10 +895,10 @@ intptr_t UserMenu::EditMenuDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, v
 					break;
 
 				case Message::second_button:
-					return TRUE;
+					return true;
 
 				default:
-					return FALSE;
+					return false;
 				}
 			}
 

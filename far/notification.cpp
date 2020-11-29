@@ -29,6 +29,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "notification.hpp"
 
@@ -39,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Common:
 #include "common/range.hpp"
+#include "common/uuid.hpp"
 
 // External:
 
@@ -112,5 +116,5 @@ bool message_manager::dispatch()
 
 string listener::CreateEventName()
 {
-	return GuidToStr(CreateUuid());
+	return uuid::str(os::uuid::generate());
 }

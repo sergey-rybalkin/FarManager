@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "fnparce.hpp"
 
@@ -41,7 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cmdline.hpp"
 #include "filepanels.hpp"
 #include "dialog.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "pathmix.hpp"
 #include "strmix.hpp"
 #include "mix.hpp"
@@ -53,6 +56,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "message.hpp"
 #include "eol.hpp"
 #include "interf.hpp"
+#include "datetime.hpp"
+#include "delete.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -127,6 +132,8 @@ struct subst_data
 	bool PreserveLFN{};
 	bool PassivePanel{};
 	bool EscapeAmpersands{};
+
+	std::unordered_map<string, string>* Variables;
 };
 
 
@@ -621,6 +628,25 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 	return CurStr;
 }
 
+static string_view ProcessVariable(string_view const CurStr, subst_data& SubstData, string& Out)
+{
+	const auto Str = CurStr.substr(1);
+
+	const auto Iterator = std::find_if(ALL_CONST_RANGE(*SubstData.Variables), [&](std::pair<string, string> const& i)
+	{
+		return starts_with_icase(Str, i.first);
+	});
+
+	if (Iterator == SubstData.Variables->cend())
+	{
+		Out += CurStr.front();
+		return Str;
+	}
+
+	Out += Iterator->second;
+	return Str.substr(Iterator->first.size());
+}
+
 static string ProcessMetasymbols(string_view Str, subst_data& Data)
 {
 	string Result;
@@ -631,6 +657,10 @@ static string ProcessMetasymbols(string_view Str, subst_data& Data)
 		if (Str.front() == L'!')
 		{
 			Str = ProcessMetasymbol(Str, Data, Result);
+		}
+		else if (Str.front() == L'%')
+		{
+			Str = ProcessVariable(Str, Data, Result);
 		}
 		else
 		{
@@ -649,8 +679,17 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 	// TODO: Dynamic?
 	const int DlgWidth = 76;
 
+	constexpr auto HistoryAndVariablePrefix = L"UserVar"sv;
+
+	const auto GenerateHistoryName = [&](size_t const Index)
+	{
+		return format(FSTR(L"{0}{1}"), HistoryAndVariablePrefix, Index);
+	};
+
+	constexpr auto ExpectedTokensCount = 64;
+
 	std::vector<DialogItemEx> DlgData;
-	DlgData.reserve(30);
+	DlgData.reserve(ExpectedTokensCount * 2 + 4); // + Box, separator, 2 buttons
 
 	struct pos_item
 	{
@@ -658,7 +697,7 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 		size_t EndPos;
 	};
 	std::vector<pos_item> Positions;
-	Positions.reserve(128);
+	Positions.reserve(ExpectedTokensCount);
 
 	{
 		DialogItemEx Item;
@@ -705,7 +744,7 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 			Item.X2 = DlgWidth - 6;
 			Item.Y1 = Item.Y2 = DlgData.size() + 1;
 			Item.Flags = DIF_HISTORY | DIF_USELASTHISTORY;
-			Item.strHistory = concat(L"UserVar"sv, str((DlgData.size() - 1) / 2));
+			Item.strHistory = GenerateHistoryName((DlgData.size() - 1) / 2);
 			DlgData.emplace_back(Item);
 		}
 
@@ -817,8 +856,39 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 		}
 	}
 
+	for (const auto& i: DlgData)
+	{
+		if (i.Type != DI_EDIT)
+			continue;
+
+		const auto Index = (&i - DlgData.data() - 1) / 2;
+		const auto VariableName = format(FSTR(L"%{0}{1}"), HistoryAndVariablePrefix, Index + 1);
+		replace_icase(strTmpStr, VariableName, i.strData);
+
+		if (!i.strHistory.empty() && i.strHistory != GenerateHistoryName(Index))
+		{
+			replace_icase(strTmpStr, L'%' + i.strHistory, i.strData);
+			SubstData.Variables->emplace(i.strHistory, i.strData);
+		}
+	}
+
 	strStr = os::env::expand(strTmpStr);
 	return true;
+}
+
+static auto get_delayed_deleter()
+{
+	static std::optional<delayed_deleter> s_DelayedDeleter(std::in_place, false);
+
+	// Housekeeping
+	static time_check TimeCheck(time_check::mode::delayed, 5min);
+	if (TimeCheck)
+	{
+		s_DelayedDeleter.reset();
+		s_DelayedDeleter.emplace(false);
+	}
+
+	return &*s_DelayedDeleter;
 }
 
 /*
@@ -829,9 +899,8 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 bool SubstFileName(
 	string &Str,                  // результирующая строка
 	const subst_context& Context,
-	delayed_deleter* ListNames,
 	bool* PreserveLongName,
-	bool IgnoreInput,                // true - не исполнять "!?<title>?<init>!"
+	bool IgnoreInputAndLists,                // true - не исполнять "!?<title>?<init>!"
 	string_view const DlgTitle,
 	bool const EscapeAmpersands
 )
@@ -848,14 +917,16 @@ bool SubstFileName(
 	  нужно будет либо убрать эту проверку либо изменить условие (последнее
 	  предпочтительнее!)
 	*/
-	if (!contains(Str, L'!'))
+	if (Str.find_first_of(L"!%"sv) == Str.npos)
 		return true;
 
 	subst_data SubstData;
 	SubstData.This.Normal.Name = Name;
 	SubstData.This.Short.Name = ShortName;
 
-	SubstData.ListNames = ListNames;
+	if (!IgnoreInputAndLists)
+		SubstData.ListNames = get_delayed_deleter();
+
 	SubstData.CmdDir = CmdLineDir.empty()? Global->CtrlObject->CmdLine()->GetCurDir() : CmdLineDir;
 
 	// Предварительно получим некоторые "константы" :-)
@@ -877,9 +948,11 @@ bool SubstFileName(
 	SubstData.PassivePanel = false; // первоначально речь идет про активную панель!
 	SubstData.EscapeAmpersands = EscapeAmpersands;
 
+	SubstData.Variables = &Context.Variables;
+
 	Str = ProcessMetasymbols(Str, SubstData);
 
-	const auto Result = IgnoreInput || InputVariablesDialog(Str, SubstData, DlgTitle.empty()? DlgTitle : os::env::expand(DlgTitle));
+	const auto Result = IgnoreInputAndLists || InputVariablesDialog(Str, SubstData, DlgTitle.empty()? DlgTitle : os::env::expand(DlgTitle));
 
 	if (PreserveLongName)
 		*PreserveLongName = SubstData.PreserveLFN;

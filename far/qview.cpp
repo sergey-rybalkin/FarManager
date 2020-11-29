@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "qview.hpp"
 
@@ -43,7 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "help.hpp"
 #include "viewer.hpp"
 #include "interf.hpp"
-#include "execute.hpp"
+#include "imports.hpp"
 #include "dirinfo.hpp"
 #include "pathmix.hpp"
 #include "mix.hpp"
@@ -295,7 +298,7 @@ bool QuickView::ProcessKey(const Manager::Key& Key)
 		return true;
 	}
 
-	if (LocalKey==KEY_F3 || LocalKey==KEY_NUMPAD5 || LocalKey == KEY_SHIFTNUMPAD5)
+	if (any_of(LocalKey, KEY_F3, KEY_NUMPAD5, KEY_SHIFTNUMPAD5))
 	{
 		const auto AnotherPanel = Parent()->GetAnotherPanel(this);
 
@@ -305,7 +308,7 @@ bool QuickView::ProcessKey(const Manager::Key& Key)
 		return true;
 	}
 
-	if (LocalKey==KEY_ADD || LocalKey==KEY_SUBTRACT)
+	if (any_of(LocalKey, KEY_ADD, KEY_SUBTRACT))
 	{
 		const auto AnotherPanel = Parent()->GetAnotherPanel(this);
 
@@ -319,15 +322,13 @@ bool QuickView::ProcessKey(const Manager::Key& Key)
 	{
 		const auto ret = QView->ProcessKey(Manager::Key(LocalKey));
 
-		if (LocalKey == KEY_F2 || LocalKey == KEY_SHIFTF2
-		 || LocalKey == KEY_F4 || LocalKey == KEY_SHIFTF4
-		 || LocalKey == KEY_F8 || LocalKey == KEY_SHIFTF8)
+		if (any_of(LocalKey, KEY_F2, KEY_SHIFTF2, KEY_F4, KEY_SHIFTF4, KEY_F8, KEY_SHIFTF8))
 		{
 			DynamicUpdateKeyBar();
 			Parent()->GetKeybar().Redraw();
 		}
 
-		if (LocalKey == KEY_F7 || LocalKey == KEY_SHIFTF7)
+		if (any_of(LocalKey, KEY_F7, KEY_SHIFTF7))
 		{
 			//long long Pos;
 			//int Length;
@@ -370,6 +371,57 @@ void QuickView::Update(int Mode)
 		Parent()->GetAnotherPanel(this)->UpdateViewPanel();
 
 	Redraw();
+}
+
+static bool IsProperProgID(string_view const ProgID)
+{
+	return !ProgID.empty() && os::reg::key::open(os::reg::key::classes_root, ProgID, KEY_QUERY_VALUE);
+}
+
+static bool GetShellType(const string_view Ext, string& strType)
+{
+	if (imports.SHCreateAssociationRegistration)
+	{
+		os::com::ptr<IApplicationAssociationRegistration> AAR;
+		if (FAILED(imports.SHCreateAssociationRegistration(IID_IApplicationAssociationRegistration, IID_PPV_ARGS_Helper(&ptr_setter(AAR)))))
+			return false;
+
+		os::com::memory<wchar_t*> Association;
+		if (FAILED(AAR->QueryCurrentDefault(null_terminated(Ext).c_str(), AT_FILEEXTENSION, AL_EFFECTIVE, &ptr_setter(Association))))
+			return false;
+
+		strType = Association.get();
+		return true;
+	}
+
+	if (const auto UserKey = os::reg::key::open(os::reg::key::current_user, concat(L"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\"sv, Ext), KEY_QUERY_VALUE))
+	{
+		if (string Value; UserKey.get(L"ProgId"sv, Value) && IsProperProgID(Value))
+		{
+			strType = std::move(Value);
+			return true;
+		}
+
+		if (string Value; UserKey.get(L"Application"sv, Value))
+		{
+			if (auto ProgId = L"Applications\\"sv + Value; IsProperProgID(ProgId))
+			{
+				strType = std::move(ProgId);
+				return true;
+			}
+		}
+	}
+
+	if (const auto CRKey = os::reg::key::open(os::reg::key::classes_root, Ext, KEY_QUERY_VALUE))
+	{
+		if (string Value; CRKey.get({}, Value) && IsProperProgID(Value))
+		{
+			strType = std::move(Value);
+			return true;
+		}
+	}
+
+	return false;
 }
 
 void QuickView::ShowFile(string_view const FileName, const UserDataItem* const UserData, bool const TempFile, const plugin_panel* const hDirPlugin)
@@ -522,16 +574,13 @@ void QuickView::PrintText(string_view const Str) const
 }
 
 
-bool QuickView::UpdateIfChanged(bool Idle)
+void QuickView::UpdateIfChanged(bool Idle)
 {
-	if (IsVisible() && !strCurFileName.empty() && m_DirectoryScanStatus == scan_status::real_fail)
-	{
-		const auto strViewName = strCurFileName;
-		ShowFile(strViewName, &CurUserData, m_TemporaryFile, nullptr);
-		return true;
-	}
+	if (!IsVisible() || strCurFileName.empty() || m_DirectoryScanStatus != scan_status::real_fail)
+		return;
 
-	return false;
+	const auto strViewName = strCurFileName;
+	ShowFile(strViewName, &CurUserData, m_TemporaryFile, nullptr);
 }
 
 void QuickView::RefreshTitle()

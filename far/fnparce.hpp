@@ -55,14 +55,15 @@ public:
 	string_view Name;
 	string_view ShortName;
 	string_view Path;
+
+	std::unordered_map<string, string> mutable Variables;
 };
 
 bool SubstFileName(
 	string &Str,
 	const subst_context& Context,
-	delayed_deleter* ListNames = nullptr,
-	bool* PreserveLongName = nullptr,
-	bool IgnoreInput = false,
+	bool* PreserveLongName = {},
+	bool IgnoreInputAndLists = false,
 	string_view DlgTitle = {},
 	bool EscapeAmpersands = false
 );

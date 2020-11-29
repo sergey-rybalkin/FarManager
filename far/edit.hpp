@@ -82,9 +82,9 @@ enum FLAGS_CLASS_EDITLINE
 struct ColorItem
 {
 	// Usually we have only 1-2 coloring plugins.
-	// Keeping a copy of GUID in each of thousands of color items is a giant waste of memory,
-	// so GUIDs are stored in a separate set and here is only a pointer.
-	const GUID* Owner;
+	// Keeping a copy of UUID in each of thousands of color items is a giant waste of memory,
+	// so UUIDs are stored in a separate set and here is only a pointer.
+	const UUID* Owner;
 	// Usually we have only 5-10 unique colors.
 	// Keeping a copy of FarColor in each of thousands of color items is a giant waste of memory,
 	// so FarColors are stored in a separate set and here is only a pointer.
@@ -95,8 +95,8 @@ struct ColorItem
 	// it's an uint64 in plugin API, but only 0x1 and 0x2 are used now, so save some memory here.
 	unsigned int Flags;
 
-	const GUID& GetOwner() const { return *Owner; }
-	void SetOwner(const GUID& Value);
+	const UUID& GetOwner() const { return *Owner; }
+	void SetOwner(const UUID& Value);
 
 	const FarColor& GetColor() const { return *Color; }
 	void SetColor(const FarColor& Value);
@@ -181,8 +181,8 @@ public:
 	bool GetColor(ColorItem& col, size_t Item) const;
 	void Xlat(bool All=false);
 	void SetDialogParent(DWORD Sets);
-	void SetCursorType(bool Visible, DWORD Size);
-	void GetCursorType(bool& Visible, DWORD& Size) const;
+	void SetCursorType(bool Visible, size_t Size);
+	void GetCursorType(bool& Visible, size_t& Size) const;
 	bool GetReadOnly() const {return m_Flags.Check(FEDITLINE_READONLY);}
 	void SetReadOnly(bool NewReadOnly) {m_Flags.Change(FEDITLINE_READONLY,NewReadOnly);}
 	void SetHorizontalPosition(int X1, int X2) { SetPosition({ X1, m_Where.top, X2, m_Where.bottom }); }
@@ -213,7 +213,7 @@ private:
 	virtual int GetPrevCurPos() const { return 0; }
 	virtual void SetPrevCurPos(int Pos) {}
 	virtual int GetCursorSize() const;
-	virtual void SetCursorSize(int Size) {}
+	virtual void SetCursorSize(size_t Size) {}
 	virtual int GetMacroSelectionStart() const;
 	virtual void SetMacroSelectionStart(int Value);
 	virtual int GetLineCursorPos() const;
@@ -226,7 +226,7 @@ private:
 	static bool CharInMask(wchar_t Char, wchar_t Mask);
 	bool ProcessCtrlQ();
 	bool ProcessInsPath(unsigned int Key,int PrevSelStart=-1,int PrevSelEnd=0);
-	int RealPosToTab(int PrevLength, int PrevPos, int Pos, int* CorrectPos) const;
+	int RealPosToTab(int PrevLength, int PrevPos, int Pos, int* CorrectPos = {}) const;
 	void FixLeftPos(int TabCurPos=-1);
 	void SetRightCoord(int Value) { SetPosition({ m_Where.left, m_Where.top, Value, m_Where.bottom }); }
 	Editor* GetEditor() const;

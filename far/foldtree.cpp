@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "foldtree.hpp"
 
@@ -230,7 +233,7 @@ bool FolderTree::ProcessKey(const Manager::Key& Key)
 		case KEY_CTRLENTER:          case KEY_RCTRLENTER:
 		case KEY_CTRLSHIFTENTER:     case KEY_RCTRLSHIFTENTER:
 		{
-			m_Tree->FindPartName(m_FindEdit->GetString(), TRUE, LocalKey == KEY_CTRLSHIFTENTER || LocalKey == KEY_RCTRLSHIFTENTER || LocalKey == KEY_CTRLSHIFTNUMENTER || LocalKey == KEY_RCTRLSHIFTNUMENTER? -1 : 1);
+			m_Tree->FindPartName(m_FindEdit->GetString(), TRUE, any_of(LocalKey, KEY_CTRLSHIFTENTER, KEY_RCTRLSHIFTENTER, KEY_CTRLSHIFTNUMENTER, KEY_RCTRLSHIFTNUMENTER)? -1 : 1);
 			DrawEdit();
 		}
 		break;
@@ -258,7 +261,7 @@ bool FolderTree::ProcessKey(const Manager::Key& Key)
 			break;
 		default:
 
-			if (LocalKey == KEY_ADD || LocalKey == KEY_SUBTRACT) // OFM: Gray+/Gray- navigation
+			if (any_of(LocalKey, KEY_ADD, KEY_SUBTRACT)) // OFM: Gray+/Gray- navigation
 			{
 				m_Tree->ProcessKey(Key);
 				DrawEdit();

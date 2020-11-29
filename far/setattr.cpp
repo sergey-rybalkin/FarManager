@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "setattr.hpp"
 
@@ -54,7 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "network.hpp"
 #include "fileowner.hpp"
 #include "wakeful.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "interf.hpp"
 #include "plugins.hpp"
 #include "imports.hpp"
@@ -162,7 +165,7 @@ enum DIALOGMODE
 static const struct
 {
 	int Id;
-	DWORD Attribute;
+	os::fs::attributes Attribute;
 	lng LngId;
 }
 AttributeMap[]
@@ -665,7 +668,7 @@ static bool process_single_file(
 
 	ESetFileSparse(Name, (New.FindData.Attributes & FILE_ATTRIBUTE_SPARSE_FILE) != 0, Current.FindData.Attributes, SkipErrors);
 
-	const auto IsChanged = [&](DWORD const Attributes)
+	const auto IsChanged = [&](os::fs::attributes const Attributes)
 	{
 		return (New.FindData.Attributes & Attributes) != (Current.FindData.Attributes & Attributes);
 	};
@@ -686,7 +689,7 @@ static bool process_single_file(
 
 static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 {
-	short DlgX = 66, DlgY = 22;
+	short DlgX = 74, DlgY = 22;
 
 	const auto C1 = 5;
 	const auto C2 = C1 + (DlgX - 10) / 2;
@@ -835,7 +838,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 			AttrDlg[i.TimeId].strMask = TimeMask;
 		}
 
-		bool FolderPresent=false,LinkPresent=false;
+		bool LinkPresent=false;
 		string strLinkName;
 
 		const auto EnableSubfolders = [&]
@@ -865,11 +868,10 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 				}
 			}
 
-			if (!FolderPresent && os::fs::is_directory(SingleSelFindData.Attributes))
-			{
-				FolderPresent = true;
+			const auto FolderPresent = os::fs::is_directory(SingleSelFindData.Attributes);
+
+			if (FolderPresent)
 				EnableSubfolders();
-			}
 
 			if (SingleSelFindData.Attributes != INVALID_FILE_ATTRIBUTES)
 			{
@@ -891,7 +893,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 			{
 				bool IsRoot = false;
 				const auto PathType = ParsePath(SingleSelFileName, nullptr, &IsRoot);
-				IsMountPoint = IsRoot && ((PathType == root_type::drive_letter || PathType == root_type::unc_drive_letter));
+				IsMountPoint = IsRoot && ((PathType == root_type::drive_letter || PathType == root_type::win32nt_drive_letter));
 			}
 
 			if ((SingleSelFindData.Attributes != INVALID_FILE_ATTRIBUTES && (SingleSelFindData.Attributes & FILE_ATTRIBUTE_REPARSE_POINT)) || IsMountPoint)
@@ -1053,7 +1055,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 
 			// проверка - есть ли среди выделенных - каталоги?
 			// так же проверка на атрибуты
-			FolderPresent=false;
+			auto FolderPresent = false;
 
 			const auto strComputerName = ExtractComputerName(SrcPanel->GetCurDir());
 
@@ -1216,7 +1218,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 				if (SingleSelFindData.Attributes == INVALID_FILE_ATTRIBUTES)
 					return true;
 
-				DWORD SetAttr = 0, ClearAttr = 0;
+				os::fs::attributes SetAttr = 0, ClearAttr = 0;
 
 				for (const auto& [i, Attr]: zip(DlgParam.Attributes, AttributeMap))
 				{
@@ -1351,7 +1353,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 					AddEndSlash(strFullName);
 				}
 				seInfo.lpFile = strFullName.c_str();
-				if (!IsWindowsVistaOrGreater() && ParsePath(seInfo.lpFile) == root_type::unc_drive_letter)
+				if (!IsWindowsVistaOrGreater() && ParsePath(seInfo.lpFile) == root_type::win32nt_drive_letter)
 				{	// "\\?\c:\..." fails on old windows
 					seInfo.lpFile += 4;
 				}

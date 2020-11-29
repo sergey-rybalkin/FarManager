@@ -175,13 +175,13 @@ public:
 	virtual void ClearLastGetSelection() {}
 	virtual bool GetCurName(string &strName, string &strShortName) const;
 	virtual bool GetCurBaseName(string &strName, string &strShortName) const;
-	virtual bool GetFileName(string &strName, int Pos, DWORD &FileAttr) const { return false; }
+	virtual bool GetFileName(string& strName, int Pos, os::fs::attributes& FileAttr) const { return false; }
 	virtual const std::unordered_set<string>* GetFilteredExtensions() const { return {}; }
 	virtual int GetCurrentPos() const {return 0;}
 	virtual bool IsFocused() const;
 	virtual void OnFocusChange(bool Get);
 	virtual void Update(int Mode) = 0;
-	virtual bool UpdateIfChanged(bool Idle) {return false;}
+	virtual void UpdateIfChanged(bool Idle) {}
 	virtual void UpdateIfRequired() {}
 	virtual void StartFSWatcher(bool got_focus=false, bool check_time=true) {}
 	virtual void StopFSWatcher() {}
@@ -206,7 +206,7 @@ public:
 	virtual void SetSortMode(panel_sort Mode, bool KeepOrder = false) { m_SortMode = Mode; }
 	virtual void SetCustomSortMode(panel_sort Mode, sort_order Order, bool InvertByDefault) {}
 	virtual void ChangeSortOrder(bool Reverse) {SetSortOrder(Reverse);}
-	virtual void IfGoHome(wchar_t Drive) {}
+	virtual void GoHome(string_view const Drive) {}
 	virtual void UpdateKeyBar() = 0;
 	virtual size_t GetFileCount() const { return 0; }
 	virtual Viewer* GetViewer() {return nullptr;}
@@ -229,7 +229,7 @@ public:
 	void SetShowShortNamesMode(bool Mode) {m_ShowShortNames=Mode;}
 	void InitCurDir(string_view CurDir);
 	bool ExecShortcutFolder(int Pos);
-	bool ExecFolder(string_view Folder, const GUID& PluginGuid, const string& strPluginFile, const string& strPluginData, bool CheckType, bool TryClosest, bool Silent);
+	bool ExecFolder(string_view Folder, const UUID& PluginUuid, const string& strPluginFile, const string& strPluginData, bool CheckType, bool TryClosest, bool Silent);
 	bool SaveShortcutFolder(int Pos) const;
 	int SetPluginCommand(int Command,int Param1,void* Param2);
 	bool ProcessMouseDrag(const MOUSE_EVENT_RECORD* MouseEvent);
@@ -284,7 +284,7 @@ private:
 		string ShortcutFolder;
 		string PluginFile;
 		string PluginData;
-		GUID PluginGuid;
+		UUID PluginUuid;
 	};
 	bool GetShortcutInfo(ShortcutInfo& Info) const;
 	bool SetPluginDirectory(string_view Directory, bool Silent);

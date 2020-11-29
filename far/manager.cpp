@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "manager.hpp"
 
@@ -54,7 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "exitcode.hpp"
 #include "scrbuf.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "plugins.hpp"
 #include "lang.hpp"
 #include "desktop.hpp"
@@ -130,7 +133,7 @@ static bool CASHook(const Manager::Key& key)
 		return false;
 	}
 
-	const auto AnyPressed = [](DWORD const State)
+	const auto AnyPressed = [](unsigned const State)
 	{
 		return
 			flags::check_any(State, LEFT_CTRL_PRESSED | RIGHT_CTRL_PRESSED) &&
@@ -138,12 +141,12 @@ static bool CASHook(const Manager::Key& key)
 			flags::check_any(State, SHIFT_PRESSED);
 	};
 
-	const auto LeftPressed = [](DWORD const State)
+	const auto LeftPressed = [](unsigned const State)
 	{
 		return flags::check_all(State, LEFT_CTRL_PRESSED | LEFT_ALT_PRESSED | SHIFT_PRESSED);
 	};
 
-	const auto RightPressed = [](DWORD const State)
+	const auto RightPressed = [](unsigned const State)
 	{
 		return flags::check_all(State, RIGHT_CTRL_PRESSED | RIGHT_ALT_PRESSED | SHIFT_PRESSED);
 	};
@@ -637,11 +640,11 @@ void Manager::ProcessMainLoop()
 			return;
 
 		const auto BaseKey = Key & ~KEY_CTRLMASK;
-		if (rec.EventType==MOUSE_EVENT && !(BaseKey == KEY_MSWHEEL_UP || BaseKey == KEY_MSWHEEL_DOWN || BaseKey == KEY_MSWHEEL_RIGHT || BaseKey == KEY_MSWHEEL_LEFT))
+		if (rec.EventType==MOUSE_EVENT && none_of(BaseKey, KEY_MSWHEEL_UP, KEY_MSWHEEL_DOWN, KEY_MSWHEEL_RIGHT, KEY_MSWHEEL_LEFT))
 		{
-				// используем копию структуры, т.к. LastInputRecord может внезапно измениться во время выполнения ProcessMouse
-				MOUSE_EVENT_RECORD mer=rec.Event.MouseEvent;
-				ProcessMouse(&mer);
+			// используем копию структуры, т.к. LastInputRecord может внезапно измениться во время выполнения ProcessMouse
+			auto mer = rec.Event.MouseEvent;
+			ProcessMouse(&mer);
 		}
 		else
 			ProcessKey(Manager::Key(Key, rec));
@@ -769,7 +772,7 @@ bool Manager::ProcessKey(Key key)
 						os::chrono::sleep_for(1ms);
 						UpdateScreenSize();
 
-						if (PScrX+1 == CurSize.X && PScrY+1 == CurSize.Y)
+						if (PScrX + 1 == CurSize.x && PScrY + 1 == CurSize.y)
 						{
 							//_MANAGER(SysLog(-1,"GetInputRecord(WINDOW_BUFFER_SIZE_EVENT); return KEY_NONE"));
 							return true;
@@ -805,7 +808,7 @@ bool Manager::ProcessKey(Key key)
 
 					if (GetCurrentWindow()->GetCanLoseFocus())
 					{
-						SwitchWindow((key()==KEY_CTRLTAB||key()==KEY_RCTRLTAB)? direction::next : direction::previous);
+						SwitchWindow(any_of(key(), KEY_CTRLTAB, KEY_RCTRLTAB)? direction::next : direction::previous);
 					}
 					else
 						break;

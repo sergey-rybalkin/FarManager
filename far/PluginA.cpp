@@ -29,6 +29,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "PluginA.hpp"
 
@@ -46,7 +49,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "mix.hpp"
 #include "colormix.hpp"
-#include "FarGuid.hpp"
+#include "uuids.far.hpp"
 #include "keys.hpp"
 #include "language.hpp"
 #include "filepanels.hpp"
@@ -70,6 +73,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/function_ref.hpp"
 #include "common/null_iterator.hpp"
 #include "common/scope_exit.hpp"
+#include "common/uuid.hpp"
+#include "common/view/select.hpp"
 #include "common/view/select.hpp"
 #include "common/view/zip.hpp"
 
@@ -755,8 +760,8 @@ static void ConvertPanelItemToAnsi(const PluginPanelItem &PanelItem, oldfar::Plu
 	PanelItemA.FindData.nFileSizeHigh = static_cast<DWORD>(PanelItem.FileSize >> 32);
 	PanelItemA.PackSize = static_cast<DWORD>(PanelItem.AllocationSize & 0xFFFFFFFF);
 	PanelItemA.PackSizeHigh = static_cast<DWORD>(PanelItem.AllocationSize >> 32);
-	encoding::oem::get_bytes(PanelItem.FileName + PathOffset, PanelItemA.FindData.cFileName);
-	encoding::oem::get_bytes(PanelItem.AlternateFileName, PanelItemA.FindData.cAlternateFileName);
+	(void)encoding::oem::get_bytes(PanelItem.FileName + PathOffset, PanelItemA.FindData.cFileName);
+	(void)encoding::oem::get_bytes(PanelItem.AlternateFileName, PanelItemA.FindData.cAlternateFileName);
 }
 
 static oldfar::PluginPanelItem* ConvertPanelItemsArrayToAnsi(const PluginPanelItem *PanelItemW, size_t ItemsNumber)
@@ -773,11 +778,7 @@ static oldfar::PluginPanelItem* ConvertPanelItemsArrayToAnsi(const PluginPanelIt
 
 static void FreeUnicodePanelItem(PluginPanelItem *PanelItem, size_t ItemsNumber)
 {
-	for (const auto& i: span(PanelItem, ItemsNumber))
-	{
-		FreePluginPanelItemNames(i);
-		FreePluginPanelItemDescriptionOwnerAndColumns(i);
-	}
+	FreePluginPanelItemsData(span(PanelItem, ItemsNumber));
 
 	delete[] PanelItem;
 }
@@ -819,7 +820,7 @@ static char *InsertQuoteA(char *Str)
 	return Str;
 }
 
-static auto GetPluginGuid(intptr_t n)
+static auto GetPluginUuid(intptr_t n)
 {
 	return &reinterpret_cast<Plugin*>(n)->Id();
 }
@@ -928,7 +929,7 @@ static const std::array ListFlagsMap
 
 static void UnicodeListItemToAnsi(const FarListItem* li, oldfar::FarListItem* liA)
 {
-	encoding::oem::get_bytes(li->Text, liA->Text);
+	(void)encoding::oem::get_bytes(li->Text, liA->Text);
 	liA->Flags = 0;
 	if (li->Flags)
 	{
@@ -1286,19 +1287,19 @@ static oldfar::FarDialogItem* UnicodeDialogItemToAnsi(FarDialogItem &di, HANDLE 
 		const auto Length = wcslen(di.Data);
 		diA->Ptr.PtrLength = static_cast<int>(Length);
 		auto Data = std::make_unique<char[]>(Length + 1);
-		encoding::oem::get_bytes({ di.Data, Length }, { Data.get(), Length });
+		(void)encoding::oem::get_bytes({ di.Data, Length }, { Data.get(), Length });
 		Data[Length] = {};
 		diA->Ptr.PtrData = Data.release();
 	}
 	else
-		encoding::oem::get_bytes(di.Data, diA->Data);
+		(void)encoding::oem::get_bytes(di.Data, diA->Data);
 
 	return diA;
 }
 
 static void ConvertUnicodePanelInfoToAnsi(const PanelInfo* PIW, oldfar::PanelInfo* PIA)
 {
-	PIA->PanelType = 0;
+	PIA->PanelType = oldfar::PTYPE_FILEPANEL;
 
 	switch (PIW->PanelType)
 	{
@@ -1379,7 +1380,7 @@ struct oldPanelInfoContainer: noncopyable
 static long long GetSetting(FARSETTINGS_SUBFOLDERS Root, const wchar_t* Name)
 {
 	long long result = 0;
-	FarSettingsCreate settings = { sizeof(FarSettingsCreate), FarGuid, INVALID_HANDLE_VALUE };
+	FarSettingsCreate settings = { sizeof(FarSettingsCreate), FarUuid, INVALID_HANDLE_VALUE };
 	const auto Settings = pluginapi::apiSettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &settings)? settings.Handle : nullptr;
 	if (Settings)
 	{
@@ -1397,10 +1398,10 @@ static uintptr_t GetEditorCodePageA()
 {
 	EditorInfo info = { sizeof(EditorInfo) };
 	pluginapi::apiEditorControl(-1, ECTL_GETINFO, 0, &info);
-	uintptr_t CodePage = info.CodePage;
+	auto CodePage = info.CodePage;
 	CPINFO cpi;
 
-	if (!GetCPInfo(static_cast<UINT>(CodePage), &cpi) || cpi.MaxCharSize > 1)
+	if (!GetCPInfo(static_cast<unsigned>(CodePage), &cpi) || cpi.MaxCharSize > 1)
 		CodePage = encoding::codepage::ansi();
 
 	return CodePage;
@@ -1436,11 +1437,11 @@ static int GetEditorCodePageFavA()
 	return result;
 }
 
-static void MultiByteRecode(UINT nCPin, UINT nCPout, span<char> const Buffer)
+static void MultiByteRecode(uintptr_t const CPin, uintptr_t const CPout, span<char> const Buffer)
 {
 	if (!Buffer.empty())
 	{
-		(void)encoding::get_bytes(nCPout, encoding::get_chars(nCPin, { Buffer.data(), Buffer.size() }), Buffer);
+		(void)encoding::get_bytes(CPout, encoding::get_chars(CPin, { Buffer.data(), Buffer.size() }), Buffer);
 	}
 }
 
@@ -1945,7 +1946,7 @@ static void WINAPI GetPathRootA(const char *Path, char *Root) noexcept
 		wchar_t Buffer[MAX_PATH];
 		const auto Size = pluginapi::apiGetPathRoot(encoding::oem::get_chars(Path).c_str(), Buffer, std::size(Buffer));
 		if (Size)
-			encoding::oem::get_bytes({ Buffer, Size - 1 }, { Root, std::size(Buffer) });
+			(void)encoding::oem::get_bytes({ Buffer, Size - 1 }, { Root, std::size(Buffer) });
 	},
 	[]
 	{
@@ -2027,7 +2028,7 @@ static int WINAPI ProcessNameA(const char *Param1, char *Param2, DWORD Flags) no
 		const auto ret = static_cast<int>(pluginapi::apiProcessName(strP1.c_str(), p.data(), size, newFlags));
 
 		if (ret && (newFlags & PN_GENERATENAME))
-			encoding::oem::get_bytes({ p.data(), static_cast<size_t>(ret - 1) }, { Param2, static_cast<size_t>(size) });
+			(void)encoding::oem::get_bytes({ p.data(), static_cast<size_t>(ret - 1) }, { Param2, static_cast<size_t>(size) });
 
 		return ret;
 	},
@@ -2062,7 +2063,7 @@ static BOOL WINAPI FarKeyToNameA(int Key, char *KeyText, int Size) noexcept
 		if (strKT.empty())
 			return FALSE;
 
-		encoding::oem::get_bytes(strKT, { KeyText, static_cast<size_t>(Size > 0? Size + 1 : 32) });
+		(void)encoding::oem::get_bytes(strKT, { KeyText, static_cast<size_t>(Size > 0? Size + 1 : 32) });
 		return TRUE;
 	},
 	[]
@@ -2094,7 +2095,7 @@ static char* WINAPI FarMkTempA(char *Dest, const char *Prefix) noexcept
 		wchar_t D[oldfar::NM]{};
 		const auto Size = pluginapi::apiMkTemp(D, std::size(D), encoding::oem::get_chars(Prefix).c_str());
 		if (Size)
-			encoding::oem::get_bytes({ D, Size - 1 }, { Dest, std::size(D) });
+			(void)encoding::oem::get_bytes({ D, Size - 1 }, { Dest, std::size(D) });
 		return Dest;
 	},
 	[&]
@@ -2160,7 +2161,7 @@ static int WINAPI ConvertNameToRealA(const char *Src, char *Dest, int DestSize) 
 		if (!Dest)
 			return static_cast<int>(strDest.size());
 
-		encoding::oem::get_bytes(strDest, { Dest, static_cast<size_t>(DestSize) });
+		(void)encoding::oem::get_bytes(strDest, { Dest, static_cast<size_t>(DestSize) });
 		return std::min(static_cast<int>(strDest.size()), DestSize);
 	},
 	[]
@@ -2184,11 +2185,11 @@ static int WINAPI FarGetReparsePointInfoA(const char *Src, char *Dest, int DestS
 			{
 				std::vector<wchar_t> Tmp(DestSize);
 				Result = pluginapi::apiGetReparsePointInfo(strSrc.c_str(), Tmp.data(), Tmp.size());
-				encoding::oem::get_bytes({ Tmp.data(), Result - 1 }, { Dest, static_cast<size_t>(DestSize) });
+				(void)encoding::oem::get_bytes({ Tmp.data(), Result - 1 }, { Dest, static_cast<size_t>(DestSize) });
 			}
 			else
 			{
-				encoding::oem::get_bytes({ Buffer, Result - 1 }, { Dest, static_cast<size_t>(DestSize) });
+				(void)encoding::oem::get_bytes({ Buffer, Result - 1 }, { Dest, static_cast<size_t>(DestSize) });
 			}
 		}
 		return static_cast<int>(Result);
@@ -2213,10 +2214,10 @@ static int WINAPI FarRecursiveSearchA_Callback(const PluginPanelItem *FData, con
 		FindData.ftLastWriteTime = FData->LastWriteTime;
 		FindData.nFileSizeLow = static_cast<DWORD>(FData->FileSize);
 		FindData.nFileSizeHigh = static_cast<DWORD>(FData->FileSize >> 32);
-		encoding::oem::get_bytes(FData->FileName, FindData.cFileName);
-		encoding::oem::get_bytes(FData->AlternateFileName, FindData.cAlternateFileName);
+		(void)encoding::oem::get_bytes(FData->FileName, FindData.cFileName);
+		(void)encoding::oem::get_bytes(FData->AlternateFileName, FindData.cAlternateFileName);
 		char FullNameA[oldfar::NM];
-		encoding::oem::get_bytes(FullName, FullNameA);
+		(void)encoding::oem::get_bytes(FullName, FullNameA);
 		return pCallbackParam->Func(&FindData, FullNameA, pCallbackParam->Param);
 	},
 	[]
@@ -2260,7 +2261,7 @@ static DWORD WINAPI ExpandEnvironmentStrA(const char *src, char *dest, size_t si
 	{
 		const auto strD = os::env::expand(encoding::oem::get_chars(src));
 		const auto len = std::min(strD.size(), size - 1);
-		encoding::oem::get_bytes(strD, { dest, len + 1 });
+		(void)encoding::oem::get_bytes(strD, { dest, len + 1 });
 		return static_cast<DWORD>(len);
 	},
 	[]
@@ -2352,17 +2353,21 @@ static int WINAPI FarInputBoxA(const char *Title, const char *Prompt, const char
 
 		const wchar_t_ptr_n<256> Buffer(DestLength);
 
-		const auto ret = pluginapi::apiInputBox(&FarGuid, &FarGuid,
+		const auto ret = pluginapi::apiInputBox(
+			&FarUuid,
+			&FarUuid,
 			Title? encoding::oem::get_chars(Title).c_str() : nullptr,
 			Prompt? encoding::oem::get_chars(Prompt).c_str() : nullptr,
 			HistoryName? encoding::oem::get_chars(HistoryName).c_str() : nullptr,
 			SrcText? encoding::oem::get_chars(SrcText).c_str() : nullptr,
-			Buffer.data(), Buffer.size(),
+			Buffer.data(),
+			Buffer.size(),
 			HelpTopic? encoding::oem::get_chars(HelpTopic).c_str() : nullptr,
-			NewFlags);
+			NewFlags
+		);
 
 		if (ret && DestText)
-			encoding::oem::get_bytes(Buffer.data(), { DestText, static_cast<size_t>(DestLength) + 1 });
+			(void)encoding::oem::get_bytes(Buffer.data(), { DestText, static_cast<size_t>(DestLength) + 1 });
 
 		return ret;
 	},
@@ -2427,10 +2432,15 @@ static int WINAPI FarMessageFnA(intptr_t PluginNumber, DWORD Flags, const char *
 			break;
 		}
 
-		return pluginapi::apiMessageFn(GetPluginGuid(PluginNumber), &FarGuid, NewFlags,
+		return pluginapi::apiMessageFn(
+			GetPluginUuid(PluginNumber),
+			&FarUuid,
+			NewFlags,
 			HelpTopic? encoding::oem::get_chars(HelpTopic).c_str() : nullptr,
 			AnsiItems.empty()? reinterpret_cast<const wchar_t* const *>(AllInOneAnsiItem.get()) : reinterpret_cast<const wchar_t* const *>(AnsiItems.data()),
-			ItemsNumber, ButtonsNumber);
+			ItemsNumber,
+			ButtonsNumber
+		);
 	},
 	[]
 	{
@@ -2570,7 +2580,7 @@ static int WINAPI FarMenuFnA(intptr_t PluginNumber, int X, int Y, int MaxHeight,
 
 		intptr_t NewBreakCode;
 
-		const auto ret = pluginapi::apiMenuFn(GetPluginGuid(PluginNumber), &FarGuid, X, Y, MaxHeight, NewFlags,
+		const auto ret = pluginapi::apiMenuFn(GetPluginUuid(PluginNumber), &FarUuid, X, Y, MaxHeight, NewFlags,
 			Title? encoding::oem::get_chars(Title).c_str() : nullptr,
 			Bottom? encoding::oem::get_chars(Bottom).c_str() : nullptr,
 			HelpTopic? encoding::oem::get_chars(HelpTopic).c_str() : nullptr,
@@ -2849,7 +2859,7 @@ static intptr_t WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, v
 				FarDialogItemData did = {sizeof(FarDialogItemData), static_cast<size_t>(didA->PtrLength), text.data()};
 				intptr_t ret = pluginapi::apiSendDlgMessage(hDlg, DM_GETTEXT, Param1, &did);
 				didA->PtrLength = static_cast<int>(did.PtrLength);
-				encoding::oem::get_bytes({ text.data(), did.PtrLength }, { didA->PtrData, static_cast<size_t>(didA->PtrLength + 1) });
+				(void)encoding::oem::get_bytes({ text.data(), did.PtrLength }, { didA->PtrData, static_cast<size_t>(didA->PtrLength + 1) });
 				return ret;
 			}
 			case oldfar::DM_GETTEXTLENGTH: Msg = DM_GETTEXT; break;
@@ -2922,7 +2932,7 @@ static intptr_t WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, v
 				std::vector<wchar_t> text(length + 1);
 				FarDialogItemData item = {sizeof(FarDialogItemData), static_cast<size_t>(length), text.data()};
 				length = pluginapi::apiSendDlgMessage(hDlg, DM_GETTEXT, Param1, &item);
-				encoding::oem::get_bytes({ text.data(), length }, { static_cast<char*>(Param2), length + 1 });
+				(void)encoding::oem::get_bytes({ text.data(), length }, { static_cast<char*>(Param2), length + 1 });
 				return length;
 			}
 			case oldfar::DM_SETTEXTPTR:
@@ -3127,7 +3137,7 @@ static intptr_t WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, v
 			{
 				intptr_t Size = pluginapi::apiSendDlgMessage(hDlg, DM_LISTGETDATASIZE, Param1, Param2);
 				intptr_t Data = pluginapi::apiSendDlgMessage(hDlg, DM_LISTGETDATA, Param1, Param2);
-				if(Size<=4) Data=Data?*reinterpret_cast<UINT*>(Data):0;
+				if(Size<=4) Data=Data?*reinterpret_cast<unsigned*>(Data):0;
 				return Data;
 			}
 			case oldfar::DM_LISTSETDATA:
@@ -3189,10 +3199,10 @@ static intptr_t WINAPI FarSendDlgMessageA(HANDLE hDlg, int OldMsg, int Param1, v
 					if (Ret)
 					{
 						if (OldListTitle->Title)
-							encoding::oem::get_bytes(ListTitle.Title, { OldListTitle->Title, static_cast<size_t>(OldListTitle->TitleLen) });
+							(void)encoding::oem::get_bytes(ListTitle.Title, { OldListTitle->Title, static_cast<size_t>(OldListTitle->TitleLen) });
 
 						if (OldListTitle->Bottom)
-							encoding::oem::get_bytes(ListTitle.Bottom, { OldListTitle->Bottom, static_cast<size_t>(OldListTitle->BottomLen) });
+							(void)encoding::oem::get_bytes(ListTitle.Bottom, { OldListTitle->Bottom, static_cast<size_t>(OldListTitle->BottomLen) });
 					}
 
 					return Ret;
@@ -3381,7 +3391,7 @@ static int WINAPI FarDialogExA(intptr_t PluginNumber, int X1, int Y1, int X2, in
 		if (Flags&oldfar::FDLG_NONMODAL)
 			DlgFlags|=FDLG_NONMODAL;
 
-		const auto hDlg = pluginapi::apiDialogInit(GetPluginGuid(PluginNumber), &FarGuid, X1, Y1, X2, Y2, (HelpTopic? encoding::oem::get_chars(HelpTopic).c_str() : nullptr), di.data(), di.size(), 0, DlgFlags, DlgProcA, Param);
+		const auto hDlg = pluginapi::apiDialogInit(GetPluginUuid(PluginNumber), &FarUuid, X1, Y1, X2, Y2, (HelpTopic? encoding::oem::get_chars(HelpTopic).c_str() : nullptr), di.data(), di.size(), 0, DlgFlags, DlgProcA, Param);
 		if (hDlg == INVALID_HANDLE_VALUE)
 			return -1;
 
@@ -3410,9 +3420,9 @@ static int WINAPI FarDialogExA(intptr_t PluginNumber, int X1, int Y1, int X2, in
 				const auto res = NullToEmpty(gdi.Item->Data);
 
 				if ((di[i].Type==DI_EDIT || di[i].Type==DI_COMBOBOX) && ItemsSpan[i].Flags&oldfar::DIF_VAREDIT)
-					encoding::oem::get_bytes(res, { ItemsSpan[i].Ptr.PtrData, static_cast<size_t>(ItemsSpan[i].Ptr.PtrLength + 1) });
+					(void)encoding::oem::get_bytes(res, { ItemsSpan[i].Ptr.PtrData, static_cast<size_t>(ItemsSpan[i].Ptr.PtrLength + 1) });
 				else
-					encoding::oem::get_bytes(res, ItemsSpan[i].Data);
+					(void)encoding::oem::get_bytes(res, ItemsSpan[i].Data);
 
 				if (gdi.Item->Type==DI_USERCONTROL)
 				{
@@ -3541,16 +3551,16 @@ static int WINAPI FarPanelControlA(HANDLE hPlugin, int Command, void *Param) noe
 						block_ptr<FarPanelDirectory> dirInfo(dirSize);
 						dirInfo->StructSize=sizeof(FarPanelDirectory);
 						pluginapi::apiPanelControl(hPlugin, FCTL_GETPANELDIRECTORY, dirSize, dirInfo.data());
-						encoding::oem::get_bytes(dirInfo->Name,OldPI->CurDir);
+						(void)encoding::oem::get_bytes(dirInfo->Name,OldPI->CurDir);
 					}
 
 					wchar_t ColumnTypes[sizeof(OldPI->ColumnTypes)];
 					pluginapi::apiPanelControl(hPlugin, FCTL_GETCOLUMNTYPES, std::size(ColumnTypes),ColumnTypes);
-					encoding::oem::get_bytes(ColumnTypes,OldPI->ColumnTypes);
+					(void)encoding::oem::get_bytes(ColumnTypes,OldPI->ColumnTypes);
 
 					wchar_t ColumnWidths[sizeof(OldPI->ColumnWidths)];
 					pluginapi::apiPanelControl(hPlugin, FCTL_GETCOLUMNWIDTHS, std::size(ColumnWidths), ColumnWidths);
-					encoding::oem::get_bytes(ColumnWidths,OldPI->ColumnWidths);
+					(void)encoding::oem::get_bytes(ColumnWidths,OldPI->ColumnWidths);
 
 					*static_cast<oldfar::PanelInfo*>(Param) = *OldPI;
 				}
@@ -3586,14 +3596,14 @@ static int WINAPI FarPanelControlA(HANDLE hPlugin, int Command, void *Param) noe
 						block_ptr<FarPanelDirectory> dirInfo(dirSize);
 						dirInfo->StructSize=sizeof(FarPanelDirectory);
 						pluginapi::apiPanelControl(hPlugin, FCTL_GETPANELDIRECTORY, dirSize, dirInfo.data());
-						encoding::oem::get_bytes(dirInfo->Name, OldPI->CurDir);
+						(void)encoding::oem::get_bytes(dirInfo->Name, OldPI->CurDir);
 					}
 					wchar_t ColumnTypes[sizeof(OldPI->ColumnTypes)];
 					pluginapi::apiPanelControl(hPlugin,FCTL_GETCOLUMNTYPES, std::size(OldPI->ColumnTypes),ColumnTypes);
-					encoding::oem::get_bytes(ColumnTypes, OldPI->ColumnTypes);
+					(void)encoding::oem::get_bytes(ColumnTypes, OldPI->ColumnTypes);
 					wchar_t ColumnWidths[sizeof(OldPI->ColumnWidths)];
 					pluginapi::apiPanelControl(hPlugin,FCTL_GETCOLUMNWIDTHS,sizeof(OldPI->ColumnWidths),ColumnWidths);
-					encoding::oem::get_bytes(ColumnWidths, OldPI->ColumnWidths);
+					(void)encoding::oem::get_bytes(ColumnWidths, OldPI->ColumnWidths);
 				}
 
 				return ret;
@@ -3641,7 +3651,7 @@ static int WINAPI FarPanelControlA(HANDLE hPlugin, int Command, void *Param) noe
 					return FALSE;
 
 				const auto Dir = encoding::oem::get_chars(static_cast<const char*>(Param));
-				FarPanelDirectory dirInfo = { sizeof(FarPanelDirectory), Dir.c_str(), nullptr, FarGuid, nullptr };
+				FarPanelDirectory dirInfo = { sizeof(FarPanelDirectory), Dir.c_str(), nullptr, FarUuid, nullptr };
 				return static_cast<int>(pluginapi::apiPanelControl(hPlugin, FCTL_SETPANELDIRECTORY, 0, &dirInfo));
 			}
 
@@ -3691,7 +3701,7 @@ static int WINAPI FarPanelControlA(HANDLE hPlugin, int Command, void *Param) noe
 							s += cls.SelStart;
 						}
 					}
-					encoding::oem::get_bytes(s, { static_cast<char*>(Param), Size });
+					(void)encoding::oem::get_bytes(s, { static_cast<char*>(Param), Size });
 					return TRUE;
 				}
 
@@ -3840,7 +3850,7 @@ static int WINAPI FarGetPluginDirListA(intptr_t PluginNumber, HANDLE hPlugin, co
 		return GetDirListGeneric(*pPanelItem, *pItemsNumber, [&](PluginPanelItem*& Items, size_t& Size, size_t& PathOffset)
 		{
 			PathOffset = 0;
-			return pluginapi::apiGetPluginDirList(GetPluginGuid(PluginNumber), hPlugin, encoding::oem::get_chars(Dir).c_str(), &Items, &Size);
+			return pluginapi::apiGetPluginDirList(GetPluginUuid(PluginNumber), hPlugin, encoding::oem::get_chars(Dir).c_str(), &Items, &Size);
 		});
 	},
 	[]
@@ -3876,7 +3886,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 			case oldfar::ACTL_GETFARVERSION:
 			{
 				VersionInfo Info;
-				pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETFARMANAGERVERSION, 0, &Info);
+				pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETFARMANAGERVERSION, 0, &Info);
 				DWORD FarVer = Info.Major<<8|Info.Minor|Info.Build<<16;
 
 				if (Param)
@@ -3890,7 +3900,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 			case oldfar::ACTL_GETSYSWORDDIV:
 			{
 				intptr_t Result = 0;
-				FarSettingsCreate settings={sizeof(FarSettingsCreate),FarGuid,INVALID_HANDLE_VALUE};
+				FarSettingsCreate settings = { sizeof(FarSettingsCreate), FarUuid, INVALID_HANDLE_VALUE };
 				HANDLE Settings = pluginapi::apiSettingsControl(INVALID_HANDLE_VALUE, SCTL_CREATE, 0, &settings)? settings.Handle : nullptr;
 				if(Settings)
 				{
@@ -3900,7 +3910,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 						const auto Length = wcslen(item.String);
 						Result = Length + 1;
 						if (Param)
-							encoding::oem::get_bytes({ item.String, Length }, { static_cast<char*>(Param), static_cast<size_t>(oldfar::NM) });
+							(void)encoding::oem::get_bytes({ item.String, Length }, { static_cast<char*>(Param), static_cast<size_t>(oldfar::NM) });
 					}
 					pluginapi::apiSettingsControl(Settings, SCTL_FREE, 0, nullptr);
 				}
@@ -3910,7 +3920,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 				{
 					INPUT_RECORD input = {};
 					KeyToInputRecord(OldKeyToKey(static_cast<int>(reinterpret_cast<intptr_t>(Param))),&input);
-					return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_WAITKEY, 0, &input);
+					return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_WAITKEY, 0, &input);
 				}
 
 			case oldfar::ACTL_GETCOLOR:
@@ -3923,16 +3933,16 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 					{
 						ColorIndex--;
 					}
-					return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETCOLOR, ColorIndex, &Color)? colors::FarColorToConsoleColor(Color) :-1;
+					return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETCOLOR, ColorIndex, &Color)? colors::FarColorToConsoleColor(Color) :-1;
 				}
 
 			case oldfar::ACTL_GETARRAYCOLOR:
 				{
-					const auto PaletteSize = pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETARRAYCOLOR, 0, nullptr);
+					const auto PaletteSize = pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETARRAYCOLOR, 0, nullptr);
 					if(Param)
 					{
 						std::vector<FarColor> Color(PaletteSize);
-						pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETARRAYCOLOR, 0, Color.data());
+						pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETARRAYCOLOR, 0, Color.data());
 						const auto OldColors = static_cast<LPBYTE>(Param);
 						std::transform(ALL_CONST_RANGE(Color), OldColors, colors::FarColorToConsoleColor);
 					}
@@ -4050,7 +4060,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 				const auto wiA = static_cast<oldfar::WindowInfo*>(Param);
 				WindowInfo wi={sizeof(wi)};
 				wi.Pos = wiA->Pos;
-				intptr_t ret = pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETWINDOWINFO, 0, &wi);
+				intptr_t ret = pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETWINDOWINFO, 0, &wi);
 
 				if (ret)
 				{
@@ -4086,9 +4096,9 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 
 						if (wi.TypeName && wi.Name)
 						{
-							pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber),ACTL_GETWINDOWINFO, 0, &wi);
-							encoding::oem::get_bytes(wi.TypeName, wiA->TypeName);
-							encoding::oem::get_bytes(wi.Name, wiA->Name);
+							pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber),ACTL_GETWINDOWINFO, 0, &wi);
+							(void)encoding::oem::get_bytes(wi.TypeName, wiA->TypeName);
+							(void)encoding::oem::get_bytes(wi.Name, wiA->Name);
 						}
 					}
 					else
@@ -4101,13 +4111,13 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 				return ret;
 			}
 			case oldfar::ACTL_GETWINDOWCOUNT:
-				return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETWINDOWCOUNT, 0, nullptr);
+				return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETWINDOWCOUNT, 0, nullptr);
 			case oldfar::ACTL_SETCURRENTWINDOW:
-				return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_SETCURRENTWINDOW, reinterpret_cast<intptr_t>(Param), nullptr);
+				return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_SETCURRENTWINDOW, reinterpret_cast<intptr_t>(Param), nullptr);
 			case oldfar::ACTL_COMMIT:
-				return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_COMMIT, 0, nullptr);
+				return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_COMMIT, 0, nullptr);
 			case oldfar::ACTL_GETFARHWND:
-				return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_GETFARHWND, 0, nullptr);
+				return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_GETFARHWND, 0, nullptr);
 
 			case oldfar::ACTL_GETSYSTEMSETTINGS:
 			{
@@ -4167,7 +4177,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 				FarSetColors sc = {sizeof(FarSetColors), 0, static_cast<size_t>(scA->StartIndex), Colors.size(), Colors.data()};
 				if (scA->Flags&oldfar::FCLR_REDRAW)
 					sc.Flags|=FSETCLR_REDRAW;
-				return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_SETARRAYCOLOR, 0, &sc);
+				return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_SETARRAYCOLOR, 0, &sc);
 			}
 			case oldfar::ACTL_GETWCHARMODE:
 				return TRUE;
@@ -4183,7 +4193,7 @@ static intptr_t WINAPI FarAdvControlA(intptr_t ModuleNumber, oldfar::ADVANCED_CO
 				return ret;
 			}
 			case oldfar::ACTL_REDRAWALL:
-				return pluginapi::apiAdvControl(GetPluginGuid(ModuleNumber), ACTL_REDRAWALL, 0, nullptr);
+				return pluginapi::apiAdvControl(GetPluginUuid(ModuleNumber), ACTL_REDRAWALL, 0, nullptr);
 		}
 		return FALSE;
 	},
@@ -4214,9 +4224,9 @@ static int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand, 
 					ec.Color = colors::ConsoleColorToFarColor(ecA->Color);
 					if(ecA->Color&oldfar::ECF_TAB1) ec.Color.Flags|=ECF_TABMARKFIRST;
 					ec.Priority=EDITOR_COLOR_NORMAL_PRIORITY;
-					ec.Owner=FarGuid;
+					ec.Owner = FarUuid;
 					EditorDeleteColor edc={sizeof(edc)};
-					edc.Owner=FarGuid;
+					edc.Owner = FarUuid;
 					edc.StringNumber = ecA->StringNumber;
 					edc.StartPos = ecA->StartPos;
 					return static_cast<int>(ecA->Color?pluginapi::apiEditorControl(-1, ECTL_ADDCOLOR, 0, &ec):pluginapi::apiEditorControl(-1, ECTL_DELCOLOR, 0, &edc));
@@ -4813,7 +4823,7 @@ static int WINAPI FarCharTableA(int Command, char *Buffer, int BufferSize) noexc
 
 			auto sTableName = pad_right(str(nCP), 5);
 			append(sTableName, BoxSymbols[BS_V1], L' ', Info->Name);
-			encoding::oem::get_bytes(sTableName, TableSet->TableName);
+			(void)encoding::oem::get_bytes(sTableName, TableSet->TableName);
 			std::unique_ptr<wchar_t[]> const us(AnsiToUnicodeBin({ reinterpret_cast<char*>(TableSet->DecodeTable), std::size(TableSet->DecodeTable) }, nCP));
 
 			inplace::lower({ us.get(), std::size(TableSet->DecodeTable) });
@@ -4822,8 +4832,8 @@ static int WINAPI FarCharTableA(int Command, char *Buffer, int BufferSize) noexc
 			inplace::upper({ us.get(), std::size(TableSet->DecodeTable) });
 			(void)encoding::get_bytes(nCP, { us.get(), std::size(TableSet->DecodeTable) }, { reinterpret_cast<char*>(TableSet->UpperTable), std::size(TableSet->DecodeTable) });
 
-			MultiByteRecode(static_cast<UINT>(nCP), CP_OEMCP, { reinterpret_cast<char*>(TableSet->DecodeTable), std::size(TableSet->DecodeTable) });
-			MultiByteRecode(CP_OEMCP, static_cast<UINT>(nCP), { reinterpret_cast<char*>(TableSet->EncodeTable), std::size(TableSet->EncodeTable) });
+			MultiByteRecode(nCP, CP_OEMCP, { reinterpret_cast<char*>(TableSet->DecodeTable), std::size(TableSet->DecodeTable) });
+			MultiByteRecode(CP_OEMCP, nCP, { reinterpret_cast<char*>(TableSet->EncodeTable), std::size(TableSet->EncodeTable) });
 			return Command;
 		}
 		return -1;
@@ -4858,7 +4868,7 @@ static char* WINAPI XlatA(
 
 		auto WideLine = encoding::oem::get_chars(Line);
 		pluginapi::apiXlat(WideLine.data(), StartPos, EndPos, NewFlags);
-		encoding::oem::get_bytes(WideLine, { Line, WideLine.size() });
+		(void)encoding::oem::get_bytes(WideLine, { Line, WideLine.size() });
 		return Line;
 	},
 	[&]
@@ -4877,7 +4887,7 @@ static int WINAPI GetFileOwnerA(const char *Computer, const char *Name, char *Ow
 		const auto Ret = pluginapi::apiGetFileOwner(encoding::oem::get_chars(Computer).c_str(), encoding::oem::get_chars(Name).c_str(), wOwner, std::size(wOwner));
 		if (Ret)
 		{
-			encoding::oem::get_bytes({ wOwner, Ret - 1 }, { Owner, static_cast<size_t>(oldfar::NM) });
+			(void)encoding::oem::get_bytes({ wOwner, Ret - 1 }, { Owner, static_cast<size_t>(oldfar::NM) });
 		}
 		return static_cast<int>(Ret);
 	},
@@ -4993,12 +5003,11 @@ private:
 		Info->Description = L"Far 1.x plugin";
 		Info->Author = L"Unknown";
 
-		const string& module = ModuleName();
+		const string& Module = ModuleName();
 		// Null-terminated, data() is ok
-		Info->Title = PointToName(module).data();
+		Info->Title = PointToName(Module).data();
 
-		bool GuidFound = false;
-		GUID PluginGuid = {};
+		bool UuidFound = false;
 
 		auto& FileVersion = static_cast<oem_plugin_module*>(m_Instance.get())->m_FileVersion;
 
@@ -5020,9 +5029,13 @@ private:
 				Info->Description = Value;
 			}
 
-			if (const auto Uuid = FileVersion.get_string(L"PluginGUID"sv))
+			if (const auto UuidStr = FileVersion.get_string(L"PluginGUID"sv))
 			{
-				GuidFound = StrToGuid(Uuid, PluginGuid);
+				if (const auto Uuid = uuid::try_parse(string_view(UuidStr)))
+				{
+					Info->Guid = *Uuid;
+					UuidFound = true;
+				}
 			}
 
 			if (const auto FileInfo = FileVersion.get_fixed_info())
@@ -5037,16 +5050,13 @@ private:
 		if (equal_icase(Info->Title, L"FarFtp"sv) || equal_icase(Info->Title, L"MultiArc"sv))
 			opif_shortcut = true;
 
-		if (GuidFound)
-		{
-			Info->Guid = PluginGuid;
-		}
-		else
+		if (!UuidFound)
 		{
 			int nb = std::min(static_cast<int>(wcslen(Info->Title)), 8);
-			while (nb > 0) {
+			while (nb > 0)
+			{
 				--nb;
-				reinterpret_cast<char *>(&Info->Guid)[8 + nb] = static_cast<char>(Info->Title[nb]);
+				reinterpret_cast<char*>(&Info->Guid)[8 + nb] = static_cast<char>(Info->Title[nb]);
 			}
 		}
 
@@ -5058,6 +5068,8 @@ private:
 		AnsiExecuteStruct<iSetStartupInfo> es;
 		if (has(es) && !Global->ProcessException)
 		{
+WARNING_PUSH()
+WARNING_DISABLE_CLANG("-Wused-but-marked-unused")
 			static const oldfar::FarStandardFunctions StandardFunctions =
 			{
 				sizeof(StandardFunctions),
@@ -5111,6 +5123,7 @@ private:
 				oldpluginapi::ConvertNameToRealA,
 				oldpluginapi::FarGetReparsePointInfoA,
 			};
+WARNING_POP()
 
 			// NOT constexpr, see VS bug #3103404
 			static const oldfar::PluginStartupInfo StartupInfo =
@@ -5151,7 +5164,7 @@ private:
 			// скорректируем адреса и плагино-зависимые поля
 			InfoCopy.ModuleNumber = reinterpret_cast<intptr_t>(this);
 			InfoCopy.FSF = &FsfCopy;
-			encoding::oem::get_bytes(ModuleName(), InfoCopy.ModuleName);
+			(void)encoding::oem::get_bytes(ModuleName(), InfoCopy.ModuleName);
 			InfoCopy.RootKey = static_cast<oem_plugin_factory*>(m_Factory)->PluginsRootKey().c_str();
 
 			if (Global->strRegUser.empty())
@@ -5347,7 +5360,7 @@ private:
 		pVFDPanelItemA = nullptr;
 		string_view const Path = Info->Path;
 		char_ptr_n<os::default_buffer_size> const PathA(Path.size() + 1);
-		encoding::oem::get_bytes(Path, PathA);
+		(void)encoding::oem::get_bytes(Path, PathA);
 		int ItemsNumber = 0;
 		ExecuteFunction(es, Info->hPanel, &pVFDPanelItemA, &ItemsNumber, PathA.data());
 		Info->ItemsNumber = ItemsNumber;
@@ -5393,13 +5406,13 @@ private:
 
 		const auto PanelItemA = ConvertPanelItemsArrayToAnsi(Info->PanelItem, Info->ItemsNumber);
 		char DestA[oldfar::NM];
-		encoding::oem::get_bytes(Info->DestPath, DestA);
+		(void)encoding::oem::get_bytes(Info->DestPath, DestA);
 		int OpMode = 0;
 		SecondFlagsToFirst(Info->OpMode, OpMode, OperationModesMap);
 		ExecuteFunction(es, Info->hPanel, PanelItemA, static_cast<int>(Info->ItemsNumber), Info->Move, DestA, OpMode);
 		UpdatePluginPanelItemFlags(PanelItemA, Info->PanelItem, Info->ItemsNumber);
 		static wchar_t DestW[oldfar::NM];
-		encoding::oem::get_chars(DestA, DestW);
+		(void)encoding::oem::get_chars(DestA, DestW);
 		Info->DestPath = DestW;
 		FreePanelItemA({ PanelItemA, Info->ItemsNumber });
 		return es;
@@ -5442,12 +5455,12 @@ private:
 			return es;
 
 		char NameA[oldfar::NM];
-		encoding::oem::get_bytes(Info->Name, NameA);
+		(void)encoding::oem::get_bytes(Info->Name, NameA);
 		int OpMode = 0;
 		SecondFlagsToFirst(Info->OpMode, OpMode, OperationModesMap);
 		ExecuteFunction(es, Info->hPanel, NameA, OpMode);
 		static wchar_t NameW[oldfar::NM];
-		encoding::oem::get_chars(NameA, NameW);
+		(void)encoding::oem::get_chars(NameA, NameW);
 		Info->Name = NameW;
 		return es;
 	}
@@ -5765,15 +5778,15 @@ private:
 			if (Size)
 			{
 				auto p = std::make_unique<const wchar_t*[]>(Size);
-				auto guid = std::make_unique<GUID[]>(Size);
+				auto Uuid = std::make_unique<UUID[]>(Size);
 
 				for (size_t i = 0; i != Size; ++i)
 				{
 					p[i] = AnsiToUnicode(Strings[i]);
-					guid[i].Data1 = static_cast<decltype(guid[i].Data1)>(i);
+					Uuid[i].Data1 = static_cast<decltype(Uuid[i].Data1)>(i);
 				}
 
-				Item.Guids = guid.release();
+				Item.Guids = Uuid.release();
 				Item.Strings = p.release();
 				Item.Count = Size;
 			}

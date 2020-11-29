@@ -51,21 +51,17 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 struct execute_info
 {
-	enum class wait_mode { no_wait, wait_idle, wait_finish };
-	enum class exec_mode { detect, direct, external };
+	enum class wait_mode { no_wait, if_needed, wait_finish };
 	enum class source_mode { unknown, known };
 	enum class echo { disabled, enabled, ignored };
 
 	string Command;
 	string DisplayCommand;
-	wait_mode WaitMode{ wait_mode::no_wait };
-	bool NewWindow{};
-	exec_mode ExecMode{ exec_mode::detect };
+	wait_mode WaitMode{ wait_mode::if_needed };
 	source_mode SourceMode{ source_mode::unknown };
 	bool RunAs{};
 	bool Echo{ true };
 	bool UseAssociations{ true };
-	bool Silent{};
 };
 
 // Contains git prompt cache for last scanned repository

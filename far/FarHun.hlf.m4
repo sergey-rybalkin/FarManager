@@ -21,7 +21,6 @@
 @Interface.CursorSize2=Interface.CursorSize
 @Interface.CursorSize3=Interface.CursorSize
 @Interface.CursorSize4=Interface.CursorSize
-@Interface.DelShowSelected=Interface.DelHighlightSelected
 @Interface.EditorTitleFormat=TitleFormat
 @Interface.ViewerTitleFormat=TitleFormat
 @InterfaceSettings=InterfSettings
@@ -39,9 +38,9 @@
 @System.MsWheelDeltaHelp=System.MsWheelDelta
 @System.MsWheelDeltaView=System.MsWheelDelta
 @Viewer.F8CPs=Editor.F8CPs
-@XLat.Rules1=XLat.Tables
-@XLat.Rules2=XLat.Tables
-@XLat.Rules3=XLat.Tables
+@XLat.Rules1=XLat.Rules
+@XLat.Rules2=XLat.Rules
+@XLat.Rules3=XLat.Rules
 @XLat.Table1=XLat.Tables
 @XLat.Table2=XLat.Tables
 
@@ -196,7 +195,8 @@ nyitja meg. A -e után megadható, hogy melyik sor hányadik karakterhelyére
 álljon a kurzor.
  Például: far -e70:2 readme.
 
- #-p[<path>]#  A "fő" plugineket a <path>-ben megadott elérési út
+ #-p[<path>]#
+ A "fő" plugineket a <path>-ben megadott elérési út
 mappáiban keresi. Több keresési útvonal is megadható, ";"-vel elválasztva.
 
  Példa: #far -p%USERPROFILE%\\Far\\Plugins#
@@ -226,8 +226,7 @@ mappákból töltődnek be.
  A Far induláskor nem tölti be a registryből a makróit.
 
  #-ma#
- A "Futtatás a Far indítása után" opciójú makrók nem
-indulnak el a Far-ral.
+ A "Futtatás a Far indítása után" opciójú makrók nem indulnak el a Far-ral.
 
  #-s <profilepath> [<localprofilepath>]#
  Custom location for Far configuration files (overrides the ini file).
@@ -423,7 +422,6 @@ megfelelő mappára.
 
  #Ctrl+Alt+Ins#
  A kijelölt fájlok neveit igazi a vágólapra másolja.
-
 
  #Ctrl+Shift+C#
  Copy the selected files to clipboard.
@@ -737,7 +735,6 @@ törlődnek, egyébként csak a kurzor alatti fájl vagy mappa törlődik;
  #Alt+Del#
  Kisöpri a fájlokat és mappákat (biztonsági törlés).
 
-
  Megjegyzések:
 
  1. A ~rendszer beállításaitól~@SystemSettings@ függ, hogy az #F8# és
@@ -754,6 +751,7 @@ felülíró karaktert megadni), ezután a fájl méretét nulla hosszúságúra
 $ #Hiba: nem végrehajtható#
  A program, amit megpróbáltunk futtatni, nem értelmezhető sem belső, sem
 külső parancsként, sem futtatható programként, sem batch fájlként.
+
 
 @Grabber
 $ #Képernyőgrabber#
@@ -804,7 +802,7 @@ sztringek mindig megmaradnak.
  Párbeszédablak szerkesztési előzményeinek törlése              #Del#
 
  Párbeszédablak szerkesztési előzmény aktuális elemének   #Shift+Del#
- törlése (ha az elem nincs rögzítve)                 
+ törlése (ha az elem nincs rögzítve)
 
  A párbeszédablak alapértelmezett elemére állítja a kurzort    #PgDn#
 
@@ -1017,7 +1015,7 @@ bővítési lehetőséget biztosítanak a Far-nak.
  * Windows gyorsbillentyűk létrehozása, módosítása.
  * A FidoNetes fájlok és szövegek kényelmesebb kezelése.
  * Fájlok UU kódolása és dekódolása.
- * A WinAmp vezérlése, MP3 tag-ek szerkesztése.
+ * A Winamp vezérlése, MP3 tag-ek szerkesztése.
  * A Quake (nevű játékprogram) PAK fájljainak kezelése.
  * Nyomtatóvezérlés, helyi és hálózati egyaránt.
  * ODBC kompatibilis adatbázisok lekérdezéseihez kapcsolódás, hibakeresés.
@@ -1277,7 +1275,7 @@ Supported types: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW and DVD-RAM.
    ^<wrap>A "friendly" display name (for example, Jeff Smith). The display name is not necessarily the defining relative distinguished name (RDN).
 
  - #Unique Id#
-   ^<wrap>A GUID string (for example, {4fa050f0-f561-11cf-bdd9-00aa003a77b6}).
+   ^<wrap>An UUID string (for example, {4fa050f0-f561-11cf-bdd9-00aa003a77b6}).
 
  - #Canonical Name#
    ^<wrap>The complete canonical name (for example, engineering.microsoft.com/software/someone). The domain-only version includes a trailing forward slash (/).
@@ -1345,7 +1343,7 @@ lenyomása előtt lenyomjuk és nyomva tartjuk a #Shift# billentyűt.
 
 @Menus
 $ #Menük#
- A menüsort az F9 lenyomásával vagy a konzolképernyő felső részén
+ A menüsort az #F9# lenyomásával vagy a konzolképernyő felső részén
 egérkattintással jeleníthetjük meg.
 
  Ha a menüsort aktiváljuk az #F9#-cel, automatikusan az aktív paneloldal
@@ -1463,7 +1461,6 @@ kijelölését fájlművelet vagy csoport kijelölése után.
 
 @CmdMenu
 $ #Menük: Parancsok menü#
-
  #Fájlkeresés#          ^<wrap>Fájlokat keres a mappák fáiban, joker
 karakterek is használhatók. Bővebben a ~fájlkeresés~@FindFile@ témakörben.
 
@@ -1522,30 +1519,30 @@ részletezi a lehetőségeit.
 
 @OptMenu
 $ #Menük: Beállítások menü#
- #Rendszer#             Megjeleníti a ~rendszer beállítások~@SystemSettings@
- #beállítások#          párbeszédablakot.
+ #Rendszer#              Megjeleníti a ~rendszer beállítások~@SystemSettings@
+ #beállítások#           párbeszédablakot.
 
- #Panel beállítások#    A ~panel beállítások~@PanelSettings@ párbeszédablak.
+ #Panel beállítások#     A ~panel beállítások~@PanelSettings@ párbeszédablak.
 
- #Fastruktúra#          A ~fastruktúra beállítások~@TreeSettings@
- #beállítások#          párbeszédablakot jeleníti meg.
+ #Fastruktúra#           A ~fastruktúra beállítások~@TreeSettings@
+ #beállítások#           párbeszédablakot jeleníti meg.
 
- #Kezelőfelület#        A ~kezelőfelület beállítások~@InterfSettings@
- #beállítások#          párbeszédablakot jeleníti meg.
+ #Kezelőfelület#         A ~kezelőfelület beállítások~@InterfSettings@
+ #beállítások#           párbeszédablakot jeleníti meg.
 
- #Nyelvek#              A program és a súgó nyelve választható ki.
-                      ^<wrap>Használjuk a "Beállítások mentése" funkciót!
+ #Nyelvek#               A program és a súgó nyelve választható ki.
+                       ^<wrap>Használjuk a "Beállítások mentése" funkciót!
 
- #Plugin#               A ~pluginek~@Plugins@ működése állítható be, a pluginek
- #beállítások#          beállítási párbeszédablakaiban.
+ #Plugin#                A ~pluginek~@Plugins@ működése állítható be, a pluginek
+ #beállítások#           beállítási párbeszédablakaiban.
 
- #Plugin manager#       Shows ~Plugin manager settings~@PluginsManagerSettings@ dialog.
+ #Plugin manager#        Shows ~Plugin manager settings~@PluginsManagerSettings@ dialog.
  #settings#
 
- #Párbeszédablak#       A ~párbeszédablak beállítások~@DialogSettings@
- #beállítások#          párbeszédablakot jeleníti meg.
+ #Párbeszédablak#        A ~párbeszédablak beállítások~@DialogSettings@
+ #beállítások#           párbeszédablakot jeleníti meg.
 
- #Menu settings#        Shows ~Menu settings~@VMenuSettings@ dialog.
+ #Menu settings#         Shows ~Menu settings~@VMenuSettings@ dialog.
 
  #Command line settings# Shows ~Command line settings~@CmdlineSettings@ dialog.
 
@@ -1555,36 +1552,36 @@ $ #Menük: Beállítások menü#
 
  #Groups of file masks#  Shows ~Groups of file masks~@MaskGroupsSettings@ dialog.
 
- #Megerősítések#        ^<wrap>Egyes műveletek végrehajtására
+ #Megerősítések#         ^<wrap>Egyes műveletek végrehajtására
 ~megerősítés~@ConfirmDlg@ (rákérdezés) kapcsolható ki vagy be.
 
- #Fájlpanel módok#      ^<wrap>A ~fájlpanel nézet módok testreszabása~@PanelViewModes@ végezhető el a
+ #Fájlpanel módok#       ^<wrap>A ~fájlpanel nézet módok testreszabása~@PanelViewModes@ végezhető el a
 funkcióval.
 
- #Fájl megjegyzés-#     Megadható, hogy a ~fájlok megjegyzéseit~@FileDiz@
- #fájlok#               mely fájlokból olvassa ki a Far. Beállíthatók
-                      a megjelenítés és frissítés jellemzői is.
+ #Fájl megjegyzés-#      Megadható, hogy a ~fájlok megjegyzéseit~@FileDiz@
+ #fájlok#                mely fájlokból olvassa ki a Far. Beállíthatók
+                       a megjelenítés és frissítés jellemzői is.
 
- #Mappa megjegyzés-#    Megadható, hogy az ~info panel~@InfoPanel@ mely
- #fájlok#               fájlokat jelenítse meg mappa megjegyzésként
-                      (~joker~@FileMasks@ karakter is megengedett).
+ #Mappa megjegyzés-#     Megadható, hogy az ~info panel~@InfoPanel@ mely
+ #fájlok#                fájlokat jelenítse meg mappa megjegyzésként
+                       (~joker~@FileMasks@ karakter is megengedett).
 
- #Nézőke beállítások#   A külső és belső ~nézőke beállításai~@ViewerSettings@.
+ #Nézőke beállítások#    A külső és belső ~nézőke beállításai~@ViewerSettings@.
 
- #Szerkesztő#           A külső és belső ~szerkesztő beállításai~@EditorSettings@.
+ #Szerkesztő#            A külső és belső ~szerkesztő beállításai~@EditorSettings@.
  #beállítások#
 
- #Code pages#           Shows the ~Code pages~@CodePagesMenu@ menu.
+ #Code pages#            Shows the ~Code pages~@CodePagesMenu@ menu.
 
- #Színek#               ^<wrap>Kiválasztható minden egyes képernyőelem
+ #Színek#                ^<wrap>Kiválasztható minden egyes képernyőelem
 színe, a Far teljes palettája fekete-fehérre cserélhető vagy visszaállítható
 az eredeti színkombináció.
 
- #Fájlkiemelések,#      A ~fájlkiemelések, rendezési csoportok~@Highlight@
- #rendezési csoportok#  beállításai.
+ #Fájlkiemelések,#       A ~fájlkiemelések, rendezési csoportok~@Highlight@
+ #rendezési csoportok#   beállításai.
 
- #Beállítások#          Elmenti a jelenlegi beállításokat, színeket
- #mentése#              és a képernyő elrendezését.
+ #Beállítások#           Elmenti a jelenlegi beállításokat, színeket
+ #mentése#               és a képernyő elrendezését.
 
  See also: common ~menu~@MenuCmd@ keyboard commands.
 
@@ -1603,6 +1600,7 @@ kapcsolhatjuk ki vagy be:
  - ~hálózati meghajtók leválasztása~@DisconnectDrive@ a Meghajtók
 menüből;
  - virtuális (SUBST) meghajtók törlése a Meghajtók menüből;
+ - detach virtual disks from the Disks menu;
  - USB tárolóeszközök eltávolítása a Meghajtók menüből;
  - fájlok ~újratöltése~@EditorReload@ a szerkesztőbe;
  - a nézőke/szerkesztő, mappa és parancs előzménylisták törlése;
@@ -1679,7 +1677,7 @@ should contain a target directory path.
 készíthetünk. Ebben az esetben a mappák neveit "#;#" vagy "#,#" karakterrel kell
 elválasztani. Ha a fent említett opciót engedélyeztük és a mappa nevében van
 "#;#" (vagy "#,#") karakter, akkor a nevet idézőjelek közé kell tenni. Például
-a következő soron Entert ütve #C:\\Foo1;"E:\\foo,2;";D:\\foo3# 
+a következő soron Entert ütve #C:\\Foo1;"E:\\foo,2;";D:\\foo3#
 a #C:\\Foo1#, az #E:\\foo,2;# és a #D:\\foo3# nevű mappák jönnek létre.
 
 
@@ -1728,6 +1726,10 @@ mappák neveire és siker esetén ezekkel is nő a találatszám.
  A #Keresés szimbolikus linkekben# opció hatására a keresés ugyanúgy
 zajlik le a ~szimbolikus linkekben~@HardSymLink@, mintha szabályos almappák
 lennének.
+
+ #Search in alternate streams# - besides the primary data stream (which is
+the content of the file itself), allows to search alternate named data streams
+supported by some file systems (for example, #NTFS#).
 
  A keresés kiadható:
  - ^<wrap>minden fix meghajtóra;
@@ -1954,7 +1956,7 @@ mérete bármilyen értéket felvehet.
  #Dátum/Idő#
  A fájl dátumának/idejének tartománya. Választhatunk az utolsó #módosítás#, a #létrehozás#
 vagy a #hozzáférés# dátuma és időpontja közt.
- #Jelenlegi# gomb az aktuális dátummal és idővel 
+ #Jelenlegi# gomb az aktuális dátummal és idővel
 tölti fel a dátum/idő mezőt, ezután a mezők értékeit módosíthatjuk, például
 akár külön a hónap vagy a perc értékét is.
  Az #Üres# gomb törli a dátum- és időmezők tartalmát.
@@ -2009,6 +2011,8 @@ $ #Parancs előzmények#
  Előzőleg kiadott parancs végrehajtása                         #Enter#
 
  Előzőleg kiadott parancs végrehajtása új ablakban       #Shift+Enter#
+
+ Re-execute a command as administrator                #Ctrl+Alt+Enter#
 
  Parancs másolása a parancssorba                          #Ctrl+Enter#
 
@@ -2079,6 +2083,7 @@ párbeszédablakban.
  1. ^<wrap>A lista frissítése (Ctrl+R) hosszú időt vehet igénybe, ha
 jelenleg nem elérhető távoli helyeket kell vizsgálnia.
  2. ^<wrap>A zárolt előzményelemek nem törlődnek az előzménylista módosulása vagy törlése esetén sem.
+
  See also: common ~menu~@MenuCmd@ keyboard commands.
 
 
@@ -2255,11 +2260,6 @@ társításokat menüből választhatjuk ki.
 
  #Ctrl+Down#  - move association down
 
- Ha egy fájltípushoz nincs definiált társítás és a
-~Rendszer beállítások~@SystemSettings@ menüben a #Windows regisztrált#
-#fájltípusainak használata# opció be van kapcsolva, a Far megpróbálja a
-Windows társításait alkalmazni.
-
  See also: common ~menu~@MenuCmd@ keyboard commands.
 
 
@@ -2296,7 +2296,6 @@ végrehajtható parancsot lehet hozzárendelni:
 ~Rendszer beállítások~@SystemSettings@ menüben a #Windows regisztrált#
 #fájltípusainak használata# opció be van kapcsolva, a Far megpróbálja a
 Windowsban definiált társításokat alkalmazni.
-
  2. ^<wrap>Az operációs rendszer "IF EXIST" és "IF DEFINED"
 ~parancsaival~@OSCommands@ a társításoknak kifinomultabb feltételrendszert
 szabhatunk. Ha azonos fájltípushoz több különböző társítást adtunk meg, az
@@ -2340,6 +2339,8 @@ Ebben az esetben a parancssor formátuma: #!?$<előzmény>$<név>?<alapérték>!
  grep !?#$GrepHist$#Keresés:?! !?Maszk:?*.*!|far.exe -v -
 
  Leave the name empty to disable history.
+
+ The entered string can also be accessed later as #%<history># (or as #%UserVarN#, where N is the index of the corresponding input).
 
 A <név> és az <alapérték> beírásánál más különleges szimbólumot is használhatunk, zárójelek között. Példa:
 grep !?Maszk (!.!):?! |far.exe -v -)
@@ -2401,7 +2402,7 @@ használjuk a #!.\# metaszimbólumot.
     ^<wrap>Például, ha egy RAR-ral tömörített fájlt
 szeretnénk a fájllal azonos nevű mappába kibontani, a parancs:
 
-    winrar x "!.!" "!.\"
+    #winrar x "!.!" "!"\#
 
 
 @SystemSettings
@@ -2815,25 +2816,30 @@ $ #Nézőke: vezérlőbillentyűk#
 
  The following keys work in all modes:
 
- #Fel#                ^<wrap>Egy sorral fel
- #Le#                 Egy sorral le
- #PgUp#               Egy oldallal fel
- #PgDn#               Egy oldallal le
- #Home, Ctrl+Home#    A fájl elejére ugrik
- #End, Ctrl+End#      A fájl végére ugrik
+ #Fel#                 ^<wrap>Egy sorral fel
+ #Le#                  Egy sorral le
+ #PgUp#                Egy oldallal fel
+ #PgDn#                Egy oldallal le
+ #Home, Ctrl+Home#     A fájl elejére ugrik
+ #End, Ctrl+End#       A fájl végére ugrik
 
  The following additional keys work in #text mode without line wrap#:
 
- #Bal#                ^<wrap>Egy karakterrel balra
- #Jobb#               Egy karakterrel jobbra
- #Ctrl+Bal#           20 karakterrel balra, hexa módban 1 hellyel balra
- #Ctrl+Jobb#          20 karakterrel jobbra, hexa módban 1 hellyel jobbra
- #Ctrl+Shift+Bal#     A sorok kezdő pozíciójára ugrik (ha a sortörés nincs bekapcsolva és a sorok túlnyúlnak a kép méretén)
- #Ctrl+Shift+Jobb#    A sorok végső pozíciójára ugrik (ha a sortörés nincs bekapcsolva és a sorok túlnyúlnak a kép méretén)
+ #Bal#               ^<wrap>Egy karakterrel balra
+ #Jobb#              Egy karakterrel jobbra
+ #Ctrl+Bal#          20 karakterrel balra, hexa módban 1 hellyel balra
+ #Ctrl+Jobb#         20 karakterrel jobbra, hexa módban 1 hellyel jobbra
+ #Ctrl+Shift+Bal#    A sorok kezdő pozíciójára ugrik (ha a sortörés nincs bekapcsolva és a sorok túlnyúlnak a kép méretén)
+ #Ctrl+Shift+Jobb#   A sorok végső pozíciójára ugrik (ha a sortörés nincs bekapcsolva és a sorok túlnyúlnak a kép méretén)
 
- In #hex# and #dump# ~view modes~@ViewerMode@, #Ctrl+Left# and
+ In the #hex# and #dump# ~view modes~@ViewerMode@, #Ctrl+Left# and
 #Ctrl+Right# keys shift the content within the window one byte at a time
 in the corresponding direction.
+
+ In the #hex# ~view mode~@ViewerMode@, #Alt+Left# and #Alt+Right# key
+combinations decrease or increase the number of bytes displayed on each
+row by one byte, respectively. #Ctrl+Alt+Left# and #Ctrl+Alt+Right# key
+combinations adjust the number of displayed bytes by 16 at a time.
 
  Viewer commands
 
@@ -3052,7 +3058,15 @@ first byte on a row becomes the last on the previous row. The
 #Ctrl+Left# key combination shifts all bytes to the right moving the
 last byte of a row to the first positions of the next row. Unlike
 in #dump# mode, the content is shifted by a byte, not by a character.
-The #Right# and #Left# keys are ignored.
+
+ The #Alt+Right# key combination increases the number of bytes displayed
+on each row by one byte. The #Ctrl+Alt+Right# key combination increases
+the number of bytes by 16 at a time. The #Alt+Left# key combination
+decreases the number of bytes displayed on each row by one byte. The
+#Ctrl+Alt+Left# key combination decreases the number of bytes by 16 at
+a time.
+
+ The #Right# and #Left# keys are ignored.
 
 
 @ViewerGotoPos
@@ -3210,7 +3224,7 @@ kódlapját kapja, de ez az opció a ~szerkesztő beállítások~@EditorSettings
  Megjegyzések:
 
  1. ^<wrap>Az #Alt+U#/#Alt+I# a sor behúzását állítja, ha nincs kijelölt blokk.
- 2. ^<wrap>Lenyomott #Alt#-tal a karaktereket decimális kódjukkal 
+ 2. ^<wrap>Lenyomott #Alt#-tal a karaktereket decimális kódjukkal
 írhatjuk be a numerikus billentyűzeten (0-65535).
  3. ^<wrap>Ha nincs kijelölt blokk, a #Ctrl+Ins#/#Ctrl+C# kijelöli
 a teljes aktuális sort és a vágólapra másolja.
@@ -3232,7 +3246,7 @@ $ #Editor: search/replace#
 
  #Regular expressions#
  Treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@).
-Each line is processed individually, so multi-line expressions and line-break characters will not be found.
+Each line is processed individually, so multi-line expressions and line break characters will not be found.
 
  ~Preserve style~@PreserveStyle@
  Preserve style (case and delimiters in program source code) of the replaced text.
@@ -3611,7 +3625,6 @@ nem ~fájlpanel~@FilePanel@ volt, meghajtóváltás után az lesz.
  #F3# key shows plugin technical information.
 
  A #Del# billentyűvel:
-
  - ^<wrap>~leválaszthatjuk~@DisconnectDrive@ a hálózati meghajtókat;
  - ^<wrap>törölhetjük a SUBST paranccsal létrehozott virtuális meghajtókat;
  - ^<wrap>kiadathatjuk a CD-ROM-ok vagy más cserélhető lemezes meghajtók lemezeit.
@@ -3629,20 +3642,23 @@ kártyaolvasót választja le.
  A Meghajtók menüben a #Ctrl+1 - Ctrl+9# billentyűkkel a meghajtókra
 vonatkozó különféle információk megjelenítését kapcsolhatjuk ki vagy be:
 
- Ctrl+1 - a lemez típusa;
- Ctrl+2 - ^<wrap>a hálózat neve (és a SUBST meghajtó gazdalemezén annak a
+ #Ctrl+1# - a lemez típusa;
+ #Ctrl+2# - ^<wrap>a hálózat neve (és a SUBST meghajtó gazdalemezén annak a
 mappának az elérési útvonala, amihez a virtuális meghajtót hozzárendeltük);
- Ctrl+3 - a lemez címkéje;
- Ctrl+4 - a fájlrendszer;
- Ctrl+5 - a teljes és a szabad lemezterület mérete (kétféle
+ #Ctrl+3# - a lemez címkéje;
+ #Ctrl+4# - a fájlrendszer;
+ #Ctrl+5# - a teljes és a szabad lemezterület mérete (kétféle
 megjelenítési módja van, nyomjuk le kétszer);
- Ctrl+6 - a kivehető lemez paraméterei;
- Ctrl+7 - pluginek megjelenítése;
- Ctrl+8 - a CD meghajtók fajtái;
- Ctrl+9 - a hálózat jellemzői.
+ #Ctrl+6# - a kivehető lemez paraméterei;
+ #Ctrl+7# - pluginek megjelenítése;
+ #Ctrl+8# - a CD meghajtók fajtái;
+ #Ctrl+9# - a hálózat jellemzői.
 
  A #Meghajtók# menü beállításait a Far a többi konfigurációs adattal együtt
 menti.
+
+ #F9# shows the ~dialog~@ChangeDriveMode@ to control displaying
+of this information.
 
  Ha ~A Ctrl+PgUp meghajtót vált~@InterfSettings@ opciót engedélyeztük, a
 #Ctrl+PgUp# ugyanúgy működik, mint az #Esc#: kilép a Meghajtók menüből és
@@ -3968,7 +3984,7 @@ elhelyezett könyvjelzőinket.
 a belső szerkesztőben.
 
  #Show white space#        Make while space characters (spaces, tabulations,
-                         line endings) visible.
+                         line breaks) visible.
 
  #Select found#            Found text is selected
 
@@ -4074,7 +4090,6 @@ kívánt értéket. Nem kötelező mindent kitölteni, mert a nem változtatott 
 eredeti értékei megmaradnak.
 
  Az #Aktuális# gomb a jelenlegi idővel tölti fel a dátum/idő mezőket.
-
  Az #Eredeti# gomb a fájl vagy mappa eredeti időértékeivel tölti fel a
 dátum/idő mezőket. Csak egy kijelölt fájlra vagy mappára használható,
 csoportra nem.
@@ -4219,7 +4234,6 @@ kívánt nézetet a felkínált listából, ahol a "Rövid mód" megfelel a fáj
 "Közepes" módjának (#BalCtrl+2#) és így tovább az utolsó elemig, a
 #BalCtrl+0#-val meghívható "Alternatív teljes" nézet módig bezárólag.
 
-
     #Oszloptípusok# - az oszloptípusok, amelyeket egy vagy több (vesszővel
 elválasztott) karakter jelképez, a következők lehetnek:
 
@@ -4326,7 +4340,6 @@ formában jelenik meg.
  Enabling links, streams and owner columns (G, LN, F and O) can significantly
 slow down the directory reading.
 
-
  Az #Állapotsor oszloptípusok# és az #Állapotsor oszlopszélességek#
 beállítása hasonlóan működik az "Oszloptípusokhoz" és "Oszlopszélességekhez",
 de a panelek állapotsorára hat.
@@ -4402,13 +4415,15 @@ Például ha a maszkban elválasztó karaktert szeretnénk használni ("," vagy 
 az idézőjelek használata elkerülhetetlen, nehogy a Far maszkok listájaként
 próbálja meg értelmezni a definíciót.
 
- Néhány parancsban (ilyen a ~fájlkeresés~@FindFile@, a ~szűrő~@Filter@,a
-~szűrők menü~@FiltersMenu@, a fájlok ~kijelölése~@SelectFiles@, a fájlok
-~társítása~@FileAssoc@ és a ~fájlkiemelések, rendezési csoportok~@Highlight@)
-használhatunk kizáró maszkokat is. A #kizáró maszk# olyan fájlmaszk (vagy
-maszkok csoportja), amivel a befoglaló maszknak megfelelő fájlok közül
-kizárhatjuk egy másik maszk vagy maszkrendszer fájljait. A kizáró maszkoknak a
-befoglaló maszkok után kell állniuk, #|# karakterrel elválasztva.
+ File mask surrounded with slashes #/# is treated as ~Perl regular expression~@RegExp@.
+
+ Example:
+ #/(eng|rus)/i# - any files with filenames containing string “eng” or “rus”,
+the character case is not taken into account.
+
+ A #kizáró maszk# olyan fájlmaszk (vagy maszkok csoportja), amivel a befoglaló
+maszknak megfelelő fájlok közül kizárhatjuk egy másik maszk vagy maszkrendszer fájljait.
+A kizáró maszkoknak a befoglaló maszkok után kell állniuk, #|# karakterrel elválasztva.
 
  Néhány példa a befoglaló és kizáró maszkok használatára:
 
@@ -4516,20 +4531,22 @@ mezőben másolási vagy mozgatási célként több elérési utat is megadhatun
 ";" vagy "," karaktert, idézőjelek közé kell tenni az elérési útjukat.
 
  Ha nem létező célmappákat adunk meg, amit szeretnénk létrehozni, a
-mappák nevei közt és után mindig álljon \\-jel. A Másolás párbeszédablakban:
+mappák nevei közt és után mindig álljon \\-jel.
+
+ If ~Panel.Tree.TurnOffCompletely~@Panel.Tree.TurnOffCompletely@
+parameter in ~far:config~@FarConfig@ is set to “false,” you can use
+~Find folder~@FindFolder@ dialog to select the target path.
+ A Másolás párbeszédablakban:
  - ^<wrap>#F10#-zel az aktív panel
- - ^<wrap>#Alt+F10#-zel a passzív panel fastruktúrájának mappái
-között kereshetünk célmappát.
+ - ^<wrap>#Alt+F10#-zel a passzív panel fastruktúrájának mappái között kereshetünk célmappát.
  - ^<wrap>A #Shift+F10# a beviteli sorba beírt elérési út
 fastruktúráját bontja ki (ha több útvonalat adtunk meg, azokból csak az elsőt).
-Ha a "Többszörös cél létrehozása" opció engedélyezett, a fastruktúrán
+
+ Ha a "Többszörös cél létrehozása" opció engedélyezett, a fastruktúrán
 kiválasztott mappa elérési útját a Far hozzáfűzi a szerkesztett sorhoz.
 
  Pluginnel emulált fájlrendszereknél a másolás, mozgatás és átnevezés
 lehetősége a plugin képességeitől függ.
-
- Ha a célfájl már létezik, felülírhatjuk, kihagyhatjuk vagy a
-forrásfájl tartalmát hozzáfűzhetjük a célfájl végéhez.
 
  A "Hozzáférési jogok" opció csak NTFS fájlrendszernél működik, vele a
 fájlok hozzáférési információit is átmásolhatjuk. A másolás és mozgatás
@@ -4555,8 +4572,7 @@ olvasható" attribútumú fájllal találkozik, a
 felülírás előtt újabb megerősítést kér.
 
  A ~Rendszer beállítások~@SystemSettings@ menü "Másoláshoz a rendszerrutin
-használata" opciójával a Far a Windows operációs rendszer CopyFileEx nevű
-(vagy CopyFile, ha a CopyFileEx nem áll rendelkezésre) másolórutinját fogja
+használata" opciójával a Far a Windows operációs rendszer CopyFileEx nevű másolórutinját fogja
 használni a saját másolórutinja helyett. Ez előnyökkel járhat NTFS
 fájlrendszernél, mert a CopyFileEx ésszerűbb lemezfoglalási metódust használ
 és a fájlokat bővített attribútumkészletükkel együtt másolja át. A rendszer
@@ -4654,7 +4670,6 @@ $ #Hardlinkek és szimbolikus linkek#
  NTFS partíciókon az #Alt+F6# paranccsal #hardlinkeket# hozhatunk létre
 fájlokhoz, #csomópontokat# mappákhoz és #szimbolikus linkeket# mind fájlokhoz, mind mappákhoz.
 
-
  #Hardlinkek#
 
  A #hardlink# fájlokhoz létrehozott kiegészítő könyvtárbejegyzés.
@@ -4678,7 +4693,6 @@ utolsó oszlopában) és rendezni is tudja a fájlokat hardlinkjeik száma szeri
 
  Hardlinkek kizárólag a forrásfájllal azonos meghajtón készíthetők.
 
-
  #Csomópontok#
 
  A mappa csomópont létrehozása olyan eljárást jelent, amellyel bármelyik
@@ -4692,7 +4706,6 @@ C:\\WINNT\\SYSTEM32\\DRIVERS mappát éri el.
  Windows 2000 alatt CD-ROM-ok mappáihoz közvetlenül nem készíthető szimlink,
 de ez a korlátozás kikerülhető, ha a CD-ROM-ot egy NTFS partíció valamelyik
 mappájához mountoljuk.
-
 
  #Szimbolikus linkek#
 
@@ -4938,7 +4951,6 @@ zero-size expression.
  #(?{name}pattern)# - group with a name. The name can be empty (in such case you
 cannot refer to this group) or must contain only word characters (#\w#) and spaces (#\s#).
 
-
  #Quantifiers#
 
  Any character, group or class can be followed by a quantifier:
@@ -4956,7 +4968,6 @@ cannot refer to this group) or must contain only word characters (#\w#) and spac
  #{n,m}?# - ^<wrap>Match at least n but not more than m times, not greedily.
  #{,m}#   - ^<wrap>equals to {0,m}
  #{,m}?#  - ^<wrap>equals to {0,m}?
-
 
  #"Greedy" and "not greedy" quantifiers#
 
@@ -5142,7 +5153,7 @@ $ #Makrók: gyorsbillentyűk#
  - ^<wrap>bármelyik billentyűhöz;
  - ^<wrap>bármelyik, módosítóval (#Ctrl#, #Alt# vagy #Shift#) együtt lenyomott billentyűhöz;
  - ^<wrap>bármelyik két módosítóval együtt lenyomott billentyűhöz. A
-lehetséges módosítópárok:  #Ctrl+Shift+<bill.>#, #Ctrl+Alt+<bill.># és 
+lehetséges módosítópárok:  #Ctrl+Shift+<bill.>#, #Ctrl+Alt+<bill.># és
 #Alt+Shift+<bill.>#
 
  A következő kombinációk #nem használhatók# makróhoz: #Alt+Ins#, #Ctrl+<.>#,
@@ -5230,7 +5241,7 @@ billentyűkombinációt, az a korábbi beállításnak megfelelően működik ez
 $ #Makrók: beállítások#
  Ha a ~makrók~@KeyMacro@ egyéb tulajdonságait is szeretnénk módosítani,
 a felvétel leállítására a #Ctrl+<.># helyett használjuk a #Ctrl+Shift+<.>#
-kombinációt, így a rögzítést követően egy párbeszédablakban állíthatjuk be 
+kombinációt, így a rögzítést követően egy párbeszédablakban állíthatjuk be
 a kívánt jellemzőket:
 
  #Szekvencia:#
@@ -5246,7 +5257,6 @@ jelenik meg a képernyőn.
 
  #Végrehajtás a Far indítása után#
  Az így megjelölt makrók közvetlenül a Far elindulása után végrehajtódnak.
-
 
  A végrehajtást a következő feltételekhez köthetjük, külön az aktív és a passzív panelre:
 
@@ -5767,37 +5777,6 @@ it before exiting. Use this parameter to compensate for this behavior.
  This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
-@System.Executor.UseAppPath
-$ #far:config System.Executor.UseAppPath#
- This Boolean parameter controls whether Far will look up #App Paths#
-Windows registry key when it searches for an executable module.
-
- When Far executes a command entered on the command line, it searches
-executable module in the following places in this order (using file
-name extensions defined by the #PATHEXT# environment variable):
-
- 1. ^<wrap>Current directory;
- 2. Directories listed on the #PATH# environment variable;
- 3. Windows 95: Windows system directory (SYSTEM);
-    Windows NT: 32-bit Windows system directory (SYSTEM32);
- 4. Windows NT: 16-bit Windows system directory (SYSTEM);
- 5. The Windows directory.
-
- If this parameter is True, Far will also look up subkeys of the
-following Windows registry keys:
-
- 6. #HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths#;
- 7. #HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths#.
-
- Default value: True (look up Windows registry).
-
- Note: If the command line is executed with #Shift+Enter# key
-combination, Far launches Windows Explorer to execute the command.
-Windows Explorer always looks up #App Paths# registry key.
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
 @System.Executor.ExcludeCmds
 $ #far:config System.Executor.ExcludeCmds#
  This string parameter defines commands which will be directly passed
@@ -5845,19 +5824,6 @@ This parameter is handy with non-standard command processors requiring
 unusual command line options or quoting.
 
  Default value: #/S /C "{0}"# (compatible with CMD.EXE).
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
-@System.Executor.FullTitle
-$ #far:config System.Executor.FullTitle#
- This Boolean parameter specifies the format of the console window title
-while an external command is being executed.
-
- False - ^<wrap>Console title contains the text entered on the command line;
- True  - Console title contains full path to the executable file.
-
- Default value: False (the entered text).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 
@@ -6264,7 +6230,7 @@ as for windowed and fullscreen mode.
 
 @-
  ┌──────────╥───────────────────────┬───────────────────────┐
- │ Mode     ║ Windowed              │ Fullscreen            │           
+ │ Mode     ║ Windowed              │ Fullscreen            │
  ╞══════════╬═══════════════════════╪═══════════════════════╡
  │ Insert   ║ Interface.CursorSize1 │ Interface.CursorSize2 │
  ├──────────╫───────────────────────┼───────────────────────┤

@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "filestr.hpp"
 
@@ -103,32 +106,6 @@ bool enum_lines::get(bool Reset, file_line& Value) const
 	return GetString(Value.Str, Value.Eol);
 }
 
-static size_t get_chars(uintptr_t const Codepage, std::string_view const From, span<wchar_t> const To, bool& ConversionError)
-{
-	if (Codepage == CP_UTF8 || Codepage == CP_UTF7)
-	{
-		Utf::errors Errors;
-		const auto Size = Utf::get_chars(Codepage, From, To, &Errors);
-		if (Errors.Conversion.Error)
-			ConversionError = true;
-		return Size;
-	}
-
-	if (!ConversionError)
-	{
-		try
-		{
-			return encoding::get_chars_strict(Codepage, From, To);
-		}
-		catch (encoding::exception const&)
-		{
-			ConversionError = true;
-		}
-	}
-
-	return encoding::get_chars(Codepage, From, To);
-}
-
 bool enum_lines::fill() const
 {
 	const auto Read = io::read(m_Stream, edit_bytes(m_Buffer));
@@ -149,7 +126,7 @@ bool enum_lines::fill() const
 			// - If we pretend that the remaining bytes are \0, the worst thing that could happen is trailing \0 bytes after save.
 			std::fill_n(m_Buffer.begin() + Read, MissingBytes, '\0');
 			m_BufferView = { m_Buffer.data(), Read + MissingBytes };
-			m_ConversionError = true;
+			m_ErrorPosition = 0;
 		}
 
 		if (m_CodePage == CP_REVERSEBOM)
@@ -293,7 +270,7 @@ bool enum_lines::GetString(string_view& Str, eol& Eol) const
 
 			for (;;)
 			{
-				const auto Size = get_chars(m_CodePage, Data.m_Bytes, Data.m_wBuffer, m_ConversionError);
+				const auto Size = encoding::get_chars(m_CodePage, Data.m_Bytes, Data.m_wBuffer, &m_ErrorPosition);
 				if (Size <= Data.m_wBuffer.size())
 				{
 					Data.m_Bytes.clear();
@@ -382,7 +359,7 @@ static bool GetCpUsingUniversalDetectorWithExceptions(std::string_view const Str
 	// This whole block shouldn't be here
 	if (Global->Opt->strNoAutoDetectCP.Get() == L"-1"sv)
 	{
-		if (Global->Opt->CPMenuMode && static_cast<UINT>(Codepage) != encoding::codepage::ansi() && static_cast<UINT>(Codepage) != encoding::codepage::oem())
+		if (Global->Opt->CPMenuMode && none_of(Codepage, encoding::codepage::ansi(), encoding::codepage::oem()))
 		{
 			const auto CodepageType = codepages::GetFavorite(Codepage);
 			if (!(CodepageType & CPST_FAVORITE))

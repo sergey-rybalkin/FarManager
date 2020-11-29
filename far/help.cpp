@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "help.hpp"
 
@@ -51,7 +54,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "colormix.hpp"
 #include "stddlg.hpp"
 #include "plugins.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "RegExp.hpp"
 #include "lang.hpp"
 #include "language.hpp"
@@ -210,7 +213,7 @@ struct Help::StackHelpData
 	int CurX{}, CurY{};           // координаты (???)
 };
 
-static bool GetOptionsParam(const os::fs::file& LangFile, string_view const KeyName, string& Value, UINT CodePage)
+static bool GetOptionsParam(const os::fs::file& LangFile, string_view const KeyName, string& Value, unsigned CodePage)
 {
 	return GetLangParam(LangFile, L"Options "sv + KeyName, Value, nullptr, CodePage);
 }
@@ -360,7 +363,7 @@ bool Help::ReadHelp(string_view const Mask)
 		unsigned UserTabSize;
 		if (from_string(strReadStr, UserTabSize))
 		{
-			if (in_range(0u, UserTabSize, 16u))
+			if (in_closed_range(0u, UserTabSize, 16u))
 			{
 				CtrlTabSize = UserTabSize;
 			}
@@ -933,7 +936,7 @@ void Help::FastShow()
 	}
 
 	SetColor(COL_HELPSCROLLBAR);
-	ScrollBarEx(m_Where.right, m_Where.top + HeaderHeight() + 1, BodyHeight(), StackData->TopStr, HelpList.size() - FixCount);
+	ScrollBar(m_Where.right, m_Where.top + HeaderHeight() + 1, BodyHeight(), StackData->TopStr, HelpList.size() - FixCount);
 }
 
 void Help::DrawWindowFrame() const
@@ -1750,8 +1753,11 @@ bool Help::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 
 		if (IntKeyState.MousePos.y == ScrollY)
 		{
-			while_mouse_button_pressed([&]
+			while_mouse_button_pressed([&](DWORD const Button)
 			{
+				if (Button != FROM_LEFT_1ST_BUTTON_PRESSED)
+					return false;
+
 				ProcessKey(Manager::Key(KEY_UP));
 				return true;
 			});
@@ -1761,8 +1767,10 @@ bool Help::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 
 		if (IntKeyState.MousePos.y == ScrollY + BodyHeight() - 1)
 		{
-			while_mouse_button_pressed([&]
+			while_mouse_button_pressed([&](DWORD const Button)
 			{
+				if (Button != FROM_LEFT_1ST_BUTTON_PRESSED)
+					return false;
 				ProcessKey(Manager::Key(KEY_DOWN));
 				return true;
 			});
@@ -1781,7 +1789,7 @@ bool Help::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 
 		if (static_cast<int>(HelpList.size()) > BodyHeight())
 		{
-			while (IsMouseButtonPressed())
+			while (IsMouseButtonPressed() == FROM_LEFT_1ST_BUTTON_PRESSED)
 			{
 				if (IntKeyState.MousePos.y > ScrollY && IntKeyState.MousePos.y < ScrollY + BodyHeight() + 1)
 				{
@@ -1852,7 +1860,7 @@ bool Help::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 		}
 	}
 
-	if (while_mouse_button_pressed([&]
+	if (while_mouse_button_pressed([&](DWORD)
 	{
 		if (MouseEvent->dwMousePosition.Y < m_Where.top + 1 + HeaderHeight())
 		{

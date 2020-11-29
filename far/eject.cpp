@@ -31,12 +31,16 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "eject.hpp"
 
 // Internal:
-#include "cddrv.hpp"
 #include "exception.hpp"
+#include "pathmix.hpp"
+#include "flink.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -50,12 +54,19 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 /* Функция by Vadim Yegorov <zg@matrica.apollo.lv>
 */
-void EjectVolume(wchar_t Letter)
+void EjectVolume(string_view const Path)
 {
+	// Ejecting VHD ISO is a bad idea.
+	// Currently OS ejects the medium but doesn't remove the device, which might be confusing
+	if (auto IsVhd = false; detach_vhd(Path, IsVhd) || IsVhd)
+		return;
+
+	const auto DeviceName = extract_root_device(Path);
+
 	bool ReadOnly;
 	DWORD WriteFlag;
 
-	const auto DriveType = FAR_GetDriveType(os::fs::get_drive(Letter));
+	const auto DriveType = os::fs::drive::get_type(DeviceName);
 	if (DriveType == DRIVE_REMOVABLE)
 	{
 		WriteFlag = GENERIC_WRITE;
@@ -84,7 +95,7 @@ void EjectVolume(wchar_t Letter)
 		throw MAKE_FAR_EXCEPTION(L"Cannot open the disk"sv);
 	};
 
-	if (!OpenForWrite(os::fs::get_unc_drive(Letter), FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING))
+	if (!OpenForWrite(DeviceName, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING))
 		ReadOnly = true;
 
 	if (!File.IoControl(FSCTL_LOCK_VOLUME, nullptr, 0, nullptr, 0))
@@ -116,9 +127,9 @@ void EjectVolume(wchar_t Letter)
 		throw MAKE_FAR_EXCEPTION(L"IOCTL_STORAGE_EJECT_MEDIA"sv);
 }
 
-void LoadVolume(wchar_t const Letter)
+void LoadVolume(string_view const Path)
 {
-	const os::fs::file File(os::fs::get_unc_drive(Letter), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING);
+	const os::fs::file File(extract_root_device(Path), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING);
 	if (!File)
 		throw MAKE_FAR_EXCEPTION(L"Cannot open the disk"sv);
 
@@ -126,9 +137,9 @@ void LoadVolume(wchar_t const Letter)
 		throw MAKE_FAR_EXCEPTION(L"IOCTL_STORAGE_LOAD_MEDIA"sv);
 }
 
-bool IsEjectableMedia(wchar_t Letter)
+bool IsEjectableMedia(string_view const Path)
 {
-	const os::fs::file File(os::fs::get_unc_drive(Letter), 0, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING);
+	const os::fs::file File(extract_root_device(Path), 0, FILE_SHARE_WRITE, nullptr, OPEN_EXISTING);
 	if (!File)
 		return false;
 

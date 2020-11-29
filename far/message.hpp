@@ -67,33 +67,33 @@ class Message: noncopyable
 {
 public:
 	Message(
-		DWORD Flags,
+		unsigned Flags,
 		string_view Title,
 		std::vector<string> Strings,
 		span<lng const> Buttons,
 		string_view HelpTopic = {},
-		const GUID* Id = nullptr
+		const UUID* Id = nullptr
 	);
 
 	Message(
-		DWORD Flags,
+		unsigned Flags,
 		const error_state_ex& ErrorState,
 		string_view Title,
 		std::vector<string> Strings,
 		span<lng const> Buttons,
 		string_view HelpTopic = {},
-		const GUID* Id = nullptr,
+		const UUID* Id = nullptr,
 		span<string const> Inserts = {}
 	);
 
 	Message(
-		DWORD Flags,
+		unsigned Flags,
 		const error_state_ex* ErrorState,
 		string_view Title,
 		std::vector<string> Strings,
 		std::vector<string> Buttons,
 		string_view HelpTopic,
-		const GUID* Id,
+		const UUID* Id,
 		Plugin* PluginNumber
 	);
 
@@ -112,7 +112,7 @@ public:
 
 private:
 	void Init(
-		DWORD Flags,
+		unsigned Flags,
 		string_view Title,
 		std::vector<string>&& Strings,
 		std::vector<string>&& Buttons,
@@ -120,7 +120,7 @@ private:
 		span<string const> Inserts,
 		string_view HelpTopic,
 		Plugin* PluginNumber,
-		const GUID* Id
+		const UUID* Id
 	);
 	intptr_t MsgDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* Param2);
 

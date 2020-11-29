@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "keybar.hpp"
 
@@ -191,12 +194,12 @@ void KeyBar::SetLabels(lng StartIndex)
 	}
 }
 
-static int FnGroup(DWORD ControlState)
+static int FnGroup(unsigned ControlState)
 {
 	static const struct
 	{
-		DWORD Group;
-		DWORD ControlState;
+		unsigned Group;
+		unsigned ControlState;
 	}
 	Area[]
 	{
@@ -298,10 +301,7 @@ bool KeyBar::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 	if (!m_Where.contains(MouseEvent->dwMousePosition))
 		return false;
 
-	int KeyWidth = (m_Where.width() - 2) / 12;
-
-	if (KeyWidth<8)
-		KeyWidth=8;
+	int const KeyWidth = std::max(8, (m_Where.width() - 2) / 12);
 
 	const auto X = MouseEvent->dwMousePosition.X - m_Where.left;
 
@@ -383,7 +383,7 @@ size_t KeyBar::Change(const KeyBarTitles *Kbt)
 
 		const auto Pos = i.Key.VirtualKeyCode - VK_F1;
 
-		DWORD Shift = 0;
+		unsigned Shift = 0;
 		const auto Flags = i.Key.ControlKeyState;
 
 		if (Flags & (LEFT_CTRL_PRESSED|RIGHT_CTRL_PRESSED))

@@ -28,6 +28,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "tracer.hpp"
 
@@ -92,7 +95,7 @@ static auto GetBackTrace(CONTEXT ContextRecord, HANDLE ThreadHandle)
 
 	const auto Data = platform_specific_data(ContextRecord);
 
-	if (Data.MachineType == IMAGE_FILE_MACHINE_UNKNOWN)
+	if (Data.MachineType == IMAGE_FILE_MACHINE_UNKNOWN || (!Data.PC && !Data.Frame && !Data.Stack))
 		return Result;
 
 	const auto address = [](DWORD64 const Offset)
@@ -176,38 +179,10 @@ static void GetSymbols(string_view const ModuleName, span<DWORD64 const> const B
 
 		Consumer(
 			FormatAddress(Address - Module.BaseOfImage),
-			concat(HasModuleInfo? PointToName(Module.ImageName) : L"<unknown>"sv, L'!', GetName(Address)),
+			Address? concat(HasModuleInfo? PointToName(Module.ImageName) : L"<unknown>"sv, L'!', GetName(Address)) : L""s,
 			GetLocation(Address)
 		);
 	}
-}
-
-#if IS_MICROSOFT_SDK()
-extern "C" void** __current_exception();
-extern "C" void** __current_exception_context();
-#else
-static void** __current_exception()
-{
-	static EXCEPTION_RECORD DummyRecord{};
-	static void* DummyRecordPtr = &DummyRecord;
-	return &DummyRecordPtr;
-}
-
-static void** __current_exception_context()
-{
-	static CONTEXT DummyContext{};
-	static void* DummyContextPtr = &DummyContext;
-	return &DummyContextPtr;
-}
-#endif
-
-EXCEPTION_POINTERS tracer::get_pointers()
-{
-	return
-	{
-		static_cast<EXCEPTION_RECORD*>(*__current_exception()),
-		static_cast<CONTEXT*>(*__current_exception_context())
-	};
 }
 
 std::vector<DWORD64> tracer::get(string_view const Module, const EXCEPTION_POINTERS& Pointers, HANDLE ThreadHandle)
@@ -217,9 +192,18 @@ std::vector<DWORD64> tracer::get(string_view const Module, const EXCEPTION_POINT
 	return GetBackTrace(*Pointers.ContextRecord, ThreadHandle);
 }
 
-void tracer::get_symbols(string_view const Module, span<DWORD64 const> const Trace, function_ref<void(string&& Address, string&& Name, string&& Source)> const Consumer)
+void tracer::get_symbols(string_view const Module, span<DWORD64 const> const Trace, function_ref<void(string&& Line)> const Consumer)
 {
-	GetSymbols(Module, Trace, Consumer);
+	GetSymbols(Module, Trace, [&](string&& Address, string&& Name, string&& Source)
+	{
+		if (!Name.empty())
+			append(Address, L' ', Name);
+
+		if (!Source.empty())
+			append(Address, L" ("sv, Source, L')');
+
+		Consumer(std::move(Address));
+	});
 }
 
 void tracer::get_symbol(string_view const Module, const void* Ptr, string& Address, string& Name, string& Source)

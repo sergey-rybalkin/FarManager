@@ -1,12 +1,16 @@
 NAME = TmpPanel
+
 SRCS = TmpPanel.cpp \
-TmpCfg.cpp \
-TmpClass.cpp \
-TmpMix.cpp
+	TmpCfg.cpp \
+	TmpClass.cpp \
+	TmpMix.cpp
+
 DOCS = \
 	TmpEng.hlf \
 	TmpRus.hlf \
 	TmpPol.hlf \
+	TmpGer.hlf \
+	TmpUkr.hlf \
 	TmpEng.lng \
 	TmpRus.lng \
 	TmpSky.lng \
@@ -14,6 +18,8 @@ DOCS = \
 	TmpIta.lng \
 	TmpPol.lng \
 	TmpBel.lng \
+	TmpGer.lng \
+	TmpUkr.lng \
 	shortcuts.eng.lua \
 	shortcuts.rus.lua \
 	shortcuts.pol.lua \

@@ -15,15 +15,7 @@ DEFINES += -D FAR_ALPHA_VERSION
 
 ifdef DEBUG
 DEFINES += -D SYSLOG -D SYSLOG_FARSYSLOG
-
-ifdef CLANG
-ifndef DISABLE_TESTS
 ENABLE_TESTS = 1
-endif
-else
-ENABLE_TESTS = 1
-endif
-
 endif
 
 ifdef ENABLE_TESTS
@@ -133,6 +125,7 @@ SRCS = \
 	platform.env.cpp \
 	platform.fs.cpp \
 	platform.memory.cpp \
+	platform.process.cpp \
 	platform.reg.cpp \
 	platform.security.cpp \
 	platform.version.cpp \
@@ -189,8 +182,12 @@ MAP = $(patsubst %.exe,%.map,$(EXEFULLNAME))
 
 TESTOBJS = $(OBJDIR)api_test_c.testobj $(OBJDIR)api_test_c++.testobj
 
-ADDINCLUDE=-I$(BOOTSTRAPDIR)..
-CCFLAGS += $(ADDINCLUDE)
+ADDINCLUDE=-I$(BOOTSTRAPDIR).. 
+FORCEINCLUDE_DISABLED_WARNINGS=-include disabled_warnings.hpp
+FORCEINCLUDE=$(FORCEINCLUDE_DISABLED_WARNINGS) -include headers.hpp -include memcheck.hpp
+
+CFLAGS += $(FORCEINCLUDE_DISABLED_WARNINGS)
+CCFLAGS += $(ADDINCLUDE) $(FORCEINCLUDE)
 
 .PHONY: all
 all:
@@ -228,6 +225,8 @@ docs: \
 	$(EXEDIR)FarRus.hlf \
 	$(EXEDIR)FarHun.hlf \
 	$(EXEDIR)FarPol.hlf \
+	$(EXEDIR)FarGer.hlf \
+	$(EXEDIR)FarUkr.hlf \
 	$(EXEDIR)File_id.diz \
 	$(EXEDIR)Far.exe.example.ini
 
@@ -237,6 +236,13 @@ build: $(EXEFULLNAME)
 $(EXEFULLNAME): $(BOOTSTRAPDIR)copyright.inc $(BOOTSTRAPDIR)farversion.inc $(OBJS)
 	@echo Linking $@
 	$(CXX) -o $@ $(OBJS) $(LNKFLAGS)
+ifdef USE_OBJDUMP_MAPS
+	@echo Generating map file
+	objdump --syms --demangle $(EXEFULLNAME) > $(MAP)
+ifndef DEBUG
+	strip $(EXEFULLNAME)
+endif
+endif
 ifdef ENABLE_TESTS
 	@echo Running unit tests
 	$@ /service:test
@@ -248,7 +254,7 @@ $(OBJDIR)%.o: %.c
 
 $(OBJDIR)%.o: %.cpp
 	@echo $<
-	$(CXX) $(CCFLAGS) -c -include $(OBJDIR)headers -include headers.hpp -include memcheck.hpp -o $@ $<
+	$(CXX) -c -include $(OBJDIR)headers $(CCFLAGS) -o $@ $<
 
 $(OBJDIR)headers.gch: headers.cpp headers.hpp
 	@echo Making precompiled headers
@@ -270,77 +276,35 @@ $(OBJDIR)api_test_c++.testobj: $(FARINCLUDE)plugin.hpp $(FARINCLUDE)farcolor.hpp
 
 MSG=@echo Generating $@
 
-$(BOOTSTRAPDIR)Far.exe.manifest: Far.exe.manifest.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(M4) Far.exe.manifest.m4 > $@
+VERSION_DEPS=farversion.m4 tools.m4 vbuild.m4
 
-$(BOOTSTRAPDIR)far.rc.inc: far.rc.inc.m4 farversion.m4 tools.m4 vbuild.m4
+$(BOOTSTRAPDIR)%: %.m4 $(VERSION_DEPS)
 	$(MSG)
-	$(M4) far.rc.inc.m4 > $@
+	$(M4) $< > $@
 
-$(BOOTSTRAPDIR)copyright.inc: copyright.inc.m4 farversion.m4 tools.m4 vbuild.m4
+$(EXEDIR)%.hlf: %.hlf.m4 $(VERSION_DEPS)
 	$(MSG)
-	$(M4) copyright.inc.m4 > $@
+	$(GAWK) -f scripts/mkhlf.awk $< | $(M4) > $@
 
-$(BOOTSTRAPDIR)farversion.inc: farversion.inc.m4 farversion.m4 tools.m4 vbuild.m4
+$(EXEDIR)File_id.diz: File_id.diz.m4 $(VERSION_DEPS)
 	$(MSG)
-	$(M4) farversion.inc.m4 > $@
-
-$(BOOTSTRAPDIR)farlang.templ: farlang.templ.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(M4) farlang.templ.m4 > $@
-
-$(EXEDIR)FarEng.hlf: FarEng.hlf.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(GAWK) -f scripts/mkhlf.awk FarEng.hlf.m4 | $(M4) > $@
-
-$(EXEDIR)FarRus.hlf: FarRus.hlf.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(GAWK) -f scripts/mkhlf.awk FarRus.hlf.m4 | $(M4) > $@
-
-$(EXEDIR)FarHun.hlf: FarHun.hlf.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(GAWK) -f scripts/mkhlf.awk FarHun.hlf.m4 | $(M4) > $@
-
-$(EXEDIR)FarPol.hlf: FarPol.hlf.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(GAWK) -f scripts/mkhlf.awk FarPol.hlf.m4 | $(M4) > $@
-
-$(EXEDIR)File_id.diz: File_id.diz.m4 farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(M4) File_id.diz.m4 > $@
+	$(M4) $< > $@
 
 $(EXEDIR)Far.exe.example.ini: Far.exe.example.ini
 	$(MSG)
-	$(CP) Far.exe.example.ini $@
+	$(CP) $< $@
 
-$(FARINCLUDE)farcolor.hpp: farcolor.hpp farversion.m4 tools.m4 vbuild.m4
+$(FARINCLUDE)%: % headers.m4 $(VERSION_DEPS)
 	$(MSG)
-	$(M4) -DINPUT=farcolor.hpp headers.m4 > $@
-
-$(FARINCLUDE)plugin.hpp: plugin.hpp farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(M4) -DINPUT=plugin.hpp headers.m4 > $@
-
-$(FARINCLUDE)PluginW.pas: PluginW.pas farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(M4) -DINPUT=PluginW.pas headers.m4 > $@
-
-$(FARINCLUDE)FarColorW.pas: FarColorW.pas farversion.m4 tools.m4 vbuild.m4
-	$(MSG)
-	$(M4) -DINPUT=FarColorW.pas headers.m4 > $@
+	$(M4) -DINPUT=$< headers.m4 > $@
 
 $(FARINCLUDE)vc_crt_fix.asm: vc_crt_fix.asm
 	$(MSG)
-	$(CP) vc_crt_fix.asm $@
-
-$(FARINCLUDE)vc_crt_fix_impl.cpp: vc_crt_fix_impl.cpp
-	$(MSG)
-	$(M4) -DINPUT=vc_crt_fix_impl.cpp headers.m4 > $@
+	$(CP) $< $@
 
 $(FARINCLUDE)vc_crt_fix_ulink.cpp: vc_crt_fix_ulink.cpp
 	$(MSG)
-	$(CP) vc_crt_fix_ulink.cpp $@
+	$(CP) $< $@
 
 ifeq ($(MAKECMDGOALS),build)
  include $(DEPFILE)

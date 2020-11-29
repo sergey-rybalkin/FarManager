@@ -32,6 +32,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Internal:
 #include "keys.hpp"
 #include "farcolor.hpp"
@@ -81,11 +84,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/range.hpp"
 #include "common/scope_exit.hpp"
 #include "common/string_utils.hpp"
+#include "common/uuid.hpp"
 
 // External:
 #include <git2.h>
 
-//----------------------------------------------------------------------------
 
 #ifdef ENABLE_TESTS
 #define TESTS_ENTRYPOINT_ONLY
@@ -93,7 +96,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #undef TESTS_ENTRYPOINT_ONLY
 #endif
 
-global* Global = nullptr;
+//----------------------------------------------------------------------------
+
+global *Global = nullptr;
 
 static void show_help()
 {
@@ -226,7 +231,7 @@ static int MainProcess(
 
 			bool Root = false;
 			const auto Type = ParsePath(strPath, nullptr, &Root);
-			if (Root && (Type == root_type::drive_letter || Type == root_type::unc_drive_letter || Type == root_type::volume))
+				if(Root && (Type == root_type::drive_letter || Type == root_type::win32nt_drive_letter || Type == root_type::volume))
 			{
 				AddEndSlash(strPath);
 			}
@@ -405,7 +410,7 @@ static void InitProfile(string& strProfilePath, string& strLocalProfilePath)
 		if (!SingleProfile)
 			CreatePath(path::join(Global->Opt->LocalProfilePath, L"PluginsData"sv), true);
 
-		const auto RandomName = GuidToStr(CreateUuid());
+		const auto RandomName = uuid::str(os::uuid::generate());
 
 		if (!os::fs::can_create_file(path::join(Global->Opt->ProfilePath, RandomName)) ||
 			(!SingleProfile && !os::fs::can_create_file(path::join(Global->Opt->LocalProfilePath, RandomName))))
@@ -422,12 +427,12 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 		return (*Arg == L'/' || *Arg == L'-') && equal_icase(Arg + 1, Name);
 	};
 
-	if (Args.size() == 4 && IsElevationArgument(Args[0])) // /service:elevation {GUID} PID UsePrivileges
+	if (Args.size() == 4 && IsElevationArgument(Args[0])) // /service:elevation {UUID} PID UsePrivileges
 	{
 		return ElevationMain(Args[1], std::wcstoul(Args[2], nullptr, 10), *Args[3] == L'1');
 	}
 
-	if (in_range(2u, Args.size(), 5u) && (isArg(Args[0], L"export"sv) || isArg(Args[0], L"import"sv)))
+	if (in_closed_range(2u, Args.size(), 5u) && (isArg(Args[0], L"export"sv) || isArg(Args[0], L"import"sv)))
 	{
 		const auto Export = isArg(Args[0], L"export"sv);
 		string strProfilePath(Args.size() > 2 ? Args[2] : L""sv), strLocalProfilePath(Args.size() > 3 ? Args[3] : L""), strTemplatePath(Args.size() > 4 ? Args[4] : L"");
@@ -438,14 +443,12 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 		return EXIT_SUCCESS;
 	}
 
-	if (in_range(1u, Args.size(), 3u) && isArg(Args[0], L"clearcache"sv))
+	if (in_closed_range(1u, Args.size(), 3u) && isArg(Args[0], L"clearcache"sv))
 	{
 		string strProfilePath(Args.size() > 1 ? Args[1] : L""sv);
 		string strLocalProfilePath(Args.size() > 2 ? Args[2] : L""sv);
 		InitProfile(strProfilePath, strLocalProfilePath);
-		(void)config_provider {
-			config_provider::clear_cache{}
-		};
+		(void)config_provider{config_provider::clear_cache{}};
 		return EXIT_SUCCESS;
 	}
 
@@ -462,6 +465,15 @@ static void UpdateErrorMode()
 	}
 
 	os::set_error_mode(Global->ErrorMode);
+}
+
+[[noreturn]]
+static int handle_exception(function_ref<bool()> const Handler)
+{
+	if (Handler())
+		std::_Exit(EXIT_FAILURE);
+
+	throw;
 }
 
 static int mainImpl(span<const wchar_t* const> const Args)
@@ -761,15 +773,11 @@ static int mainImpl(span<const wchar_t* const> const Args)
 		},
 			[&]() -> int
 		{
-			if (handle_unknown_exception(CurrentFunctionName))
-				std::_Exit(EXIT_FAILURE);
-			throw;
+		handle_exception([&]{ return handle_unknown_exception(CurrentFunctionName); });
 		},
 			[&](std::exception const& e) -> int
 		{
-			if (handle_std_exception(e, CurrentFunctionName))
-				std::_Exit(EXIT_FAILURE);
-			throw;
+		handle_exception([&]{ return handle_std_exception(e, CurrentFunctionName); });
 		});
 }
 
@@ -785,24 +793,34 @@ static void configure_exception_handling(int Argc, const wchar_t* const Argv[])
 	}
 }
 
-static int wmain_seh(int Argc, const wchar_t* const Argv[])
+[[noreturn]]
+static int handle_exception_final(function_ref<bool()> const Handler)
 {
+	if (Handler())
+		std::_Exit(EXIT_FAILURE);
+
+	restore_system_exception_handler();
+	throw;
+}
+
+static int wmain_seh()
+{
+	// wmain is a non-standard extension and not available in gcc.
+	int Argc = 0;
+	const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
+
 #ifdef ENABLE_TESTS
-	if (const auto Result = testing_main(Argc, Argv))
+	if (const auto Result = testing_main(Argc, Argv.get()))
 	{
 		return *Result;
 	}
 #endif
 
-	configure_exception_handling(Argc, Argv);
-
-#if defined(SYSLOG)
-	atexit(PrintSysLogStat);
-#endif
+	configure_exception_handling(Argc, Argv.get());
 
 	SCOPED_ACTION(unhandled_exception_filter);
+	SCOPED_ACTION(seh_terminate_handler);
 	SCOPED_ACTION(new_handler);
-
 
 	const auto CurrentFunctionName = __FUNCTION__;
 
@@ -812,7 +830,7 @@ static int wmain_seh(int Argc, const wchar_t* const Argv[])
 			try
 			{
 				git_libgit2_init();
-				int retVal = mainImpl({ Argv + 1, Argv + Argc });
+				int retVal = mainImpl({ Argv.get() + 1, Argv.get() + Argc });
 				git_libgit2_shutdown();
 
 				return retVal;
@@ -826,19 +844,11 @@ static int wmain_seh(int Argc, const wchar_t* const Argv[])
 		},
 			[&]() -> int
 		{
-			if (handle_unknown_exception(CurrentFunctionName))
-				std::_Exit(EXIT_FAILURE);
-
-			restore_gpfault_ui();
-			throw;
+		handle_exception_final([&]{ return handle_unknown_exception(CurrentFunctionName); });
 		},
 			[&](std::exception const& e) -> int
 		{
-			if (handle_std_exception(e, CurrentFunctionName))
-				std::_Exit(EXIT_FAILURE);
-
-			restore_gpfault_ui();
-			throw;
+		handle_exception_final([&]{ return handle_std_exception(e, CurrentFunctionName); });
 		});
 }
 
@@ -847,10 +857,7 @@ int main()
 	return seh_try_with_ui(
 		[]
 		{
-			// wmain is a non-standard extension and not available in gcc.
-			int Argc;
-			const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
-			return wmain_seh(Argc, Argv.get());
+		return wmain_seh();
 		},
 			[]() -> int
 		{

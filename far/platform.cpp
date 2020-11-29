@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "platform.hpp"
 
@@ -47,7 +50,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Common:
 #include "common/algorithm.hpp"
 #include "common/range.hpp"
-#include "common/scope_exit.hpp"
 #include "common/string_utils.hpp"
 
 // External:
@@ -87,7 +89,7 @@ namespace os
 
 			const auto Result = WaitForMultipleObjects(static_cast<DWORD>(Handles.size()), Handles.data(), WaitAll, Timeout? *Timeout / 1ms : INFINITE);
 
-			if (in_range<size_t>(WAIT_OBJECT_0, Result, WAIT_OBJECT_0 + Handles.size() - 1))
+			if (in_closed_range<size_t>(WAIT_OBJECT_0, Result, WAIT_OBJECT_0 + Handles.size() - 1))
 			{
 				return Result - WAIT_OBJECT_0;
 			}
@@ -261,15 +263,13 @@ bool GetWindowText(HWND Hwnd, string& Text)
 	return false;
 }
 
+#ifndef _WIN64
 bool IsWow64Process()
 {
-#ifdef _WIN64
-	return false;
-#else
 	static const auto Wow64Process = []{ BOOL Value = FALSE; return imports.IsWow64Process(GetCurrentProcess(), &Value) && Value; }();
 	return Wow64Process;
-#endif
 }
+#endif
 
 DWORD GetAppPathsRedirectionFlag()
 {
@@ -406,29 +406,40 @@ handle OpenConsoleActiveScreenBuffer()
 			return m_module.get();
 		}
 	}
-}
 
-UUID CreateUuid()
-{
-	UUID Uuid;
-	UuidCreate(&Uuid);
-	return Uuid;
-}
+	namespace uuid
+	{
+		UUID generate()
+		{
+			UUID Uuid;
+			UuidCreate(&Uuid);
+			return Uuid;
+		}
+	}
 
-string GuidToStr(const GUID& Guid)
-{
-	RPC_WSTR Str;
-	// declared as non-const in GCC headers :(
-	if (UuidToString(const_cast<GUID*>(&Guid), &Str) != RPC_S_OK)
-		throw std::bad_alloc{};
+	namespace debug
+	{
+		bool debugger_present()
+		{
+			return IsDebuggerPresent() != FALSE;
+		}
 
-	SCOPE_EXIT{ RpcStringFree(&Str); };
-	return upper(string_view{ reinterpret_cast<const wchar_t*>(Str) });
-}
+		void breakpoint(bool const Always)
+		{
+			if (Always || debugger_present())
+				DebugBreak();
+		}
 
-bool StrToGuid(string_view const Value, GUID& Guid)
-{
-	return UuidFromString(reinterpret_cast<RPC_WSTR>(const_cast<wchar_t*>(null_terminated(Value).c_str())), &Guid) == RPC_S_OK;
+		void print(const wchar_t* const Str)
+		{
+			OutputDebugString(Str);
+		}
+
+		void print(string const& Str)
+		{
+			print(Str.c_str());
+		}
+	}
 }
 
 #ifdef ENABLE_TESTS

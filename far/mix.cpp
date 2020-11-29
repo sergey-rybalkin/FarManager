@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "mix.hpp"
 
@@ -89,7 +92,7 @@ unsigned long long FromPercent(unsigned int const Percent, unsigned long long co
 
 string MakeTemp(string_view Prefix, bool const WithTempPath, string_view const UserTempPath)
 {
-	static UINT s_shift = 0;
+	static unsigned s_shift = 0;
 
 	Prefix = Prefix.empty()? L"FAR"sv : Prefix.substr(0, 3);
 
@@ -193,13 +196,16 @@ void FindDataExToPluginPanelItemHolder(const os::fs::find_data& Src, PluginPanel
 
 PluginPanelItemHolder::~PluginPanelItemHolder()
 {
-	FreePluginPanelItemNames(Item);
+	FreePluginPanelItemData(Item);
 }
 
-void FreePluginPanelItemNames(const PluginPanelItem& Data)
+void FreePluginPanelItemData(const PluginPanelItem& Data)
 {
 	delete[] Data.FileName;
 	delete[] Data.AlternateFileName;
+	delete[] Data.Description;
+	delete[] Data.Owner;
+	DeleteRawArray(span(Data.CustomColumnData, Data.CustomColumnNumber));
 }
 
 void FreePluginPanelItemUserData(HANDLE hPlugin, const UserDataItem& Data)
@@ -211,24 +217,17 @@ void FreePluginPanelItemUserData(HANDLE hPlugin, const UserDataItem& Data)
 	Data.FreeData(Data.Data, &info);
 }
 
-void FreePluginPanelItemDescriptionOwnerAndColumns(const PluginPanelItem & Data)
-{
-	delete[] Data.Description;
-	delete[] Data.Owner;
-	DeleteRawArray(span(Data.CustomColumnData, Data.CustomColumnNumber));
-}
-
-void FreePluginPanelItemsNames(const std::vector<PluginPanelItem>& Items)
+void FreePluginPanelItemsData(span<PluginPanelItem> const Items)
 {
 	for (const auto& i: Items)
 	{
-		FreePluginPanelItemNames(i);
+		FreePluginPanelItemData(i);
 	}
 }
 
 plugin_item_list::~plugin_item_list()
 {
-	FreePluginPanelItemsNames(m_Data);
+	FreePluginPanelItemsData(m_Data);
 }
 
 const PluginPanelItem* plugin_item_list::data() const

@@ -31,11 +31,14 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "macro.hpp"
 
 // Internal:
-#include "FarGuid.hpp"
+#include "uuids.far.hpp"
 #include "cmdline.hpp"
 #include "config.hpp"
 #include "ctrlobj.hpp"
@@ -52,12 +55,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "panelmix.hpp"
 #include "flink.hpp"
-#include "cddrv.hpp"
 #include "fileedit.hpp"
 #include "viewer.hpp"
 #include "datetime.hpp"
 #include "xlat.hpp"
-#include "imports.hpp"
 #include "plugapi.hpp"
 #include "dlgedit.hpp"
 #include "clipboard.hpp"
@@ -85,6 +86,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Common:
 #include "common/from_string.hpp"
+#include "common/uuid.hpp"
 
 // External:
 #include "format.hpp"
@@ -176,13 +178,13 @@ void print_opcodes()
 	fprintf(fp, "MCODE_F_KEYBAR_SHOW=0x%X // N=KeyBar.Show([N])\n", MCODE_F_KEYBAR_SHOW);
 	fprintf(fp, "MCODE_F_HISTORY_DISABLE=0x%X // N=History.Disable([State])\n", MCODE_F_HISTORY_DISABLE);
 	fprintf(fp, "MCODE_F_FMATCH=0x%X // N=FMatch(S,Mask)\n", MCODE_F_FMATCH);
-	fprintf(fp, "MCODE_F_PLUGIN_MENU=0x%X // N=Plugin.Menu(Guid[,MenuGuid])\n", MCODE_F_PLUGIN_MENU);
-	fprintf(fp, "MCODE_F_PLUGIN_CALL=0x%X // N=Plugin.Config(Guid[,MenuGuid])\n", MCODE_F_PLUGIN_CALL);
-	fprintf(fp, "MCODE_F_PLUGIN_SYNCCALL=0x%X // N=Plugin.Call(Guid[,Item])\n", MCODE_F_PLUGIN_SYNCCALL);
+	fprintf(fp, "MCODE_F_PLUGIN_MENU=0x%X // N=Plugin.Menu(Uuid[,MenuUuid])\n", MCODE_F_PLUGIN_MENU);
+	fprintf(fp, "MCODE_F_PLUGIN_CALL=0x%X // N=Plugin.Config(Uuid[,MenuUuid])\n", MCODE_F_PLUGIN_CALL);
+	fprintf(fp, "MCODE_F_PLUGIN_SYNCCALL=0x%X // N=Plugin.Call(Uuid[,Item])\n", MCODE_F_PLUGIN_SYNCCALL);
 	fprintf(fp, "MCODE_F_PLUGIN_LOAD=0x%X // N=Plugin.Load(DllPath[,ForceLoad])\n", MCODE_F_PLUGIN_LOAD);
-	fprintf(fp, "MCODE_F_PLUGIN_COMMAND=0x%X // N=Plugin.Command(Guid[,Command])\n", MCODE_F_PLUGIN_COMMAND);
+	fprintf(fp, "MCODE_F_PLUGIN_COMMAND=0x%X // N=Plugin.Command(Uuid[,Command])\n", MCODE_F_PLUGIN_COMMAND);
 	fprintf(fp, "MCODE_F_PLUGIN_UNLOAD=0x%X // N=Plugin.UnLoad(DllPath)\n", MCODE_F_PLUGIN_UNLOAD);
-	fprintf(fp, "MCODE_F_PLUGIN_EXIST=0x%X // N=Plugin.Exist(Guid)\n", MCODE_F_PLUGIN_EXIST);
+	fprintf(fp, "MCODE_F_PLUGIN_EXIST=0x%X // N=Plugin.Exist(Uuid)\n", MCODE_F_PLUGIN_EXIST);
 	fprintf(fp, "MCODE_F_MENU_FILTER=0x%X // N=Menu.Filter(Action[,Mode])\n", MCODE_F_MENU_FILTER);
 	fprintf(fp, "MCODE_F_MENU_FILTERSTR=0x%X // S=Menu.FilterStr([Action[,S]])\n", MCODE_F_MENU_FILTERSTR);
 	fprintf(fp, "MCODE_F_DLG_SETFOCUS=0x%X // N=Dlg->SetFocus([ID])\n", MCODE_F_DLG_SETFOCUS);
@@ -636,7 +638,7 @@ static void LM_ProcessRecordedMacro(FARMACROAREA Area, const string& TextKey, co
 
 bool KeyMacro::ProcessEvent(const FAR_INPUT_RECORD *Rec)
 {
-	if (m_InternalInput || Rec->IntKey==KEY_IDLE || Rec->IntKey==KEY_NONE || !Global->WindowManager->GetCurrentWindow()) //FIXME: избавиться от Rec->IntKey
+	if (m_InternalInput || any_of(Rec->IntKey, KEY_IDLE, KEY_NONE) || !Global->WindowManager->GetCurrentWindow()) //FIXME: избавиться от Rec->IntKey
 		return false;
 
 	const auto textKey = KeyToText(Rec->IntKey);
@@ -802,54 +804,59 @@ int KeyMacro::GetKey()
 				return KEY_OP_PLAINTEXT;
 			}
 
-			case MPRT_PLUGINMENU:   // N=Plugin.Menu(Guid[,MenuGuid])
-			case MPRT_PLUGINCONFIG: // N=Plugin.Config(Guid[,MenuGuid])
-			case MPRT_PLUGINCOMMAND: // N=Plugin.Command(Guid[,Command])
+			case MPRT_PLUGINMENU:   // N=Plugin.Menu(Uuid[,MenuUuid])
+			case MPRT_PLUGINCONFIG: // N=Plugin.Config(Uuid[,MenuUuid])
+			case MPRT_PLUGINCOMMAND: // N=Plugin.Command(Uuid[,Command])
 			{
-				const wchar_t *Arg = L"";
-				GUID guid, menuGuid;
-				PluginManager::CallPluginInfo cpInfo = { CPT_CHECKONLY };
 				SetMacroValue(false);
 
-				if (!(mpr.Count>0 && mpr.Values[0].Type==FMVT_STRING && StrToGuid(mpr.Values[0].String,guid)))
+				if (!mpr.Count || mpr.Values[0].Type != FMVT_STRING)
 					break;
 
-				if (mpr.Count>1 && mpr.Values[1].Type==FMVT_STRING)
+				const auto Uuid = uuid::try_parse(string_view(mpr.Values[0].String));
+				if (!Uuid)
+					break;
+
+				if (!Global->CtrlObject->Plugins->FindPlugin(*Uuid))
+					break;
+
+				PluginManager::CallPluginInfo cpInfo = { CPT_CHECKONLY };
+				const auto Arg = mpr.Count > 1 && mpr.Values[1].Type == FMVT_STRING? mpr.Values[1].String : L"";
+
+				UUID MenuUuid;
+				if (*Arg && (mpr.ReturnType==MPRT_PLUGINMENU || mpr.ReturnType==MPRT_PLUGINCONFIG))
 				{
-					Arg = mpr.Values[1].String;
-					if (mpr.ReturnType==MPRT_PLUGINMENU || mpr.ReturnType==MPRT_PLUGINCONFIG)
+					if (const auto MenuUuidOpt = uuid::try_parse(string_view(Arg)))
 					{
-						if (StrToGuid(Arg, menuGuid))
-							cpInfo.ItemGuid = &menuGuid;
-						else
-							break;
+						MenuUuid = *MenuUuidOpt;
+						cpInfo.ItemUuid = &MenuUuid;
 					}
+					else
+						break;
 				}
 
-				if (Global->CtrlObject->Plugins->FindPlugin(guid))
+				if (mpr.ReturnType == MPRT_PLUGINMENU)
+					cpInfo.CallFlags |= CPT_MENU;
+				else if (mpr.ReturnType == MPRT_PLUGINCONFIG)
+					cpInfo.CallFlags |= CPT_CONFIGURE;
+				else if (mpr.ReturnType == MPRT_PLUGINCOMMAND)
 				{
-					if (mpr.ReturnType == MPRT_PLUGINMENU)
-						cpInfo.CallFlags |= CPT_MENU;
-					else if (mpr.ReturnType == MPRT_PLUGINCONFIG)
-						cpInfo.CallFlags |= CPT_CONFIGURE;
-					else if (mpr.ReturnType == MPRT_PLUGINCOMMAND)
-					{
-						cpInfo.CallFlags |= CPT_CMDLINE;
-						cpInfo.Command = Arg;
-					}
-
-					// Чтобы вернуть результат "выполнения" нужно проверить наличие плагина/пункта
-					if (Global->CtrlObject->Plugins->CallPluginItem(guid,&cpInfo))
-					{
-						// Если нашли успешно - то теперь выполнение
-						SetMacroValue(true);
-						cpInfo.CallFlags&=~CPT_CHECKONLY;
-						Global->CtrlObject->Plugins->CallPluginItem(guid,&cpInfo);
-					}
-					Global->WindowManager->RefreshWindow();
-					//с текущим переключением окон могут быть проблемы с заголовком консоли.
-					Global->WindowManager->PluginCommit();
+					cpInfo.CallFlags |= CPT_CMDLINE;
+					cpInfo.Command = Arg;
 				}
+
+				// Чтобы вернуть результат "выполнения" нужно проверить наличие плагина/пункта
+				if (Global->CtrlObject->Plugins->CallPluginItem(*Uuid, &cpInfo))
+				{
+					// Если нашли успешно - то теперь выполнение
+					SetMacroValue(true);
+					cpInfo.CallFlags&=~CPT_CHECKONLY;
+					Global->CtrlObject->Plugins->CallPluginItem(*Uuid, &cpInfo);
+				}
+				Global->WindowManager->RefreshWindow();
+				//с текущим переключением окон могут быть проблемы с заголовком консоли.
+				Global->WindowManager->PluginCommit();
+
 				break;
 			}
 
@@ -907,7 +914,7 @@ void KeyMacro::RunStartMacro()
 	}
 }
 
-bool KeyMacro::AddMacro(const GUID& PluginId, const MacroAddMacroV1* Data)
+bool KeyMacro::AddMacro(const UUID& PluginId, const MacroAddMacroV1* Data)
 {
 	if (!(Data->Area >= 0 && (Data->Area < MACROAREA_LAST || Data->Area == MACROAREA_COMMON)))
 		return false;
@@ -939,7 +946,7 @@ bool KeyMacro::AddMacro(const GUID& PluginId, const MacroAddMacroV1* Data)
 	return CallMacroPlugin(&info);
 }
 
-bool KeyMacro::DelMacro(const GUID& PluginId,void* Id)
+bool KeyMacro::DelMacro(const UUID& PluginId, void* Id)
 {
 	FarMacroValue values[]={PluginId,Id};
 	FarMacroCall fmc={sizeof(FarMacroCall),std::size(values),values,nullptr,nullptr};
@@ -1006,7 +1013,7 @@ static bool CheckPanel(panel_mode PanelMode, MACROFLAGS_MFLAGS CurFlags, bool Is
 static bool CheckFileFolder(panel_ptr CheckPanel, MACROFLAGS_MFLAGS CurFlags, bool IsPassivePanel)
 {
 	string strFileName;
-	DWORD FileAttr;
+	os::fs::attributes FileAttr;
 	if (!CheckPanel->GetFileName(strFileName, CheckPanel->GetCurrentPos(), FileAttr))
 		return true;
 
@@ -1345,20 +1352,20 @@ bool KeyMacro::ExecuteString(MacroExecuteString *Data)
 	return false;
 }
 
-DWORD KeyMacro::GetMacroParseError(COORD* ErrPos, string& ErrSrc)
+DWORD KeyMacro::GetMacroParseError(point& ErrPos, string& ErrSrc)
 {
 	MacroPluginReturn Ret;
 	if (MacroPluginOp(OP_GETLASTERROR, false, &Ret))
 	{
 		ErrSrc = Ret.Values[0].String;
-		ErrPos->Y = static_cast<SHORT>(Ret.Values[1].Double);
-		ErrPos->X = static_cast<SHORT>(Ret.Values[2].Double);
+		ErrPos.y = static_cast<int>(Ret.Values[1].Double);
+		ErrPos.x = static_cast<int>(Ret.Values[2].Double);
 		return ErrSrc.empty() ? MPEC_SUCCESS : MPEC_ERROR;
 	}
 	else
 	{
 		ErrSrc = L"No response from macro plugin"sv;
-		ErrPos->Y = ErrPos->X = 0;
+		ErrPos = {};
 		return MPEC_ERROR;
 	}
 }
@@ -1538,7 +1545,7 @@ private:
 intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 {
 	intptr_t ret=0;
-	DWORD FileAttr=INVALID_FILE_ATTRIBUTES;
+	os::fs::attributes FileAttr = INVALID_FILE_ATTRIBUTES;
 	FarMacroApi api(Data);
 
 	// проверка на область
@@ -1938,7 +1945,7 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 
 			if (SelPanel  && SelPanel->GetMode() != panel_mode::PLUGIN_PANEL)
 			{
-				return FAR_GetDriveType(GetPathRoot(SelPanel->GetCurDir()));
+				return os::fs::drive::get_type(GetPathRoot(SelPanel->GetCurDir()));
 			}
 
 			return -1;
@@ -2183,9 +2190,8 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 			{
 				bool SyncCall = (Data->Values[0].Boolean == 0);
 				const wchar_t* SysID = Data->Values[1].String;
-				GUID guid;
-
-				if (StrToGuid(SysID,guid) && Global->CtrlObject->Plugins->FindPlugin(guid))
+				const auto Uuid = uuid::try_parse(string_view(SysID));
+				if (Uuid && Global->CtrlObject->Plugins->FindPlugin(*Uuid))
 				{
 					FarMacroValue *Values = Data->Count>2 ? Data->Values+2:nullptr;
 					OpenMacroInfo info={sizeof(OpenMacroInfo),Data->Count-2,Values};
@@ -2193,7 +2199,7 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 
 					if (SyncCall) m_InternalInput++;
 
-					if (!Global->CtrlObject->Plugins->CallPlugin(guid,OPEN_FROMMACRO,&info,&ResultCallPlugin))
+					if (!Global->CtrlObject->Plugins->CallPlugin(*Uuid, OPEN_FROMMACRO, &info, &ResultCallPlugin))
 						ResultCallPlugin = nullptr;
 
 					if (SyncCall) m_InternalInput--;
@@ -2258,7 +2264,7 @@ intptr_t KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 				{
 					const auto SortMode = panel_sort{ static_cast<int>(Data->Values[1].Double) };
 					const auto InvertByDefault = Data->Values[2].Boolean != 0;
-					const auto Order = Data->Count < 4 || Data->Values[3].Type != FMVT_DOUBLE || !in_range(static_cast<int>(sort_order::first), static_cast<int>(Data->Values[3].Double), static_cast<int>(sort_order::last))?
+					const auto Order = Data->Count < 4 || Data->Values[3].Type != FMVT_DOUBLE || !in_closed_range(static_cast<int>(sort_order::first), static_cast<int>(Data->Values[3].Double), static_cast<int>(sort_order::last))?
 						sort_order::flip_or_default :
 						sort_order{ static_cast<int>(Data->Values[3].Double) };
 
@@ -2901,36 +2907,7 @@ int FarMacroApi::xlatFunc()
 int FarMacroApi::beepFunc()
 {
 	auto Params = parseParams(1, mData);
-	/*
-		MB_ICONASTERISK = 0x00000040
-			Звук Звездочка
-		MB_ICONEXCLAMATION = 0x00000030
-		    Звук Восклицание
-		MB_ICONHAND = 0x00000010
-		    Звук Критическая ошибка
-		MB_ICONQUESTION = 0x00000020
-		    Звук Вопрос
-		MB_OK = 0x0
-		    Стандартный звук
-		SIMPLE_BEEP = 0xffffffff
-		    Встроенный динамик
-	*/
-	const auto Ret = MessageBeep(static_cast<UINT>(Params[0].asInteger())) != FALSE;
-
-	/*
-		http://msdn.microsoft.com/en-us/library/dd743680%28VS.85%29.aspx
-		BOOL PlaySound(
-	    	LPCTSTR pszSound,
-	    	HMODULE hmod,
-	    	DWORD fdwSound
-		);
-
-		http://msdn.microsoft.com/en-us/library/dd798676%28VS.85%29.aspx
-		BOOL sndPlaySound(
-	    	LPCTSTR lpszSound,
-	    	UINT fuSound
-		);
-	*/
+	const auto Ret = MessageBeep(static_cast<unsigned>(Params[0].asInteger())) != FALSE;
 
 	PassBoolean(Ret);
 	return Ret;
@@ -3069,7 +3046,7 @@ int FarMacroApi::msgBoxFunc()
 	//_KEYMACRO(SysLog(L"title='%s'",title));
 	//_KEYMACRO(SysLog(L"text='%s'",text));
 	const auto TempBuf = concat(title, L'\n', text);
-	const auto Result = pluginapi::apiMessageFn(&FarGuid, &FarGuid, Flags, nullptr, reinterpret_cast<const wchar_t* const*>(TempBuf.c_str()), 0, 0) + 1;
+	const auto Result = pluginapi::apiMessageFn(&FarUuid, &FarUuid, Flags, nullptr, reinterpret_cast<const wchar_t* const*>(TempBuf.c_str()), 0, 0) + 1;
 	PassNumber(Result);
 	return 1;
 }
@@ -3296,13 +3273,10 @@ int FarMacroApi::menushowFunc()
 						if (Menu->at(i).Flags & MIF_HIDDEN)
 							continue;
 
-						const auto Check = (Key == KEY_CTRLADD || Key == KEY_RCTRLADD)?
-							true :
-							(Key==KEY_CTRLMULTIPLY || Key==KEY_RCTRLMULTIPLY)?
-								!Menu->GetCheck(static_cast<int>(i)) :
-								false;
-
-						Check? Menu->SetCheck(static_cast<int>(i)) : Menu->ClearCheck(static_cast<int>(i));
+						if (any_of(Key, KEY_CTRLADD, KEY_RCTRLADD) || (any_of(Key, KEY_CTRLMULTIPLY, KEY_RCTRLMULTIPLY) && !Menu->GetCheck(static_cast<int>(i))))
+							Menu->SetCheck(static_cast<int>(i));
+						else
+							Menu->ClearCheck(static_cast<int>(i));
 					}
 				}
 				break;
@@ -3387,7 +3361,7 @@ int FarMacroApi::menushowFunc()
 	{
 		if (bExitAfterNavigate)
 		{
-			if ((LastKey == KEY_ESC) || (LastKey == KEY_F10) || (LastKey == KEY_BREAK))
+			if (any_of(LastKey, KEY_ESC, KEY_F10, KEY_BREAK))
 				Result = -(SelectedPos + 1);
 			else
 				Result = SelectedPos + 1;
@@ -3464,8 +3438,7 @@ int FarMacroApi::panelselectFunc()
 
 		MacroPanelSelect mps;
 		mps.Item = ValItems.asString();
-		mps.Action      = Action & 0xF;
-		mps.ActionFlags = (Action & (~0xF)) >> 4;
+		mps.Action      = Action;
 		mps.Mode        = Mode;
 		mps.Index       = Index;
 		Result=SelPanel->VMProcess(MCODE_F_PANEL_SELECT,&mps,0);
@@ -3478,7 +3451,7 @@ int FarMacroApi::panelselectFunc()
 int FarMacroApi::fattrFuncImpl(int Type)
 {
 	int Ret=0;
-	DWORD FileAttr=INVALID_FILE_ATTRIBUTES;
+	os::fs::attributes FileAttr = INVALID_FILE_ATTRIBUTES;
 	long Pos=-1;
 
 	if (!Type || Type == 2) // не панели: fattr(0) & fexist(2)
@@ -3568,7 +3541,7 @@ int FarMacroApi::flockFunc()
 	auto Params = parseParams(2, mData);
 	int Ret = -1;
 	const auto stateFLock = static_cast<int>(Params[1].asInteger());
-	auto vkKey = static_cast<UINT>(Params[0].asInteger());
+	auto vkKey = static_cast<unsigned>(Params[0].asInteger());
 
 	switch (vkKey)
 	{
@@ -4691,8 +4664,8 @@ int FarMacroApi::fmatchFunc()
 	auto& S(Params[0]);
 	filemasks FileMask;
 
-	if (FileMask.Set(Mask.toString(), FMF_SILENT))
-		PassNumber(FileMask.Compare(S.toString()));
+	if (FileMask.assign(Mask.toString(), FMF_SILENT))
+		PassNumber(FileMask.check(S.toString()));
 	else
 		PassNumber(-1);
 	return 1;
@@ -4860,14 +4833,14 @@ int FarMacroApi::editorsetstrFunc()
 	return Ret.asInteger()!=0;
 }
 
-// N=Plugin.Exist(Guid)
+// N=Plugin.Exist(Uuid)
 int FarMacroApi::pluginexistFunc()
 {
-	int Ret = 0;
+	bool Ret = false;
 	if (mData->Count>0 && mData->Values[0].Type==FMVT_STRING)
 	{
-		GUID guid;
-		Ret = StrToGuid(mData->Values[0].String,guid) && Global->CtrlObject->Plugins->FindPlugin(guid);
+		if (const auto Uuid = uuid::try_parse(string_view(mData->Values[0].String)); Global->CtrlObject->Plugins->FindPlugin(*Uuid))
+			Ret = true;
 	}
 	PassBoolean(Ret);
 	return Ret;
@@ -4928,10 +4901,10 @@ int FarMacroApi::testfolderFunc()
 // обработчик диалогового окна назначения клавиши
 intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* Param2)
 {
-	static int LastKey=0;
+	static unsigned LastKey = 0;
 	static DlgParam *KMParam=nullptr;
 	const INPUT_RECORD* record=nullptr;
-	int key=0;
+	unsigned key = 0;
 
 	if (Msg == DN_CONTROLINPUT)
 	{
@@ -5006,10 +4979,11 @@ intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 		//_SVS(SysLog(L"Macro: Key=%s",_FARKEY_ToName(key)));
 		// <Обработка особых клавиш: F1 & Enter>
 		// Esc & (Enter и предыдущий Enter) - не обрабатываем
-		if (key == KEY_ESC ||
-		        ((key == KEY_ENTER||key == KEY_NUMENTER) && (LastKey == KEY_ENTER||LastKey == KEY_NUMENTER)) ||
-		        key == KEY_CTRLDOWN || key == KEY_RCTRLDOWN ||
-		        key == KEY_F1)
+		if (
+			key == KEY_ESC ||
+			(any_of(key, KEY_ENTER, KEY_NUMENTER) && any_of(LastKey, KEY_ENTER, KEY_NUMENTER)) ||
+			any_of(key, KEY_CTRLDOWN, KEY_RCTRLDOWN, KEY_F1)
+		)
 		{
 			return FALSE;
 		}
@@ -5027,7 +5001,7 @@ intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 		// Было что-то уже нажато и Enter`ом подтверждаем
 		_SVS(SysLog(L"[%d] Assign ==> Param2='%s',LastKey='%s'",__LINE__,_FARKEY_ToName((DWORD)key),(LastKey?_FARKEY_ToName(LastKey):L"")));
 
-		if ((key == KEY_ENTER||key == KEY_NUMENTER) && LastKey && !(LastKey == KEY_ENTER||LastKey == KEY_NUMENTER))
+		if (any_of(key, KEY_ENTER, KEY_NUMENTER) && LastKey && none_of(LastKey, KEY_ENTER, KEY_NUMENTER))
 			return FALSE;
 
 		// </Обработка особых клавиш: F1 & Enter>

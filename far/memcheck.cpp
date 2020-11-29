@@ -30,6 +30,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "memcheck.hpp"
 
@@ -70,7 +73,7 @@ struct MEMINFO
 
 	size_t Size;
 
-	void* Stack[4];
+	void* Stack[10];
 
 	MEMINFO* prev;
 	MEMINFO* next;
@@ -190,6 +193,7 @@ public:
 		++m_AllocatedMemoryBlocks;
 		++m_TotalAllocationCalls;
 		m_AllocatedMemorySize += block->Size;
+		m_AllocatedPayloadSize += block->Size - block->HeaderSize - sizeof(EndMarker);
 	}
 
 	void unregister_block(MEMINFO *block)
@@ -212,6 +216,7 @@ public:
 		++m_TotalDeallocationCalls;
 		--m_AllocatedMemoryBlocks;
 		m_AllocatedMemorySize -= block->Size;
+		m_AllocatedPayloadSize -= block->Size - block->HeaderSize - sizeof(EndMarker);
 	}
 
 private:
@@ -228,11 +233,13 @@ private:
 
 	void print_summary() const
 	{
-		if (!m_CallNewDeleteVector && !m_CallNewDeleteScalar && !m_AllocatedMemoryBlocks && !m_AllocatedMemorySize)
+		if (!m_AllocatedMemorySize)
 			return;
 
+		os::debug::breakpoint(false);
+
 		// Q: Why?
-		// A: The same reason we owerride stream buffers everywhere else: the default one is shite - it goes through FILE* and breaks wide characters.
+		// A: The same reason we override stream buffers everywhere else: the default one is shite - it goes through FILE* and breaks wide characters.
 		//    At this point the regular overrider is already dead so we need to revive it once more:
 		SCOPED_ACTION(auto)(console_detail::console::create_temporary_stream_buffers_overrider());
 
@@ -242,19 +249,21 @@ private:
 		const auto Print = [](const string& Str)
 		{
 			std::wcerr << Str;
-			OutputDebugString(Str.c_str());
+			os::debug::print(Str);
 		};
 
 		auto Message = L"Memory leaks detected:\n"s;
 
 		if (m_CallNewDeleteVector)
-			Message += format(FSTR(L"  delete[]:   {0}\n"), m_CallNewDeleteVector);
+			format_to(Message, FSTR(L" new[]:   {0}\n"), m_CallNewDeleteVector);
 		if (m_CallNewDeleteScalar)
-			Message += format(FSTR(L"  delete:     {0}\n"), m_CallNewDeleteScalar);
-		if (m_AllocatedMemoryBlocks)
-			Message += format(FSTR(L"Total blocks: {0}\n"), m_AllocatedMemoryBlocks);
-		if (m_AllocatedMemorySize)
-			Message += format(FSTR(L"Total bytes:  {0} payload, {1} overhead\n"), m_AllocatedMemorySize - m_AllocatedMemoryBlocks * (sizeof(MEMINFO) + sizeof(EndMarker)), m_AllocatedMemoryBlocks * sizeof(MEMINFO));
+			format_to(Message, FSTR(L" new:     {0}\n"), m_CallNewDeleteScalar);
+
+		Message += L'\n';
+
+		format_to(Message, FSTR(L" Blocks:  {0}\n"), m_AllocatedMemoryBlocks);
+		format_to(Message, FSTR(L" Payload: {0}\n"), m_AllocatedPayloadSize);
+		format_to(Message, FSTR(L" Bytes:   {0}\n"), m_AllocatedMemorySize);
 
 		append(Message, L"\nNot freed blocks:\n"sv);
 
@@ -263,7 +272,7 @@ private:
 
 		for (auto i = FirstMemBlock.next; i; i = i->next)
 		{
-			const auto BlockSize = i->Size - sizeof(MEMINFO) - sizeof(EndMarker);
+			const auto BlockSize = i->Size - i->HeaderSize - sizeof(EndMarker);
 			const auto UserAddress = to_user(i);
 			const size_t Width = 80 - 7 - 1;
 
@@ -283,17 +292,9 @@ private:
 				Stack[StackSize] = reinterpret_cast<uintptr_t>(i->Stack[StackSize]);
 			}
 
-			tracer::get_symbols({}, span(Stack, StackSize), [&](string&& Address, string&& Name, string&& Source)
+			tracer::get_symbols({}, span(Stack, StackSize), [&](string_view const Line)
 			{
-				Message += Address;
-
-				if (!Name.empty())
-					append(Message, L' ', Name);
-
-				if (!Source.empty())
-					append(Message, L" ("sv, Source, L')');
-
-				Message += L'\n';
+				append(Message, Line, L'\n');
 			});
 
 			Print(Message);
@@ -306,6 +307,7 @@ private:
 	intptr_t m_CallNewDeleteScalar{};
 	size_t m_AllocatedMemoryBlocks{};
 	size_t m_AllocatedMemorySize{};
+	size_t m_AllocatedPayloadSize{};
 	size_t m_TotalAllocationCalls{};
 	size_t m_TotalDeallocationCalls{};
 
@@ -327,6 +329,7 @@ static void* debug_allocator(size_t const size, std::align_val_t Alignment, allo
 			placement::construct(*Info, type, HeaderSize, realSize);
 
 			const auto FramesToSkip = 2; // This function and the operator
+			// RtlCaptureStackBackTrace is invoked directly since we don't need to make debug builds Win2k compatible
 			Info->Stack[RtlCaptureStackBackTrace(FramesToSkip, static_cast<DWORD>(std::size(Info->Stack)), Info->Stack, {})] = {};
 
 			Info->end_marker() = EndMarker;
@@ -360,14 +363,16 @@ static void debug_deallocator(void* const Block, std::align_val_t Alignment, all
 	_aligned_free(Info);
 }
 
-static auto default_alignment()
+static constexpr auto default_alignment()
 {
-	return std::align_val_t{ MEMORY_ALLOCATION_ALIGNMENT };
+	return std::align_val_t{ __STDCPP_DEFAULT_NEW_ALIGNMENT__ };
 }
 
 }
 
 // ReSharper disable CppParameterNamesMismatch
+WARNING_PUSH()
+WARNING_DISABLE_CLANG("-Wmissing-prototypes")
 
 void* operator new(size_t const Size)
 {
@@ -491,6 +496,7 @@ void operator delete[](void* const Block, std::align_val_t const Alignment, std:
 }
 
 // ReSharper restore CppParameterNamesMismatch
+WARNING_POP()
 
 NIFTY_DEFINE(memcheck::checker, Checker);
 

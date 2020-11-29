@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "filefilter.hpp"
 
@@ -51,7 +54,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mix.hpp"
 #include "configdb.hpp"
 #include "keyboard.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "lang.hpp"
 #include "string_sort.hpp"
 #include "global.hpp"
@@ -150,7 +153,7 @@ FileFilter::FileFilter(Panel *HostPanel, FAR_FILE_FILTER_TYPE FilterType):
 	UpdateCurrentTime();
 }
 
-static void ParseAndAddMasks(std::map<string, int, string_sort::less_t>& Extensions, string_view const FileName, DWORD const FileAttr, int const Check)
+static void ParseAndAddMasks(std::map<string, int, string_sort::less_t>& Extensions, string_view const FileName, os::fs::attributes const FileAttr, int const Check)
 {
 	if ((FileAttr & FILE_ATTRIBUTE_DIRECTORY) || IsParentDirectory(FileName))
 		return;
@@ -221,7 +224,7 @@ void FileFilter::FilterEdit()
 
 		{
 			string strFileName;
-			DWORD FileAttr;
+			os::fs::attributes FileAttr;
 
 			for (int i = 0; m_HostPanel->GetFileName(strFileName, i, FileAttr); i++)
 				ParseAndAddMasks(Extensions, strFileName, FileAttr, 0);
@@ -254,7 +257,7 @@ void FileFilter::FilterEdit()
 		if (Msg!=DN_INPUT)
 			return 0;
 
-		int Key=InputRecordToKey(static_cast<INPUT_RECORD*>(param));
+		auto Key = InputRecordToKey(static_cast<INPUT_RECORD*>(param));
 
 		if (Key==KEY_ADD)
 			Key=L'+';
@@ -439,10 +442,10 @@ void FileFilter::FilterEdit()
 				if (SelPos<0)
 					break;
 
-				if (static_cast<size_t>(SelPos) < FilterData().size() && !((Key == KEY_CTRLUP || Key == KEY_RCTRLUP) && !SelPos) &&
-					!((Key == KEY_CTRLDOWN || Key == KEY_RCTRLDOWN) && static_cast<size_t>(SelPos) == FilterData().size() - 1))
+				if (static_cast<size_t>(SelPos) < FilterData().size() && !(any_of(Key, KEY_CTRLUP, KEY_RCTRLUP) && !SelPos) &&
+					!(any_of(Key, KEY_CTRLDOWN, KEY_RCTRLDOWN) && static_cast<size_t>(SelPos) == FilterData().size() - 1))
 				{
-					const auto NewPos = SelPos + ((Key == KEY_CTRLDOWN || Key == KEY_RCTRLDOWN) ? 1 : -1);
+					const auto NewPos = SelPos + (any_of(Key, KEY_CTRLDOWN, KEY_RCTRLDOWN)? 1 : -1);
 					using std::swap;
 					swap(FilterList->at(SelPos), FilterList->at(NewPos));
 					swap(FilterData()[NewPos], FilterData()[SelPos]);
@@ -612,7 +615,7 @@ bool FileFilter::FileInFilter(const os::fs::find_data& fde, filter_status* const
 			{
 				IsAnyIncludeFound = true;
 
-				DWORD AttrClear;
+				os::fs::attributes AttrClear;
 				if (CurFilterData.GetAttr(nullptr, &AttrClear))
 					IsAnyFolderIncludeFound = IsAnyFolderIncludeFound || !(AttrClear & FILE_ATTRIBUTE_DIRECTORY);
 			}
@@ -848,7 +851,7 @@ FileFilterParams FileFilter::LoadFilter(/*const*/ HierarchicalConfig& cfg, unsig
 		}
 	}
 
-	Item.SetAttr(UseAttr != 0, static_cast<DWORD>(AttrSet), static_cast<DWORD>(AttrClear));
+	Item.SetAttr(UseAttr != 0, static_cast<os::fs::attributes>(AttrSet), static_cast<os::fs::attributes>(AttrClear));
 
 	return Item;
 }
@@ -1017,7 +1020,7 @@ void FileFilter::SaveFilter(HierarchicalConfig& cfg, unsigned long long KeyId, c
 	cfg.SetValue(Key, names::HardLinksAbove, HardLinksAbove);
 	cfg.SetValue(Key, names::HardLinksBelow, HardLinksBelow);
 
-	DWORD AttrSet, AttrClear;
+	os::fs::attributes AttrSet, AttrClear;
 	cfg.SetValue(Key, names::UseAttr, Item.GetAttr(&AttrSet, &AttrClear));
 	cfg.SetValue(Key, names::AttrSet, AttrSet);
 	cfg.SetValue(Key, names::AttrClear, AttrClear);

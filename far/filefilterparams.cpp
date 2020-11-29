@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "filefilterparams.hpp"
 
@@ -49,7 +52,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "locale.hpp"
 #include "fileattr.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "FarDlgBuilder.hpp"
 
 // Platform:
@@ -125,7 +128,7 @@ void FileFilterParams::SetMask(bool const Used, string_view const Mask)
 	FMask.strMask = Mask;
 	if (Used)
 	{
-		FMask.FilterMask.Set(FMask.strMask, FMF_SILENT);
+		FMask.FilterMask.assign(FMask.strMask, FMF_SILENT);
 	}
 }
 
@@ -152,7 +155,7 @@ void FileFilterParams::SetHardLinks(bool const Used, DWORD const HardLinksAbove,
 	FHardLinks.CountBelow=HardLinksBelow;
 }
 
-void FileFilterParams::SetAttr(bool const Used, DWORD const AttrSet, DWORD const AttrClear)
+void FileFilterParams::SetAttr(bool const Used, os::fs::attributes const AttrSet, os::fs::attributes const AttrClear)
 {
 	FAttr.Used=Used;
 	FAttr.AttrSet=AttrSet;
@@ -190,7 +193,7 @@ bool FileFilterParams::GetHardLinks(DWORD *HardLinksAbove, DWORD *HardLinksBelow
 }
 
 
-bool FileFilterParams::GetAttr(DWORD *AttrSet, DWORD *AttrClear) const
+bool FileFilterParams::GetAttr(os::fs::attributes* AttrSet, os::fs::attributes* AttrClear) const
 {
 	if (AttrSet)
 		*AttrSet=FAttr.AttrSet;
@@ -219,7 +222,7 @@ struct filter_file_object
 	os::chrono::time_point ModificationTime;
 	os::chrono::time_point AccessTime;
 	os::chrono::time_point ChangeTime;
-	DWORD Attributes;
+	os::fs::attributes Attributes;
 	int NumberOfLinks;
 };
 
@@ -272,7 +275,7 @@ bool FileFilterParams::FileInFilter(const PluginPanelItem& Object, os::chrono::t
 		os::chrono::nt_clock::from_filetime(Object.LastWriteTime),
 		os::chrono::nt_clock::from_filetime(Object.LastAccessTime),
 		os::chrono::nt_clock::from_filetime(Object.ChangeTime),
-		static_cast<DWORD>(Object.FileAttributes),
+		static_cast<os::fs::attributes>(Object.FileAttributes),
 		static_cast<int>(Object.NumberOfLinks),
 	};
 
@@ -296,67 +299,44 @@ bool FileFilterParams::FileInFilter(const filter_file_object& Object, os::chrono
 	// Режим проверки размера файла включен?
 	if (FSize.Used)
 	{
-		if (!FSize.Above.Size.empty())
-		{
-			if (Object.Size < FSize.Above.SizeReal) // Размер файла меньше минимального разрешённого по фильтру?
-				return false;                          // Не пропускаем этот файл
-		}
+		// Размер файла меньше минимального разрешённого по фильтру?
+		if (!FSize.Above.Size.empty() && Object.Size < FSize.Above.SizeReal)
+			return false;
 
-		if (!FSize.Below.Size.empty())
-		{
-			if (Object.Size > FSize.Below.SizeReal) // Размер файла больше максимального разрешённого по фильтру?
-				return false;                          // Не пропускаем этот файл
-		}
+		// Размер файла больше максимального разрешённого по фильтру?
+		if (!FSize.Below.Size.empty() && Object.Size > FSize.Below.SizeReal)
+			return false;
 	}
 
 	// Режим проверки времени файла включен?
-	if (FDate.Used)
+	// Есть введённая пользователем начальная / конечная дата?
+	if (FDate.Used && FDate.Dates)
 	{
-		// Есть введённая пользователем начальная / конечная дата?
-		if (FDate.Dates)
+		const auto& ft = [&]() -> const auto&
 		{
-			const os::chrono::time_point* ft{};
-
 			switch (FDate.DateType)
 			{
-			case FDATE_CREATED:
-				ft = &Object.CreationTime;
-				break;
-
-			case FDATE_OPENED:
-				ft = &Object.AccessTime;
-				break;
-
-			case FDATE_CHANGED:
-				ft = &Object.ChangeTime;
-				break;
-
-			case FDATE_MODIFIED:
-				ft = &Object.ModificationTime;
-				break;
-
-			default:
-				// Validated in SetDate()
-				UNREACHABLE;
+			case FDATE_CREATED:  return Object.CreationTime;
+			case FDATE_OPENED:   return Object.AccessTime;
+			case FDATE_CHANGED:  return Object.ChangeTime;
+			case FDATE_MODIFIED: return Object.ModificationTime;
+			default: UNREACHABLE; // Validated in SetDate()
 			}
+		}();
 
-			// Дата файла меньше начальной / больше конечной даты по фильтру?
-			if (FDate.Dates.visit(overload
+		// Дата файла меньше начальной / больше конечной даты по фильтру?
+		if (FDate.Dates.visit(overload
+		{
+			[&](os::chrono::duration After, os::chrono::duration Before)
 			{
-				[&](os::chrono::duration After, os::chrono::duration Before)
-				{
-					return (After != 0s && *ft < CurrentTime - After) || (Before != 0s && *ft > CurrentTime - Before);
-				},
-				[&](os::chrono::time_point After, os::chrono::time_point Before)
-				{
-					return (After != os::chrono::time_point{} && *ft < After) || (Before != os::chrono::time_point{} && *ft > Before);
-				}
-			}))
+				return (After != 0s && ft < CurrentTime - After) || (Before != 0s && ft > CurrentTime - Before);
+			},
+			[&](os::chrono::time_point After, os::chrono::time_point Before)
 			{
-				// Не пропускаем этот файл
-				return false;
+				return (After != os::chrono::time_point{} && ft < After) || (Before != os::chrono::time_point{} && ft > Before);
 			}
-		}
+		}))
+			return false;
 	}
 
 	// Режим проверки маски файла включен?
@@ -366,7 +346,7 @@ bool FileFilterParams::FileInFilter(const filter_file_object& Object, os::chrono
 		// при считывании директории
 
 		// Файл не попадает под маску введённую в фильтре?
-		if (!FMask.FilterMask.Compare(Object.Name))
+		if (!FMask.FilterMask.check(Object.Name))
 		// Не пропускаем этот файл
 			return false;
 	}
@@ -376,16 +356,10 @@ bool FileFilterParams::FileInFilter(const filter_file_object& Object, os::chrono
 	if (FHardLinks.Used)
 	{
 		if (Object.Attributes & FILE_ATTRIBUTE_DIRECTORY)
-		{
 			return false;
-		}
 
-		const auto NumberOfLinks = HardlinkGetter? HardlinkGetter() : Object.NumberOfLinks;
-
-		if (NumberOfLinks < 2)
-		{
+		if (const auto NumberOfLinks = HardlinkGetter? HardlinkGetter() : Object.NumberOfLinks; NumberOfLinks < 2)
 			return false;
-		}
 	}
 
 	// Да! Файл выдержал все испытания и будет допущен к использованию
@@ -397,7 +371,7 @@ static string AttributesString(DWORD Include, DWORD Exclude)
 {
 	string IncludeStr, ExcludeStr;
 
-	enum_attributes([&](DWORD Attribute, wchar_t Character)
+	enum_attributes([&](os::fs::attributes const Attribute, wchar_t const Character)
 	{
 		if (Include & Attribute)
 		{
@@ -440,7 +414,7 @@ string MenuString(const FileFilterParams* const FF, bool const bHighlightType, w
 	string_view Name;
 	auto Mask = L""sv;
 	auto MarkChar = L"' '"s;
-	DWORD IncludeAttr, ExcludeAttr;
+	os::fs::attributes IncludeAttr, ExcludeAttr;
 	bool UseSize, UseHardLinks, UseDate, RelativeDate;
 
 	if (bPanelType)
@@ -609,7 +583,7 @@ enum enumFileFilterConfig
 
 struct attribute_map
 {
-	DWORD Attribute;
+	os::fs::attributes Attribute;
 	lng Name;
 	int State;
 };
@@ -1126,7 +1100,7 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 		{ FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL,          lng::MFileFilterAttrStrictlySequential, },
 	};
 
-	DWORD AttrSet, AttrClear;
+	os::fs::attributes AttrSet, AttrClear;
 	FilterDlg[ID_FF_CHECKBOX_ATTRIBUTES].Selected = FF->GetAttr(&AttrSet,&AttrClear)? BSTATE_CHECKED : BSTATE_UNCHECKED;
 
 	for (auto& i: AttributeMapping)
@@ -1174,7 +1148,7 @@ bool FileFilterConfig(FileFilterParams *FF, bool ColorConfig)
 		if (ExitCode==ID_FF_OK) // Ok
 		{
 			// Если введённая пользователем маска не корректна, тогда вернёмся в диалог
-			if (FilterDlg[ID_FF_MATCHMASK].Selected && !FileMask.Set(FilterDlg[ID_FF_MASKEDIT].strData,0))
+			if (FilterDlg[ID_FF_MATCHMASK].Selected && !FileMask.assign(FilterDlg[ID_FF_MASKEDIT].strData, 0))
 				continue;
 
 			Colors.Mark.Transparent = FilterDlg[ID_HER_MARKTRANSPARENT].Selected == BSTATE_CHECKED;

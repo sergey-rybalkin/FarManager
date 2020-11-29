@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "findfile.hpp"
 
@@ -52,7 +55,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filefilter.hpp"
 #include "syslog.hpp"
 #include "encoding.hpp"
-#include "cddrv.hpp"
 #include "taskbar.hpp"
 #include "interf.hpp"
 #include "message.hpp"
@@ -62,7 +64,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "mix.hpp"
 #include "constitle.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "console.hpp"
 #include "wakeful.hpp"
 #include "panelmix.hpp"
@@ -78,6 +80,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "exception_handler.hpp"
 #include "drivemix.hpp"
 #include "global.hpp"
+#include "cvtname.hpp"
 
 // Platform:
 #include "platform.concurrency.hpp"
@@ -340,7 +343,7 @@ private:
 	void ReleaseInFileSearch();
 
 	bool LookForString(string_view FileName);
-	bool IsFileIncluded(PluginPanelItem* FileItem, string_view FullName, DWORD FileAttr, string_view DisplayName);
+	bool IsFileIncluded(PluginPanelItem* FileItem, string_view FullName, os::fs::attributes FileAttr, string_view DisplayName);
 	void DoPrepareFileList();
 	void DoPreparePluginListImpl();
 	void DoPreparePluginList();
@@ -402,17 +405,14 @@ private:
 struct background_searcher::CodePageInfo
 {
 	explicit CodePageInfo(uintptr_t CodePage):
-		CodePage(CodePage),
-		MaxCharSize(0),
-		LastSymbol(0),
-		WordFound(false)
+		CodePage(CodePage)
 	{
 	}
 
 	uintptr_t CodePage;
-	UINT MaxCharSize;
-	wchar_t LastSymbol;
-	bool WordFound;
+	size_t MaxCharSize{};
+	wchar_t LastSymbol{};
+	bool WordFound{};
 
 	void initialize()
 	{
@@ -689,7 +689,7 @@ intptr_t FindFiles::MainDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 					if (Mask.empty())
 						Mask = L"*"sv;
 
-					return FileMaskForFindFile->Set(Mask);
+					return FileMaskForFindFile->assign(Mask);
 				}
 				case FAD_BUTTON_DRIVE:
 				{
@@ -983,12 +983,12 @@ bool background_searcher::LookForString(string_view const FileName)
 		FileSize=std::min(SearchInFirst,FileSize);
 	}
 
-	UINT LastPercents=0;
+	unsigned LastPercents{};
 
 	// Основной цикл чтения из файла
 	while (!Stopped() && File.Read(readBufferA.data(), (!SearchInFirst || alreadyRead + readBufferA.size() <= SearchInFirst)? readBufferA.size() : SearchInFirst - alreadyRead, readBlockSize))
 	{
-		const auto Percents = static_cast<UINT>(FileSize? alreadyRead * 100 / FileSize : 0);
+		const auto Percents = ToPercent(alreadyRead, FileSize);
 
 		if (Percents!=LastPercents)
 		{
@@ -1214,9 +1214,9 @@ bool background_searcher::LookForString(string_view const FileName)
 	return false;
 }
 
-bool background_searcher::IsFileIncluded(PluginPanelItem* FileItem, string_view const FullName, DWORD FileAttr, string_view const DisplayName)
+bool background_searcher::IsFileIncluded(PluginPanelItem* FileItem, string_view const FullName, os::fs::attributes FileAttr, string_view const DisplayName)
 {
-	if (!m_Owner->GetFileMask()->Compare(PointToName(FullName)))
+	if (!m_Owner->GetFileMask()->check(PointToName(FullName)))
 		return false;
 
 	const auto ArcItem = m_Owner->itd->GetFindFileArcItem();
@@ -1723,19 +1723,19 @@ intptr_t FindFiles::FindDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 		{
 			SCOPED_ACTION(Dialog::suppress_redraw)(Dlg);
 
-			const auto pCoord = static_cast<PCOORD>(Param2);
+			auto& Coord = *static_cast<COORD*>(Param2);
 			SMALL_RECT DlgRect;
 			Dlg->SendMessage( DM_GETDLGRECT, 0, &DlgRect);
 			int DlgWidth=DlgRect.Right-DlgRect.Left+1;
 			int DlgHeight=DlgRect.Bottom-DlgRect.Top+1;
-			int IncX = pCoord->X - DlgWidth - 2;
-			int IncY = pCoord->Y - DlgHeight - 2;
+			const auto IncX = Coord.X - DlgWidth - 2;
+			const auto IncY = Coord.Y - DlgHeight - 2;
 
 			if ((IncX > 0) || (IncY > 0))
 			{
-				pCoord->X = DlgWidth + (IncX > 0 ? IncX : 0);
-				pCoord->Y = DlgHeight + (IncY > 0 ? IncY : 0);
-				Dlg->SendMessage( DM_RESIZEDIALOG, 0, pCoord);
+				Coord.X = DlgWidth + (IncX > 0? IncX : 0);
+				Coord.Y = DlgHeight + (IncY > 0? IncY : 0);
+				Dlg->SendMessage( DM_RESIZEDIALOG, 0, &Coord);
 			}
 
 			DlgWidth += IncX;
@@ -1777,9 +1777,9 @@ intptr_t FindFiles::FindDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 
 			if ((IncX <= 0) || (IncY <= 0))
 			{
-				pCoord->X = DlgWidth;
-				pCoord->Y = DlgHeight;
-				Dlg->SendMessage( DM_RESIZEDIALOG, 0, pCoord);
+				Coord.X = DlgWidth;
+				Coord.Y = DlgHeight;
+				Dlg->SendMessage( DM_RESIZEDIALOG, 0, &Coord);
 			}
 
 			return TRUE;
@@ -1820,19 +1820,14 @@ void FindFiles::OpenFile(const string& strSearchFileName, int OpenKey, const Fin
 		if (openMode == FILETYPE_VIEW)
 		{
 			NamesList ViewList;
-			int list_count = 0;
 
 			// Возьмем все файлы, которые имеют реальные имена...
-			itd->ForEachFindItem([&list_count, &ViewList](const FindListItem& i)
+			itd->ForEachFindItem([&ViewList](const FindListItem& i)
 			{
-				if (!i.Arc || (i.Arc->Flags & OPIF_REALNAMES))
-				{
-					if (!i.FindData.FileName.empty() && !(i.FindData.Attributes&FILE_ATTRIBUTE_DIRECTORY))
-					{
-						++list_count;
-						ViewList.AddName(i.FindData.FileName);
-					}
-				}
+				if ((i.Arc && !(i.Arc->Flags & OPIF_REALNAMES)) || i.FindData.FileName.empty() || i.FindData.Attributes & FILE_ATTRIBUTE_DIRECTORY)
+					return;
+
+				ViewList.AddName(i.FindData.FileName);
 			});
 
 			ViewList.SetCurName(FindItem->FindData.FileName);
@@ -1844,7 +1839,7 @@ void FindFiles::OpenFile(const string& strSearchFileName, int OpenKey, const Fin
 				false,
 				-1,
 				{},
-				list_count > 1? &ViewList : nullptr);
+				ViewList.size() > 1? &ViewList : nullptr);
 
 			ShellViewer->SetEnableF6(TRUE);
 
@@ -2415,39 +2410,31 @@ void background_searcher::DoPrepareFileList()
 	else if (SearchMode==FINDAREA_ALL || SearchMode==FINDAREA_ALL_BUTNETWORK)
 	{
 		const auto Drives = os::fs::get_logical_drives() & allowed_drives_mask();
-		std::vector<string> Volumes;
-		Volumes.reserve(Drives.count());
+
+		const auto is_acceptable_drive = [&](string_view const RootDirectory)
+		{
+			const auto Type = os::fs::drive::get_type(RootDirectory);
+			return Type == DRIVE_FIXED || Type == DRIVE_RAMDISK || (SearchMode != FINDAREA_ALL_BUTNETWORK && Type == DRIVE_REMOTE);
+		};
 
 		for (const auto& i: os::fs::enum_drives(Drives))
 		{
-			auto RootDir = os::fs::get_root_directory(i);
+			auto RootDir = os::fs::drive::get_root_directory(i);
+			if (!is_acceptable_drive(RootDir))
+				continue;
 
-			const auto DriveType = FAR_GetDriveType(RootDir);
-
-			if (DriveType != DRIVE_REMOVABLE && DriveType != DRIVE_CDROM && (DriveType != DRIVE_REMOTE || SearchMode != FINDAREA_ALL_BUTNETWORK))
-			{
-				string strGuidVolime;
-				if(os::fs::GetVolumeNameForVolumeMountPoint(RootDir, strGuidVolime))
-				{
-					Volumes.emplace_back(std::move(strGuidVolime));
-				}
-				Locations.emplace_back(std::move(RootDir));
-			}
+			Locations.emplace_back(std::move(RootDir));
 		}
 
 		for (auto& VolumeName: os::fs::enum_volumes())
 		{
-			const auto DriveType = FAR_GetDriveType(VolumeName);
-
-			if (DriveType == DRIVE_REMOVABLE || DriveType == DRIVE_CDROM || (DriveType == DRIVE_REMOTE && SearchMode == FINDAREA_ALL_BUTNETWORK))
-			{
+			if (!is_acceptable_drive(VolumeName))
 				continue;
-			}
 
-			if (std::none_of(CONST_RANGE(Volumes, i) { return starts_with(i, VolumeName); }))
-			{
-				Locations.emplace_back(std::move(VolumeName));
-			}
+			if (const auto DriveLetter = get_volume_drive(VolumeName); DriveLetter && Drives[os::fs::drive::get_number(*DriveLetter)])
+				continue;
+
+			Locations.emplace_back(std::move(VolumeName));
 		}
 	}
 	else
@@ -2622,7 +2609,7 @@ bool FindFiles::FindFilesProcess()
 			Dlg->InitDialog();
 			Dlg->Show();
 
-			os::thread FindThread(&os::thread::join, &background_searcher::Search, &BC);
+			os::thread FindThread(os::thread::mode::join, &background_searcher::Search, &BC);
 
 			// In case of an exception in the main thread
 			SCOPE_EXIT

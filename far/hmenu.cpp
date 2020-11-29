@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "hmenu.hpp"
 
@@ -63,10 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //----------------------------------------------------------------------------
 
 HMenu::HMenu(private_tag, HMenuData *Item,size_t ItemCount):
-	m_Item(Item, Item + ItemCount),
-	m_SelectPos(),
-	m_VExitCode(-1),
-	m_SubmenuOpened()
+	m_Item(Item, Item + ItemCount)
 {
 }
 
@@ -437,9 +437,7 @@ bool HMenu::ProcessCurrentSubMenu()
 				}
 				else
 				{
-					if (Key == KEY_LEFT || Key == KEY_RIGHT || Key == KEY_TAB ||
-						Key == KEY_NUMPAD4 || Key == KEY_NUMPAD6 ||
-						Key == KEY_MSWHEEL_LEFT || Key == KEY_MSWHEEL_RIGHT)
+					if (any_of(Key, KEY_LEFT, KEY_RIGHT, KEY_TAB, KEY_NUMPAD4, KEY_NUMPAD6, KEY_MSWHEEL_LEFT, KEY_MSWHEEL_RIGHT))
 					{
 						SendKey = true;
 						MenuKey = Key;

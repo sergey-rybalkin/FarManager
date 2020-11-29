@@ -30,6 +30,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "wm_listener.hpp"
 
@@ -156,7 +159,7 @@ void wm_listener::Check()
 	{
 		rethrow_if(m_ExceptionPtr);
 		os::event ReadyEvent(os::event::type::automatic, os::event::state::nonsignaled);
-		m_Thread = os::thread(&os::thread::join, &wm_listener::WindowThreadRoutine, this, &ReadyEvent);
+		m_Thread = os::thread(os::thread::mode::join, &wm_listener::WindowThreadRoutine, this, &ReadyEvent);
 		ReadyEvent.wait();
 	}
 }

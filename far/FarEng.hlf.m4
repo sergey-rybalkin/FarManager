@@ -86,6 +86,7 @@ $^#Copyright © 1996-2000 Eugene Roshal#
  ~File associations~@FileAssoc@
  ~Operating system commands~@OSCommands@
  ~Folder shortcuts~@FolderShortcuts@
+ ~Sort groups~@SortGroups@
  ~Filters menu~@FiltersMenu@
  ~Screens switching~@ScrSwitch@
  ~Task list~@TaskList@
@@ -354,8 +355,7 @@ $ #Panel control commands#
  Invert selection including folders                   #Ctrl+<Gray *>#
  (ignore command line state)
  Select files with the same name as the current file   #Alt+<Gray +>#
- Deselect files with the same name as the current      #Alt+<Gray ->#
- file
+ Deselect files with the same name as the current file #Alt+<Gray ->#
  Select all files                                    #Shift+<Gray +>#
  Deselect all files                                  #Shift+<Gray ->#
  Restore previous selection                                  #Ctrl+M#
@@ -411,7 +411,6 @@ active, but on the passive panel.
 
  #Ctrl+Alt+Ins#
  Copy real names of selected files to clipboard.
-
 
  #Ctrl+Shift+C#
  Copy the selected files to clipboard.
@@ -715,7 +714,6 @@ the object currently under cursor will be deleted.
  #Alt+Del#
  Wipe out files and folders.
 
-
  Remarks:
 
  1. ^<wrap>In accordance to ~System settings~@SystemSettings@ the hotkeys #F8# and
@@ -726,6 +724,7 @@ the object currently under cursor will be deleted.
 (a different value can be specified in
 ~System.WipeSymbol~@System.WipeSymbol@), then truncating to zero
 length, following by renaming to a temporary name, and finally deleting.
+
 
 @ErrCannotExecute
 $ #Error: Cannot execute#
@@ -991,7 +990,7 @@ an almost limitless expansion of the features of Far.
  * Creating and modifying Windows shortcuts.
  * File and text operations making it more comfortable to use FidoNet.
  * Files UU-encode and UU-decode.
- * WinAmp control and MP3-tags modifying.
+ * Winamp control and MP3-tags modifying.
  * Quake PAK-files processing.
  * Printers control, both connected to PC and network.
  * Connection and debugging of queries to ODBC-compatible databases.
@@ -1025,7 +1024,7 @@ one can recommend:
 
 
 @Panels
-$ #Panels #
+$ #Panels#
  Normally Far shows two panels (left and right windows), with different
 information. If you want to change the type of information displayed in the
 panel, use the ~panel menu~@LeftRightMenu@ or corresponding ~keyboard commands~@KeyRef@.
@@ -1244,7 +1243,7 @@ Supported types: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW and DVD-RAM.
    ^<wrap>A "friendly" display name (for example, Jeff Smith). The display name is not necessarily the defining relative distinguished name (RDN).
 
  - #Unique Id#
-   ^<wrap>A GUID string (for example, {4fa050f0-f561-11cf-bdd9-00aa003a77b6}).
+   ^<wrap>An UUID string (for example, {4fa050f0-f561-11cf-bdd9-00aa003a77b6}).
 
  - #Canonical Name#
    ^<wrap>The complete canonical name (for example, engineering.microsoft.com/software/someone). The domain-only version includes a trailing forward slash (/).
@@ -1309,8 +1308,8 @@ pressing the left mouse button.
 
 
 @Menus
-$ #Menus #
- To choose an action from the menu you can press F9 or click on top of the
+$ #Menus#
+ To choose an action from the menu you can press #F9# or click on top of the
 screen.
 
  When the menu is activated by pressing #F9#, the menu for the active panel
@@ -1440,7 +1439,6 @@ $ #Menus: commands menu#
  #File view history#    Display ~file view and edit history~@HistoryViews@.
 
  #Folders history#      Display folders ~changing history~@HistoryFolders@.
-
                       Items in "Folders history" and "File view
                       history" are moved to the end of list after
                       selection. Use #Shift+Enter# to select item
@@ -1464,13 +1462,15 @@ $ #Menus: commands menu#
 
  #Folder shortcuts#     Displays current ~folder shortcuts~@FolderShortcuts@.
 
+ #Edit sort groups#     Allows to edit user defined ~sort groups~@SortGroups@.
+
  #File panel filter#    Allows to control file panel contents.
                       See ~filters menu~@FiltersMenu@ for the detailed
                       description.
 
- #Plugin commands#      Show ~plugin commands~@Plugins@ list
+ #Plugin commands#      Show ~plugin commands~@Plugins@ list.
 
- #Screens list#         Show open ~screens list~@ScrSwitch@
+ #Screens list#         Show open ~screens list~@ScrSwitch@.
 
  #Task list#            Shows ~active tasks list~@TaskList@.
 
@@ -1933,7 +1933,7 @@ attributes and none of the exclusion attributes:
  #[?]# - ^<wrap>ignore this attribute.
 
  The #Compressed#, #Encrypted#, #Not indexed#, #Sparse#, #Temporary# and #Offline# attributes
-are used only on disks with the NTFS file system. #Virtual# attribute is not used in Windows 2000/XP/2003.
+are used only on disks with the NTFS file system.
 The #Integrity stream# and #No scrub data# attributes are supported only on ReFS volumes starting from Windows Server 2012.
 
 
@@ -1947,7 +1947,7 @@ checkboxes. The #Reset# button will clear all of the filter conditions.
 
 
 @History
-$ #History #
+$ #History#
  The commands history shows the list of previously executed commands.
 Besides the cursor control keys, the following keyboard shortcuts are
 available:
@@ -2161,7 +2161,7 @@ If global user menu file exists it will override the user specific menu.
 
 
 @FileAssoc
-$ #File associations #
+$ #File associations#
  Far Manager supports file associations, that allow to associate various
 actions to running, viewing and editing files with a specified
 ~mask~@FileMasks@.
@@ -2183,10 +2183,6 @@ desired association from the menu.
  #Ctrl+Up#    - move association up
 
  #Ctrl+Down#  - move association down
-
- If no execute command is associated with the file and
-#Use Windows registered types# option in ~System settings~@SystemSettings@
-dialog is on, Far tries to use Windows association to execute this file type;
 
  See also: common ~menu~@MenuCmd@ keyboard commands.
 
@@ -2216,14 +2212,13 @@ as a ~mask~@FileMasks@:
 
  The association can be described in the #Description of the association# field.
 
- The following ~special symbols~@MetaSymbols@ can be used in the associated
-command.
+ ~Special symbols~@MetaSymbols@ can be used in the associated command.
 
  Notes:
 
  1. ^<wrap>If no execute command is associated with file and
 #Use Windows registered types# option in ~System settings~@SystemSettings@
-dialog is on, Far tries to use Windows association to execute this file type;
+dialog is on, Far tries to use Windows association to execute this file type.
  2. ^<wrap>Operating system ~commands~@OSCommands@ "IF EXIST" and "IF DEFINED"
 allow to configure "smarter" associations - if you have specified several
 associations for a file type, the menu will show only the associations
@@ -2265,6 +2260,8 @@ executing command. <title> and <init> - title and initial text of edit control.
  grep !?#$GrepHist$#Search for:?! !?In:?*.*!|Far.exe -v -
 
  Leave the name empty to disable history.
+
+ The entered string can also be accessed later as #%<history># (or as #%UserVarN#, where N is the index of the corresponding input).
 
  In <title> and <init> the usage of other meta-symbols is allowed by enclosing them in brackets, e.g.
 grep !?Find in (!.!):?! |Far.exe -v -.
@@ -2753,9 +2750,14 @@ $ #Viewer: control keys#
  #Ctrl+Shift+Left#    Show the leftmost column
  #Ctrl+Shift+Right#   Show the rightmost column of all lines currently visible on the screen
 
- In #hex# and #dump# ~view modes~@ViewerMode@, #Ctrl+Left# and
+ In the #hex# and #dump# ~view modes~@ViewerMode@, #Ctrl+Left# and
 #Ctrl+Right# keys shift the content within the window one byte at a time
 in the corresponding direction.
+
+ In the #hex# ~view mode~@ViewerMode@, #Alt+Left# and #Alt+Right# key
+combinations decrease or increase the number of bytes displayed on each
+row by one byte, respectively. #Ctrl+Alt+Left# and #Ctrl+Alt+Right# key
+combinations adjust the number of displayed bytes by 16 at a time.
 
  Viewer commands
 
@@ -2975,7 +2977,15 @@ first byte on a row becomes the last on the previous row. The
 #Ctrl+Left# key combination shifts all bytes to the right moving the
 last byte of a row to the first positions of the next row. Unlike
 in #dump# mode, the content is shifted by a byte, not by a character.
-The #Right# and #Left# keys are ignored.
+
+ The #Alt+Right# key combination increases the number of bytes displayed
+on each row by one byte. The #Ctrl+Alt+Right# key combination increases
+the number of bytes by 16 at a time. The #Alt+Left# key combination
+decreases the number of bytes displayed on each row by one byte. The
+#Ctrl+Alt+Left# key combination decreases the number of bytes by 16 at
+a time.
+
+ The #Right# and #Left# keys are ignored.
 
 
 @ViewerGotoPos
@@ -3382,11 +3392,11 @@ helps applications to identify the code page of this file.
 
  #Dos/Windows format (CR LF)#
  Line breaks will be represented as a two-character sequence -
-Carriage Return and Line Feed (CR LF), as used in DOS/Windows.
+Carriage Return and Line Feed (CR LF), as used in Dos/Windows.
 
  #Unix format (LF)#
  Line breaks will be represented as a single character - Line
-Feed (LF), as used in UNIX.
+Feed (LF), as used in Unix.
 
  #Mac format (CR)#
  Line breaks will be represented as a single character - Carriage
@@ -3958,9 +3968,8 @@ folders, all checkboxes will always be 3-state.
 corresponding checkboxes was changed from the initial state.
 
  The #Compressed#, #Encrypted#, #Not indexed#, #Sparse#, #Temporary#,
-#Offline#, #Reparse point# and #Virtual# attributes are available only on NTFS drives. The
-#Virtual# attribute is not used in Windows 2000/XP/2003. The #Compressed#
-and #Encrypted# attributes are mutually exclusive, that is, you can set only
+#Offline#, #Reparse point# attributes are available only on NTFS drives.
+The #Compressed# and #Encrypted# attributes are mutually exclusive, that is, you can set only
 one of them. You cannot clear the #Sparse# attribute in Windows 2000/XP/2003. The
 #Integrity stream# and #No scrub data# attributes are supported only on ReFS volumes starting from
 Windows Server 2012.
@@ -3986,7 +3995,6 @@ month or only minutes. All the other date and time components will remain
 unchanged.
 
  The #Current# button fills the file time fields with the current time.
-
  The #Original# button fills the file time fields with their original
 values. Available only when the dialog is invoked for a single file object.
 
@@ -4128,7 +4136,6 @@ the list. In this list "Brief mode" item corresponds to brief panel mode
 on. The last item, "Alternative full", corresponds to view mode called with
 #LeftCtrl+0#. After selecting the mode, you can change the following settings:
 
-
  #Column types# - a comma-separated list. Each column type starts with
 a file property character, such as name, size, etc. Some file properties
 may be followed by modifiers. Supported column types (properties and
@@ -4237,7 +4244,6 @@ to the display of seconds and milliseconds.
 
  Enabling links, streams and owner columns (G, LN, F and O) can significantly
 slow down the directory reading.
-
 
  #Status line column types# and #Status line column widths# -
 similar to "Column types" and "Column widths", but for panel status line.
@@ -4435,8 +4441,8 @@ append backslash to its name.
 
  If ~Panel.Tree.TurnOffCompletely~@Panel.Tree.TurnOffCompletely@
 parameter in ~far:config~@FarConfig@ is set to “false,” you can use
-~Find folder~@FindFolder@ dialog to select the target path. The
-following shortcuts open the dialog with different pre-selected folders:
+~Find folder~@FindFolder@ dialog to select the target path.
+ The following shortcuts open the dialog with different pre-selected folders:
  - ^<wrap>#F10# selects the folder from the active panel.
  - ^<wrap>#Alt+F10# selects the folder from the passive panel.
  - ^<wrap>#Shift+F10# selects the specified target folder. If several
@@ -4470,8 +4476,7 @@ will be copied;
 dialog should be displayed for the read-only files.
 
  The “#Use system copy routine#” option of the ~System settings~@SystemSettings@
-dialog enables the use of Windows operating system function CopyFileEx
-(or CopyFile if CopyFileEx is not available). This may be useful
+dialog enables the use of Windows operating system function CopyFileEx. This may be useful
 on NTFS, because CopyFileEx optimizes disk space allocation and copies
 extended file attributes. If this option is off, the internal
 implementation of the file copy routine is used. The internal
@@ -4568,7 +4573,6 @@ $ #Hard and Symbolic link#
  On NTFS volumes you can create #hard links# for files, #directory junctions# for
 folders and #symbolic links# for files and folders using the #Alt+F6# command.
 
-
  #Hard links#
 
  A #hard link# is an additional directory entry for the given file. When a
@@ -4590,7 +4594,6 @@ and sort the files by hard link number.
 
  Hard links can only be created on the same partition as the source file.
 
-
  #Directory junctions#
 
  Directory junctions allows to access to any local folders as to any other
@@ -4603,7 +4606,6 @@ C:\\WINNT\\SYSTEM32\\DRIVERS.
  Under Windows 2000 it is not allowed to create directory junctions directly to
 CD-ROM folders, but this restriction can be overcome by mounting a CD-ROM
 as a folder on the NTFS partition.
-
 
  #Symbolic links#
 
@@ -4764,10 +4766,8 @@ behavior is restored by the “TITLE” command with no parameters.
  Notes:
 
  1. ^<wrap>If the command syntax does not match one of the listed
-above, Far Manager will invoke the operating system command processor
-to execute the command.
- 2. ^<wrap>Far Manager executes the commands listed above in the
-following contexts:
+above, Far Manager will invoke the operating system command processor to execute the command.
+ 2. ^<wrap>Far Manager executes the commands listed above in the following contexts:
  - ~Command line~@CmdLineCmd@
  - ~Apply command~@ApplyCmd@
  - ~User menu~@UserMenu@
@@ -4850,7 +4850,6 @@ zero-size expression.
  #(?{name}pattern)# - group with a name. The name can be empty (in such case you
 cannot refer to this group) or must contain only word characters (#\w#) and spaces (#\s#).
 
-
  #Quantifiers#
 
  Any character, group or class can be followed by a quantifier:
@@ -4868,7 +4867,6 @@ cannot refer to this group) or must contain only word characters (#\w#) and spac
  #{n,m}?# - ^<wrap>Match at least n but not more than m times, not greedily.
  #{,m}#   - ^<wrap>equals to {0,m}
  #{,m}?#  - ^<wrap>equals to {0,m}?
-
 
  #"Greedy" and "not greedy" quantifiers#
 
@@ -5164,7 +5162,6 @@ command playback is finished.
  #Execute after Far start#
  Allows to execute the macro command immediately after the Far Manager is started.
 
-
  The following execution conditions can be applied for the active and passive panels:
 
  #Plugin panel#
@@ -5194,11 +5191,11 @@ command playback is finished.
  [ ] - execute only if there is no selection present
  [?] - ignore selection state
 
-
  Notes:
 
  1. ^<wrap>Before executing a macro command, all of the above conditions are checked.
- 2. Some key combinations (including #Enter#, #Esc#, #F1# and #Ctrl+F5#,
+
+ 2. ^<wrap>Some key combinations (including #Enter#, #Esc#, #F1# and #Ctrl+F5#,
 #MsWheelUp#, #MsWheelDown# and other mouse keys combined with #Ctrl#, #Shift#, #Alt#) cannot be entered
 directly because they have special functions in the dialog. To assign a macro
 to one of those key combinations, select it from the drop-down list.
@@ -5682,37 +5679,6 @@ it before exiting. Use this parameter to compensate for this behavior.
  This parameter can be changed via ~far:config~@FarConfig@ only.
 
 
-@System.Executor.UseAppPath
-$ #far:config System.Executor.UseAppPath#
- This Boolean parameter controls whether Far will look up #App Paths#
-Windows registry key when it searches for an executable module.
-
- When Far executes a command entered on the command line, it searches
-executable module in the following places in this order (using file
-name extensions defined by the #PATHEXT# environment variable):
-
- 1. ^<wrap>Current directory;
- 2. Directories listed on the #PATH# environment variable;
- 3. Windows 95: Windows system directory (SYSTEM);
-    Windows NT: 32-bit Windows system directory (SYSTEM32);
- 4. Windows NT: 16-bit Windows system directory (SYSTEM);
- 5. The Windows directory.
-
- If this parameter is True, Far will also look up subkeys of the
-following Windows registry keys:
-
- 6. #HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths#;
- 7. #HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths#.
-
- Default value: True (look up Windows registry).
-
- Note: If the command line is executed with #Shift+Enter# key
-combination, Far launches Windows Explorer to execute the command.
-Windows Explorer always looks up #App Paths# registry key.
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
 @System.Executor.ExcludeCmds
 $ #far:config System.Executor.ExcludeCmds#
  This string parameter defines commands which will be directly passed
@@ -5760,19 +5726,6 @@ This parameter is handy with non-standard command processors requiring
 unusual command line options or quoting.
 
  Default value: #/S /C "{0}"# (compatible with CMD.EXE).
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
-@System.Executor.FullTitle
-$ #far:config System.Executor.FullTitle#
- This Boolean parameter specifies the format of the console window title
-while an external command is being executed.
-
- False - ^<wrap>Console title contains the text entered on the command line;
- True  - Console title contains full path to the executable file.
-
- Default value: False (the entered text).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 
@@ -6179,7 +6132,7 @@ as for windowed and fullscreen mode.
 
 @-
  ┌──────────╥───────────────────────┬───────────────────────┐
- │ Mode     ║ Windowed              │ Fullscreen            │           
+ │ Mode     ║ Windowed              │ Fullscreen            │
  ╞══════════╬═══════════════════════╪═══════════════════════╡
  │ Insert   ║ Interface.CursorSize1 │ Interface.CursorSize2 │
  ├──────────╫───────────────────────┼───────────────────────┤

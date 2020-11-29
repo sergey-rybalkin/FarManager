@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "dirinfo.hpp"
 
@@ -450,9 +453,8 @@ void FreePluginDirList(HANDLE hPlugin, std::vector<PluginPanelItem>& Items)
 {
 	for (const auto& i: Items)
 	{
-		FreePluginPanelItemNames(i);
+		FreePluginPanelItemData(i);
 		FreePluginPanelItemUserData(hPlugin, i.UserData);
-		FreePluginPanelItemDescriptionOwnerAndColumns(i);
 	}
 
 	Items.clear();

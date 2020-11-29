@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "stddlg.hpp"
 
@@ -40,7 +43,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "imports.hpp"
 #include "message.hpp"
 #include "lang.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "interf.hpp"
 #include "dlgedit.hpp"
 #include "cvtname.hpp"
@@ -82,7 +85,7 @@ int GetSearchReplaceString(
 	bool* pPreserveStyle,
 	string_view const HelpTopic,
 	bool HideAll,
-	const GUID* Id,
+	const UUID* Id,
 	function_ref<string(bool)> const Picker)
 {
 	int Result = 0;
@@ -261,7 +264,7 @@ bool GetString(
 	int* const CheckBoxValue,
 	const string_view CheckBoxText,
 	Plugin* const PluginNumber,
-	const GUID* const Id
+	const UUID* const Id
 )
 {
 	int Substract=5; // дополнительная величина :-)
@@ -506,7 +509,7 @@ static os::com::ptr<IFileIsInUse> CreateIFileIsInUse(const string& File)
 static size_t enumerate_rm_processes(const string& Filename, DWORD& Reasons, function_ref<bool(string&&)> const Handler)
 {
 	DWORD Session;
-	WCHAR SessionKey[CCH_RM_SESSION_KEY + 1] = {};
+	wchar_t SessionKey[CCH_RM_SESSION_KEY + 1] = {};
 	if (imports.RmStartSession(&Session, 0, SessionKey) != ERROR_SUCCESS)
 		return 0;
 
@@ -516,8 +519,7 @@ static size_t enumerate_rm_processes(const string& Filename, DWORD& Reasons, fun
 		return 0;
 
 	DWORD RmGetListResult;
-	UINT ProceccInfoSizeNeeded = 0;
-	UINT ProcessInfoSize = 1;
+	unsigned ProceccInfoSizeNeeded = 0, ProcessInfoSize = 1;
 	std::vector<RM_PROCESS_INFO> ProcessInfos(ProcessInfoSize);
 	while ((RmGetListResult = imports.RmGetList(Session, &ProceccInfoSizeNeeded, &ProcessInfoSize, ProcessInfos.data(), &Reasons)) == ERROR_MORE_DATA)
 	{
@@ -564,7 +566,7 @@ operation OperationFailed(const error_state_ex& ErrorState, string_view const Ob
 {
 	std::vector<string> Msg;
 	os::com::ptr<IFileIsInUse> FileIsInUse;
-	lng Reason = lng::MObjectLockedReasonOpened;
+	auto Reason = lng::MObjectLockedReasonOpened;
 	bool SwitchBtn = false, CloseBtn = false;
 	const auto Error = ErrorState.Win32Error;
 	if(Error == ERROR_ACCESS_DENIED ||

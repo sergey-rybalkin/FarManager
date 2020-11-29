@@ -31,6 +31,9 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+// BUGBUG
+#include "platform.headers.hpp"
+
 // Self:
 #include "delete.hpp"
 
@@ -41,7 +44,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "constitle.hpp"
 #include "TPreRedrawFunc.hpp"
 #include "taskbar.hpp"
-#include "cddrv.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
 #include "message.hpp"
@@ -57,7 +59,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "FarDlgBuilder.hpp"
 #include "strmix.hpp"
-#include "DlgGuid.hpp"
+#include "uuids.far.dialogs.hpp"
 #include "cvtname.hpp"
 #include "fileattr.hpp"
 #include "copy_progress.hpp"
@@ -102,7 +104,7 @@ public:
 	};
 
 private:
-	bool ConfirmDeleteReadOnlyFile(string_view Name, DWORD Attr);
+	bool ConfirmDeleteReadOnlyFile(string_view Name, os::fs::attributes Attr);
 	bool ShellRemoveFile(string_view Name, progress Files);
 	bool ERemoveDirectory(string_view Name, delete_type Type, bool& RetryRecycleAsRemove);
 	bool RemoveToRecycleBin(string_view Name, bool dir, bool& RetryRecycleAsRemove, bool& Skip);
@@ -326,7 +328,7 @@ static void show_confirmation(
 	}
 
 	lng mTitle, mDText, mDBttn;
-	const GUID* Id;
+	const UUID* Id;
 
 	if (DeleteType == delete_type::erase)
 	{
@@ -548,30 +550,34 @@ void ShellDelete::process_item(
 			int MsgCode = 0; // для symlink не нужно подтверждение
 			if (!DirSymLink)
 			{
-				const GUID* guidId = &DeleteFolderId;
-				auto tit = lng::MDeleteFolderTitle, con = lng::MDeleteFolderConfirm, del = lng::MDeleteFileDelete;
+				auto Uuid = &DeleteFolderId;
+				auto
+					TitleId = lng::MDeleteFolderTitle,
+					ConfirmId = lng::MDeleteFolderConfirm,
+					DeleteId = lng::MDeleteFileDelete;
+
 				if (m_DeleteType == delete_type::erase)
 				{
-					tit = lng::MWipeFolderTitle;
-					con = lng::MWipeFolderConfirm;
-					del = lng::MDeleteFileWipe;
-					guidId = &WipeFolderId;
+					TitleId = lng::MWipeFolderTitle;
+					ConfirmId = lng::MWipeFolderConfirm;
+					DeleteId = lng::MDeleteFileWipe;
+					Uuid = &WipeFolderId;
 				}
 				else if (m_DeleteType == delete_type::recycle)
 				{
-					con = lng::MRecycleFolderConfirm;
-					del = lng::MDeleteRecycle;
-					guidId = &DeleteFolderRecycleId;
+					ConfirmId = lng::MRecycleFolderConfirm;
+					DeleteId = lng::MDeleteRecycle;
+					Uuid = &DeleteFolderRecycleId;
 				}
 
 				MsgCode=Message(MSG_WARNING,
-					msg(tit),
+					msg(TitleId),
 					{
-						msg(con),
+						msg(ConfirmId),
 						strFullName
 					},
-					{ del, lng::MDeleteFileAll, lng::MDeleteFileSkip, lng::MDeleteFileCancel },
-					{}, guidId);
+					{ DeleteId, lng::MDeleteFileAll, lng::MDeleteFileSkip, lng::MDeleteFileCancel },
+					{}, Uuid);
 			}
 
 			if (MsgCode == Message::first_button)
@@ -642,7 +648,7 @@ void ShellDelete::process_item(
 							strFullName
 						},
 						{ m_DeleteType == delete_type::erase? lng::MDeleteFileWipe : lng::MDeleteFileDelete, lng::MDeleteFileAll, lng::MDeleteFileSkip, lng::MDeleteFileCancel },
-						{}, m_DeleteType == delete_type::erase? &WipeFolderId : &DeleteFolderId); // ??? other GUID ???
+						{}, m_DeleteType == delete_type::erase? &WipeFolderId : &DeleteFolderId); // ??? other UUID ???
 
 					if (MsgCode == Message::first_button)
 					{
@@ -740,7 +746,7 @@ ShellDelete::ShellDelete(panel_ptr SrcPanel, delete_type const Type):
 	if (!SrcPanel->get_first_selected(SingleSelData))
 		return;
 
-	if (m_DeleteType == delete_type::recycle && FAR_GetDriveType(GetPathRoot(ConvertNameToFull(SingleSelData.FileName))) != DRIVE_FIXED)
+	if (m_DeleteType == delete_type::recycle && os::fs::drive::get_type(GetPathRoot(ConvertNameToFull(SingleSelData.FileName))) != DRIVE_FIXED)
 		m_DeleteType = delete_type::remove;
 
 	show_confirmation(SrcPanel, m_DeleteType, SelCount, SingleSelData);
@@ -773,7 +779,7 @@ ShellDelete::ShellDelete(panel_ptr SrcPanel, delete_type const Type):
 	}
 }
 
-bool ShellDelete::ConfirmDeleteReadOnlyFile(string_view const Name, DWORD Attr)
+bool ShellDelete::ConfirmDeleteReadOnlyFile(string_view const Name, os::fs::attributes Attr)
 {
 	if (!(Attr & FILE_ATTRIBUTE_READONLY))
 		return true;

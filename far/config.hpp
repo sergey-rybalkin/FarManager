@@ -141,7 +141,7 @@ enum DIZUPDATETYPE
 enum disk_menu_mode
 {
 	DRIVE_SHOW_TYPE              = 0_bit,
-	DRIVE_SHOW_PATH              = 1_bit,
+	DRIVE_SHOW_ASSOCIATED_PATH   = 1_bit,
 	DRIVE_SHOW_LABEL             = 2_bit,
 	DRIVE_SHOW_FILESYSTEM        = 3_bit,
 	DRIVE_SHOW_SIZE              = 4_bit,
@@ -153,6 +153,7 @@ enum disk_menu_mode
 	DRIVE_SORT_PLUGINS_BY_HOTKEY = 10_bit,
 	DRIVE_SHOW_LABEL_USE_SHELL   = 11_bit,
 	DRIVE_SHOW_VIRTUAL           = 12_bit,
+	DRIVE_SHOW_UNMOUNTED_VOLUMES = 13_bit,
 };
 
 class Option
@@ -764,7 +765,7 @@ public:
 		StringOption strKeyMacroCtrlDot, strKeyMacroRCtrlDot; // аля KEY_CTRLDOT/KEY_RCTRLDOT
 		StringOption strKeyMacroCtrlShiftDot, strKeyMacroRCtrlShiftDot; // аля KEY_CTRLSHIFTDOT/KEY_RCTRLSHIFTDOT
 		// internal
-		DWORD
+		unsigned
 			KeyMacroCtrlDot{},
 			KeyMacroRCtrlDot{},
 			KeyMacroCtrlShiftDot{},
@@ -775,27 +776,24 @@ public:
 
 	struct KnownModulesIDs
 	{
-		struct GuidOption
+		struct UuidOption
 		{
-			GUID Id{};
+			UUID Id{};
 			StringOption StrId;
 			string_view Default;
-		};
-
-		GuidOption Network;
-		GuidOption Emenu;
-		GuidOption Arclite;
-		GuidOption Luamacro;
-		GuidOption Netbox;
-		GuidOption ProcList;
-		GuidOption TmpPanel;
+		}
+		Network,
+		Emenu,
+		Arclite,
+		Luamacro,
+		Netbox,
+		ProcList,
+		TmpPanel;
 	};
 
 	struct ExecuteOptions
 	{
 		BoolOption RestoreCPAfterExecute;
-		BoolOption ExecuteUseAppPath;
-		BoolOption ExecuteFullTitle;
 		StringOption strExecuteBatchType;
 		StringOption strExcludeCmds;
 		StringOption Comspec;
@@ -809,6 +807,7 @@ public:
 		StringOption ComspecCondition;
 		BoolOption   UseHomeDir; // cd ~
 		StringOption strHomeDir; // cd ~
+		BoolOption UseAssociations;
 	};
 
 	SortingOptions Sort;
