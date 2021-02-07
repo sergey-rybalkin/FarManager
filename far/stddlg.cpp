@@ -650,7 +650,7 @@ operation OperationFailed(const error_state_ex& ErrorState, string_view const Ob
 		}
 	}
 
-	std::vector Msgs{std::move(Description), QuoteOuterSpace(string(Object))};
+	std::vector Msgs{std::move(Description), QuoteOuterSpace(Object)};
 	if(!Msg.empty())
 	{
 		Msgs.emplace_back(format(msg(lng::MObjectLockedReason), msg(Reason)));
@@ -727,6 +727,29 @@ operation OperationFailed(const error_state_ex& ErrorState, string_view const Ob
 		return operation::cancel;
 
 	return static_cast<operation>(Result);
+}
+
+bool retryable_ui_operation(function_ref<bool()> const Action, string_view const Name, lng const ErrorDescription, bool& SkipErrors)
+{
+	while (!Action())
+	{
+		switch (const auto ErrorState = error_state::fetch(); SkipErrors? operation::skip_all : OperationFailed(ErrorState, Name, lng::MError, msg(ErrorDescription)))
+		{
+		case operation::retry:
+			continue;
+
+		case operation::skip_all:
+			SkipErrors = true;
+			[[fallthrough]];
+		case operation::skip:
+			return false;
+
+		case operation::cancel:
+			cancel_operation();
+		}
+	}
+
+	return true;
 }
 
 static string GetReErrorString(int code)

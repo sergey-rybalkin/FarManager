@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "exception.hpp"
 #include "exception_handler.hpp"
 #include "plugin.hpp"
+#include "codepage_selection.hpp"
 
 // Platform:
 
@@ -197,7 +198,7 @@ static size_t widechar_to_multibyte_with_validation(uintptr_t const Codepage, st
 	};
 
 	auto Result = convert(Buffer);
-	if (Buffer.size() <= Str.size() && GetLastError() == ERROR_INSUFFICIENT_BUFFER)
+	if (GetLastError() == ERROR_INSUFFICIENT_BUFFER)
 	{
 		// If BufferSize is less than DataSize, this function writes the number of bytes specified by BufferSize to the buffer indicated by Buffer.
 		// If the function succeeds and BufferSize is 0, the return value is the required size, in bytes, for the buffer indicated by Buffer.
@@ -340,7 +341,7 @@ bool MultibyteCodepageDecoder::SetCP(uintptr_t Codepage)
 		char b1;
 		wchar_t b2;
 	}
-	u;
+	u{};
 
 	int CharsProcessed = 0;
 	size_t Size = 0;
@@ -450,6 +451,16 @@ uintptr_t encoding::codepage::ansi()
 uintptr_t encoding::codepage::oem()
 {
 	return GetOEMCP();
+}
+
+uintptr_t encoding::codepage::normalise(uintptr_t const Codepage)
+{
+	switch (Codepage)
+	{
+	case CP_OEMCP: return oem();
+	case CP_ACP:   return ansi();
+	default:       return Codepage;
+	}
 }
 
 size_t encoding::get_bytes(uintptr_t const Codepage, string_view const Str, span<char> const Buffer, error_position* const ErrorPosition)
@@ -595,10 +606,11 @@ std::string_view encoding::get_signature_bytes(uintptr_t Cp)
 	}
 }
 
-encoding::writer::writer(std::ostream& Stream, uintptr_t Codepage, bool AddSignature):
+encoding::writer::writer(std::ostream& Stream, uintptr_t Codepage, bool AddSignature, bool IgnoreEncodingErrors):
 	m_Stream(&Stream),
 	m_Codepage(Codepage),
-	m_AddSignature(AddSignature)
+	m_AddSignature(AddSignature),
+	m_IgnoreEncodingErrors(IgnoreEncodingErrors)
 {
 }
 
@@ -623,7 +635,20 @@ void encoding::writer::write(const string_view Str)
 
 	for (auto Overflow = true; Overflow;)
 	{
-		const auto Size = get_bytes(m_Codepage, Str, m_Buffer);
+		error_position ErrorPosition;
+		const auto Size = get_bytes(m_Codepage, Str, m_Buffer, m_IgnoreEncodingErrors? nullptr : &ErrorPosition);
+
+		if (ErrorPosition)
+		{
+			throw MAKE_FAR_KNOWN_EXCEPTION(
+				concat(
+					codepages::UnsupportedCharacterMessage(Str[*ErrorPosition]),
+					L"\n"sv,
+					codepages::FormatName(m_Codepage)
+				)
+			);
+		}
+
 		Overflow = Size > m_Buffer.size();
 		m_Buffer.resize(Size);
 	}

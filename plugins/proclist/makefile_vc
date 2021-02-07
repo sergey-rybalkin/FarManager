@@ -13,22 +13,6 @@ LINK_OBJS = $(OBJDIR)\fileio.obj \
 	$(OBJDIR)\WMI.obj \
 	$(OBJDIR)\Proclist.obj
 
-DOCS = \
-	ProcEng.hlf \
-	ProcRus.hlf \
-	ProcPol.hlf \
-	ProcGer.hlf \
-	ProcUkr.hlf \
-	ProcEng.lng \
-	ProcRus.lng \
-	ProcIta.lng \
-	ProcBel.lng \
-	ProcPol.lng \
-	ProcGer.lng \
-	ProcUkr.lng \
-	changelog
-
-
 !ifndef FARDIR
 FAR_DIRECTORY=../../far
 !else

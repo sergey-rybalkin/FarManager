@@ -352,7 +352,7 @@ static const char *FirstSlashA(const char *String)
 	return nullptr;
 }
 
-static void AnsiToUnicodeBin(std::string_view const AnsiString, wchar_t* UnicodeString, uintptr_t CodePage = CP_OEMCP)
+static void AnsiToUnicodeBin(std::string_view const AnsiString, wchar_t* const UnicodeString, uintptr_t const CodePage = encoding::codepage::oem())
 {
 	if (!AnsiString.empty())
 	{
@@ -362,7 +362,7 @@ static void AnsiToUnicodeBin(std::string_view const AnsiString, wchar_t* Unicode
 	}
 }
 
-static wchar_t *AnsiToUnicodeBin(std::string_view const AnsiString, uintptr_t CodePage = CP_OEMCP)
+static wchar_t* AnsiToUnicodeBin(std::string_view const AnsiString, uintptr_t const CodePage = encoding::codepage::oem())
 {
 	auto Result = std::make_unique<wchar_t[]>(AnsiString.size() + 1);
 	AnsiToUnicodeBin(AnsiString, Result.get(), CodePage);
@@ -371,10 +371,10 @@ static wchar_t *AnsiToUnicodeBin(std::string_view const AnsiString, uintptr_t Co
 
 static wchar_t *AnsiToUnicode(const char* AnsiString)
 {
-	return AnsiString? AnsiToUnicodeBin(AnsiString, CP_OEMCP) : nullptr;
+	return AnsiString? AnsiToUnicodeBin(AnsiString, encoding::codepage::oem()) : nullptr;
 }
 
-static void UnicodeToAnsiBin(string_view const UnicodeString, char* AnsiString, uintptr_t CodePage = CP_OEMCP)
+static void UnicodeToAnsiBin(string_view const UnicodeString, char* const AnsiString, uintptr_t const CodePage = encoding::codepage::oem())
 {
 	if (!UnicodeString.empty())
 	{
@@ -384,7 +384,7 @@ static void UnicodeToAnsiBin(string_view const UnicodeString, char* AnsiString, 
 	}
 }
 
-static char *UnicodeToAnsiBin(string_view const UnicodeString, uintptr_t CodePage = CP_OEMCP)
+static char* UnicodeToAnsiBin(string_view const UnicodeString, uintptr_t const CodePage = encoding::codepage::oem())
 {
 	/* $ 06.01.2008 TS
 	! Увеличил размер выделяемой под строку памяти на 1 байт для нормальной
@@ -401,7 +401,7 @@ static char *UnicodeToAnsi(const wchar_t* UnicodeString)
 	if (!UnicodeString)
 		return nullptr;
 
-	return UnicodeToAnsiBin(UnicodeString, CP_OEMCP);
+	return UnicodeToAnsiBin(UnicodeString, encoding::codepage::oem());
 }
 
 static wchar_t** AnsiArrayToUnicode(span<const char* const> const Strings)
@@ -1842,7 +1842,7 @@ static char* WINAPI TruncPathStrA(char *Str, int MaxLength) noexcept
 		{
 			char *Start = nullptr;
 
-			if (*Str && Str[1] == ':' && IsSlash(Str[2]))
+			if (*Str && Str[1] == ':' && path::is_separator(Str[2]))
 				Start = Str + 3;
 			else
 			{
@@ -2563,8 +2563,8 @@ static int WINAPI FarMenuFnA(intptr_t PluginNumber, int X, int Y, int MaxHeight,
 
 			if (BreakKeysCount)
 			{
-				NewBreakKeys.resize(BreakKeysCount);
-				std::transform(BreakKeys, BreakKeys + BreakKeysCount, NewBreakKeys.begin(), [](int i)
+				NewBreakKeys.reserve(BreakKeysCount + 1);
+				std::transform(BreakKeys, BreakKeys + BreakKeysCount, std::back_inserter(NewBreakKeys), [](int i)
 				{
 					FarKey NewItem;
 					NewItem.VirtualKeyCode = i & 0xffff;
@@ -2575,6 +2575,9 @@ static int WINAPI FarMenuFnA(intptr_t PluginNumber, int X, int Y, int MaxHeight,
 					if (ItemFlags & oldfar::PKF_SHIFT) NewItem.ControlKeyState |= SHIFT_PRESSED;
 					return NewItem;
 				});
+
+				// Terminator
+				NewBreakKeys.emplace_back();
 			}
 		}
 
@@ -4337,8 +4340,8 @@ static int WINAPI FarEditorControlA(oldfar::EDITOR_CONTROL_COMMANDS OldCommand, 
 				const auto ect = static_cast<const oldfar::EditorConvertText*>(Param);
 				const auto CodePage = GetEditorCodePageA();
 				MultiByteRecode(
-					OldCommand == oldfar::ECTL_OEMTOEDITOR? CP_OEMCP : CodePage,
-					OldCommand == oldfar::ECTL_OEMTOEDITOR? CodePage : CP_OEMCP,
+					OldCommand == oldfar::ECTL_OEMTOEDITOR? encoding::codepage::oem() : CodePage,
+					OldCommand == oldfar::ECTL_OEMTOEDITOR? CodePage : encoding::codepage::oem(),
 					{ ect->Text, static_cast<size_t>(ect->TextLength) });
 				return TRUE;
 			}
@@ -4832,8 +4835,8 @@ static int WINAPI FarCharTableA(int Command, char *Buffer, int BufferSize) noexc
 			inplace::upper({ us.get(), std::size(TableSet->DecodeTable) });
 			(void)encoding::get_bytes(nCP, { us.get(), std::size(TableSet->DecodeTable) }, { reinterpret_cast<char*>(TableSet->UpperTable), std::size(TableSet->DecodeTable) });
 
-			MultiByteRecode(nCP, CP_OEMCP, { reinterpret_cast<char*>(TableSet->DecodeTable), std::size(TableSet->DecodeTable) });
-			MultiByteRecode(CP_OEMCP, nCP, { reinterpret_cast<char*>(TableSet->EncodeTable), std::size(TableSet->EncodeTable) });
+			MultiByteRecode(nCP, encoding::codepage::oem(), { reinterpret_cast<char*>(TableSet->DecodeTable), std::size(TableSet->DecodeTable) });
+			MultiByteRecode(encoding::codepage::oem(), nCP, { reinterpret_cast<char*>(TableSet->EncodeTable), std::size(TableSet->EncodeTable) });
 			return Command;
 		}
 		return -1;

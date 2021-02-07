@@ -543,7 +543,7 @@ bool Help::ReadHelp(string_view const Mask)
 			HighlightsCorrection(strReadStr);
 		}
 
-		if (!strReadStr.empty() && strReadStr[0]==L'@' && !BreakProcess)
+		if (starts_with(strReadStr, L'@') && !BreakProcess)
 		{
 			if (m_TopicFound)
 			{
@@ -629,7 +629,7 @@ m1:
 					continue;
 				}
 
-				if (!((!strReadStr.empty() && strReadStr[0]==L'$') && NearTopicFound && (PrevSymbol == L'$' || PrevSymbol == L'@')))
+				if (!(starts_with(strReadStr, L'$') && NearTopicFound && any_of(PrevSymbol, L'$', L'@')))
 					NearTopicFound=0;
 
 				/* $<text> в начале строки, определение темы
@@ -642,7 +642,7 @@ m1:
 					LastStartPos = 0;
 				}
 
-				if ((!strReadStr.empty() && strReadStr[0]==L'$') && NearTopicFound && (PrevSymbol == L'$' || PrevSymbol == L'@'))
+				if (starts_with(strReadStr, L'$') && NearTopicFound && any_of(PrevSymbol, L'$', L'@'))
 				{
 					AddLine(string_view(strReadStr).substr(1));
 					FixCount++;
@@ -817,7 +817,7 @@ m1:
 
 void Help::AddLine(const string_view Line)
 {
-	const auto Width = StartPos && !Line.empty() && Line[0] == L' '? StartPos - 1 : StartPos;
+	const auto Width = StartPos && starts_with(Line, L' ')? StartPos - 1 : StartPos;
 	HelpList.emplace_back(string(Width, L' ') + Line);
 }
 
@@ -1016,7 +1016,7 @@ static bool FastParseLine(string_view Str, int* const pLen, const int x0, const 
 	{
 		const auto wc = Str[0];
 		Str.remove_prefix(1);
-		if (!Str.empty() && wc == Str[0] && (wc == L'~' || wc == L'@' || wc == L'#' || wc == cColor))
+		if (starts_with(Str, wc) && any_of(wc, L'~', L'@', L'#', cColor))
 			Str.remove_prefix(1);
 		else if (wc == L'#') // start/stop highlighting
 			continue;
@@ -1058,7 +1058,7 @@ static bool FastParseLine(string_view Str, int* const pLen, const int x0, const 
 			else
 			{
 				found = (realX >= start_topic && realX < x);
-				if (!Str.empty() && Str[0] == L'@')
+				if (starts_with(Str, L'@'))
 					Str = SkipLink(Str.substr(1), found ? pTopic : nullptr);
 				if (found)
 					break;
@@ -1568,7 +1568,7 @@ bool Help::JumpTopic()
 		if (pos != string::npos)
 		{
 			const auto Path = string_view(StackData->strSelTopic).substr(1, pos - 1);
-			const auto EndSlash = IsSlash(Path.back());
+			const auto EndSlash = path::is_separator(Path.back());
 			const auto FullPath = path::join(StackData->strHelpPath, Path);
 			auto Topic = string_view(StackData->strSelTopic).substr(StackData->strSelTopic.find(HelpEndLink, 2) + 1);
 
@@ -1617,13 +1617,13 @@ bool Help::JumpTopic()
 
 	if (EndPos != string::npos)
 	{
-		if (!IsSlash(strNewTopic[EndPos - 1]))
+		if (!path::is_separator(strNewTopic[EndPos - 1]))
 		{
 			const auto Pos2 = EndPos;
 
 			while (EndPos != string::npos)
 			{
-				if (IsSlash(strNewTopic[EndPos]))
+				if (path::is_separator(strNewTopic[EndPos]))
 				{
 					StackData->Flags|=FHELP_CUSTOMFILE;
 					StackData->strHelpMask = strNewTopic.substr(EndPos + 1);
@@ -2014,8 +2014,8 @@ void Help::Search(const os::fs::file& HelpFile,uintptr_t nCodePage)
 	{
 		auto Str = trim_right(i.Str);
 
-		if ((!Str.empty() && Str[0] == L'@') &&
-		    !(Str.size() > 1 && (Str[1] == L'+' || Str[1] == L'-')) &&
+		if (starts_with(Str, L'@') &&
+		    !(Str.size() > 1 && any_of(Str[1], L'+', L'-')) &&
 		    !contains(Str, L'='))// && !TopicFound)
 		{
 			strEntryName.clear();
@@ -2273,7 +2273,7 @@ namespace help
 
 		auto SlashPos = EndPos - 1;
 
-		if (!IsSlash(Topic[SlashPos])) // Это имя модуля?
+		if (!path::is_separator(Topic[SlashPos])) // Это имя модуля?
 		{
 			// значит удалим это чертово имя :-)
 			const auto Pos = FindLastSlash(Topic);

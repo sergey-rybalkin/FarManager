@@ -283,11 +283,10 @@ static auto full_command(string_view const Command, string_view const Parameters
 void OpenFolderInShell(string_view const Folder)
 {
 	execute_info Info;
-	auto FullFolderName = ConvertNameToFull(Folder);
-	// To avoid collisions with bat/cmd/etc.
-	AddEndSlash(FullFolderName);
 	Info.DisplayCommand = Folder;
 	Info.Command = Folder;
+	// To avoid collisions with bat/cmd/etc.
+	AddEndSlash(Info.Command);
 	Info.WaitMode = execute_info::wait_mode::no_wait;
 	Info.SourceMode = execute_info::source_mode::known;
 
@@ -533,17 +532,13 @@ public:
 		ChangeConsoleMode(console.GetInputHandle(), InitialConsoleMode->Input);
 		ChangeConsoleMode(console.GetOutputHandle(), InitialConsoleMode->Output);
 		ChangeConsoleMode(console.GetErrorHandle(), InitialConsoleMode->Error);
-
-		GetCursorType(CursorVisible, CursorSize);
 	}
 
 	~external_execution_context()
 	{
-		FlushInputBuffer();
+		SCOPED_ACTION(os::last_error_guard);
 
 		SetFarConsoleMode(true);
-
-		SetCursorType(CursorVisible, CursorSize);
 
 		point ConSize;
 		if (console.GetSize(ConSize) && (ConSize.x != ScrX + 1 || ConSize.y != ScrY + 1))
@@ -557,15 +552,13 @@ public:
 			console.SetOutputCodepage(ConsoleOutputCP);
 		}
 
-		// The title could be changed by the external program
-		Global->ScrBuf->Flush(flush_type::cursor | flush_type::title);
+		// Could be changed by the external program
+		Global->ScrBuf->Invalidate();
 	}
 
 private:
 	int ConsoleCP = console.GetInputCodepage();
 	int ConsoleOutputCP = console.GetOutputCodepage();
-	bool CursorVisible{};
-	size_t CursorSize{};
 };
 
 static bool execute_impl(

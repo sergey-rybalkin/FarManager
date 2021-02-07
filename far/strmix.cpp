@@ -137,14 +137,6 @@ string InsertRegexpQuote(string strStr)
 	return strStr;
 }
 
-string &QuoteSpace(string &strStr)
-{
-	if (strStr.find_first_of(Global->Opt->strQuotedSymbols.Get()) != string::npos)
-		inplace::quote(strStr);
-
-	return strStr;
-}
-
 wchar_t* legacy::QuoteSpaceOnly(wchar_t* Str)
 {
 	if (contains(Str, L' '))
@@ -153,10 +145,16 @@ wchar_t* legacy::QuoteSpaceOnly(wchar_t* Str)
 	return Str;
 }
 
-void inplace::QuoteOuterSpace(string &strStr)
+void inplace::QuoteSpace(string& Str)
 {
-	if (!strStr.empty() && (strStr.front() == L' ' || strStr.back() == L' '))
-		inplace::quote(strStr);
+	if (Str.find_first_of(Global->Opt->strQuotedSymbols.Get()) != string::npos)
+		quote(Str);
+}
+
+void inplace::QuoteOuterSpace(string& Str)
+{
+	if (!Str.empty() && (Str.front() == L' ' || Str.back() == L' '))
+		quote(Str);
 }
 
 // TODO: "…" is displayed as "." in raster fonts. Make it lng-customisable?
@@ -944,9 +942,9 @@ bool SearchAndReplaceString(
 				if (PreserveStyle && !ReplaceStr.empty() && is_alpha(ReplaceStr.front()) && is_alpha(Haystack[HaystackIndex]))
 				{
 					if (is_upper(Haystack[HaystackIndex]))
-						ReplaceStr.front() = ::upper(ReplaceStr.front());
+						ReplaceStr.front() = upper(ReplaceStr.front());
 					else if (is_lower(Haystack[HaystackIndex]))
-						ReplaceStr.front() = ::lower(ReplaceStr.front());
+						ReplaceStr.front() = lower(ReplaceStr.front());
 				}
 
 				return true;
@@ -1063,7 +1061,7 @@ string ExtractHexString(string_view const HexString)
 
 string ConvertHexString(string_view const From, uintptr_t Codepage, bool FromHex)
 {
-	const auto CompatibleCp = IsVirtualCodePage(Codepage)? CP_ACP : Codepage;
+	const auto CompatibleCp = IsVirtualCodePage(Codepage)? encoding::codepage::ansi() : Codepage;
 	if (FromHex)
 	{
 		const auto Blob = HexStringToBlob(ExtractHexString(From), 0);

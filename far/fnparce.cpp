@@ -65,6 +65,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Common:
 #include "common/string_utils.hpp"
+#include "common/scope_exit.hpp"
 #include "common/view/select.hpp"
 
 // External:
@@ -295,9 +296,9 @@ static size_t SkipInputToken(string_view const Str, subst_strings* const Strings
 	return tokens::input.size() + TitleSize + TextSize;
 }
 
-static bool MakeListFile(panel_ptr const& Panel, string& ListFileName, bool const ShortNames, string_view const Modifers)
+static void MakeListFile(panel_ptr const& Panel, string& ListFileName, bool const ShortNames, string_view const Modifers)
 {
-	uintptr_t CodePage = CP_OEMCP;
+	auto CodePage = encoding::codepage::oem();
 	bool UseFullPaths{}, QuotePaths{}, UseForwardSlash{};
 
 	for (const auto& i: Modifers)
@@ -305,7 +306,7 @@ static bool MakeListFile(panel_ptr const& Panel, string& ListFileName, bool cons
 		switch (i)
 		{
 		case L'A':
-			CodePage = CP_ACP;
+			CodePage = encoding::codepage::ansi();
 			break;
 
 		case L'U':
@@ -347,43 +348,29 @@ static bool MakeListFile(panel_ptr const& Panel, string& ListFileName, bool cons
 
 	ListFileName = MakeTemp();
 
-	try
+	const os::fs::file ListFile(ListFileName, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS);
+	if (!ListFile)
+		throw MAKE_FAR_EXCEPTION(msg(lng::MCannotCreateListTemp));
+
+	SCOPE_FAIL { (void)os::fs::delete_file(ListFileName); }; // BUGBUG
+
+	os::fs::filebuf StreamBuffer(ListFile, std::ios::out);
+	std::ostream Stream(&StreamBuffer);
+	Stream.exceptions(Stream.badbit | Stream.failbit);
+	encoding::writer Writer(Stream, CodePage, false);
+	const auto Eol = eol::system.str();
+
+	for (const auto& i: Panel->enum_selected())
 	{
-		const os::fs::file ListFile(ListFileName, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS);
-		if (!ListFile)
-			throw MAKE_FAR_EXCEPTION(msg(lng::MCannotCreateListTemp));
+		auto Name = ShortNames? i.AlternateFileName() : i.FileName;
 
-		os::fs::filebuf StreamBuffer(ListFile, std::ios::out);
-		std::ostream Stream(&StreamBuffer);
-		Stream.exceptions(Stream.badbit | Stream.failbit);
-		encoding::writer Writer(Stream, CodePage);
-		const auto Eol = eol::system.str();
+		transform(Name);
 
-		for (const auto& i: Panel->enum_selected())
-		{
-			auto Name = ShortNames? i.AlternateFileName() : i.FileName;
-
-			transform(Name);
-
-			Writer.write(Name);
-			Writer.write(Eol);
-		}
-
-		Stream.flush();
-
-		return true;
+		Writer.write(Name);
+		Writer.write(Eol);
 	}
-	catch (const far_exception& e)
-	{
-		(void)os::fs::delete_file(ListFileName); // BUGBUG
-		Message(MSG_WARNING, e,
-			msg(lng::MError),
-			{
-				msg(lng::MCannotCreateListFile)
-			},
-			{ lng::MOk });
-		return false;
-	}
+
+	Stream.flush();
 }
 
 static string_view ProcessMetasymbol(string_view const CurStr, subst_data& SubstData, string& Out)
@@ -498,14 +485,13 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 		if (Data.ListNames)
 		{
 			string Str;
-			if (MakeListFile(Data.Default().Panel, Str, Short, Modifiers))
-			{
-				if (Short)
-					Str = ConvertNameToShort(Str);
+			MakeListFile(Data.Default().Panel, Str, Short, Modifiers);
 
-				append_with_escape(Out, Str);
-				Data.ListNames->add(std::move(Str));
-			}
+			if (Short)
+				Str = ConvertNameToShort(Str);
+
+			append_with_escape(Out, Str);
+			Data.ListNames->add(std::move(Str));
 		}
 		else
 		{
@@ -608,14 +594,14 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 	}
 
 	// !?<title>?<init>!
-	if (const auto Tail = tokens::skip(CurStr, tokens::input))
+	if (tokens::skip(CurStr, tokens::input))
 	{
 		auto SkipSize = SkipInputToken(CurStr);
 		// if bad format string skip 1 char
 		if (!SkipSize)
 			SkipSize = 1;
 
-		Out.append(CurStr.data(), SkipSize);
+		Out += CurStr.substr(0, SkipSize);
 		return CurStr.substr(SkipSize);
 	}
 
@@ -759,7 +745,7 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 
 				if (HistoryEnd != string_view::npos)
 				{
-					DlgData.back().strHistory.assign(Strings.Title.All.data(), HistoryBegin, HistoryEnd - HistoryBegin);
+					DlgData.back().strHistory = Strings.Title.All.substr(HistoryBegin, HistoryEnd - HistoryBegin);
 					const auto HistorySize = HistoryEnd - HistoryBegin + 2;
 					Strings.Title.All.remove_prefix(HistorySize);
 				}
@@ -950,7 +936,19 @@ bool SubstFileName(
 
 	SubstData.Variables = &Context.Variables;
 
-	Str = ProcessMetasymbols(Str, SubstData);
+	try
+	{
+		Str = ProcessMetasymbols(Str, SubstData);
+	}
+	catch (far_exception const& e)
+	{
+		Message(MSG_WARNING, e,
+			msg(lng::MError),
+			{
+			},
+			{ lng::MOk });
+		return false;
+	}
 
 	const auto Result = IgnoreInputAndLists || InputVariablesDialog(Str, SubstData, DlgTitle.empty()? DlgTitle : os::env::expand(DlgTitle));
 

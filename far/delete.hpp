@@ -52,8 +52,6 @@ enum class delete_type
 	recycle,
 	remove,
 	erase,
-
-	delete_type_count
 };
 
 void Delete(const panel_ptr& SrcPanel, delete_type Type);
@@ -63,7 +61,7 @@ bool DeleteFileWithFolder(string_view FileName);
 class delayed_deleter: noncopyable
 {
 public:
-	delayed_deleter(bool WithFolder);
+	explicit delayed_deleter(bool WithFolder);
 	~delayed_deleter();
 
 	void add(string File);

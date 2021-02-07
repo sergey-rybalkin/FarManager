@@ -271,14 +271,13 @@ void Message::Init(
 				LenErrStr = MAX_MESSAGE_WIDTH;
 		}
 
-		MaxLength = std::max(MaxLength, LenErrStr);
-
 		if (!Strings.empty())
 			Strings.emplace_back(L"\x1"sv);
 
 		for (const auto& i: wrapped_text(strErrStr, LenErrStr))
 		{
 			Strings.emplace_back(i);
+			MaxLength = std::max(MaxLength, i.size());
 		}
 	}
 
@@ -347,7 +346,7 @@ void Message::Init(
 			Item.X1 = (Flags & MSG_LEFTALIGN) ? 5 : -1;
 			Item.Y1 = i + 2;
 
-			if (!Strings[i].empty() && (Strings[i].front() == L'\1' || Strings[i].front() == L'\2'))
+			if (!Strings[i].empty() && any_of(Strings[i].front(), L'\1', L'\2'))
 			{
 				Item.Flags |= (Strings[i].front() == L'\2' ? DIF_SEPARATOR2 : DIF_SEPARATOR);
 				if(i == Strings.size() - 1)
@@ -474,7 +473,7 @@ void Message::Init(
 	{
 		const auto& SrcItem = Strings[i];
 
-		if (!SrcItem.empty() && (SrcItem.front() == L'\1' || SrcItem.front() == L'\2'))
+		if (!SrcItem.empty() && any_of(SrcItem.front(), L'\1', L'\2'))
 		{
 			int Length = m_Position.width() - 1;
 			if (Length > 5)

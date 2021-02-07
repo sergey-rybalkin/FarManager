@@ -180,15 +180,29 @@ static auto compare_time(os::chrono::time_point First, os::chrono::time_point Se
 	return compare_numbers(First, Second);
 }
 
-// FAT Last Write time is rounded up to the even number of seconds
+// FAT Last Write time is rounded up to the even number of seconds, e.g. 2s 1ms -> 4s
 static auto to_fat_write_time(os::chrono::time_point Point)
 {
 	return (Point.time_since_epoch() + 2s - 1ns) / 2s;
 }
 
+// However, people also use this function with FTP, which rounds down to whole seconds
+static auto to_whole_seconds(os::chrono::time_point Point)
+{
+	return Point.time_since_epoch() / 1s;
+}
+
+// The ultimate question here is "can these times be considered 'equal'",
+// so we take an opportunistic approach and try both methods:
 static auto compare_fat_write_time(os::chrono::time_point First, os::chrono::time_point Second)
 {
-	return compare_numbers(to_fat_write_time(First), to_fat_write_time(Second));
+	if (!compare_numbers(to_fat_write_time(First), to_fat_write_time(Second)))
+		return 0;
+
+	if (!compare_numbers(to_whole_seconds(First), to_whole_seconds(Second)))
+		return 0;
+
+	return compare_time(First, Second);
 }
 
 
@@ -196,6 +210,7 @@ enum SELECT_MODES
 {
 	SELECT_INVERT,
 	SELECT_INVERTALL,
+	SELECT_INVERTFILES,
 	SELECT_ADD,
 	SELECT_REMOVE,
 	SELECT_ADDEXT,
@@ -230,8 +245,9 @@ static void FileListToSortingPanelItem(const FileListItem *arr, int index, Sorti
 	if (fi.Selected)
 		pi.Flags|=PPIF_SELECTED;
 
-	pi.CustomColumnData=fi.CustomColumnData;
-	pi.CustomColumnNumber=fi.CustomColumnNumber;
+	pi.CustomColumnData=fi.CustomColumns.data();
+	pi.CustomColumnNumber=fi.CustomColumns.size();
+
 	pi.Description=fi.DizText; //BUGBUG???
 
 	pi.UserData = fi.UserData;
@@ -508,7 +524,7 @@ FileList::~FileList()
 
 void FileList::list_data::clear()
 {
-	for (const auto& i: Items)
+	for (auto& i: Items)
 	{
 		if (m_Plugin)
 		{
@@ -517,7 +533,12 @@ void FileList::list_data::clear()
 				delete[] i.DizText;
 		}
 
-		DeleteRawArray(span(i.CustomColumnData, i.CustomColumnNumber));
+		for (const auto& Column: i.CustomColumns)
+		{
+			delete[] Column;
+		}
+
+		i.CustomColumns.clear();
 	}
 
 	Items.clear();
@@ -1311,6 +1332,11 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 			SelectFiles(SELECT_INVERTALL);
 			return true;
 
+		case KEY_ALTMULTIPLY:
+		case KEY_RALTMULTIPLY:
+			SelectFiles(SELECT_INVERTFILES);
+			return true;
+
 		case KEY_ALTLEFT:     // Прокрутка длинных имен и описаний
 		case KEY_RALTLEFT:
 			if (LeftPos != std::numeric_limits<decltype(LeftPos)>::min())
@@ -1491,7 +1517,7 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 					}
 
 					if (!strFileName.empty() && (Global->Opt->QuotedName&QUOTEDNAME_INSERT) != 0)
-						QuoteSpace(strFileName);
+						inplace::QuoteSpace(strFileName);
 
 					strFileName += L' ';
 				}
@@ -2664,7 +2690,6 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 				strFullPath = CurItem.FileName;
 			}
 
-			QuoteSpace(strFullPath);
 			OpenFolderInShell(strFullPath);
 		}
 		else
@@ -2749,9 +2774,7 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 					const auto ExclusionFlag = IsItExecutable? EXCLUDECMDHISTORY_NOTPANEL : EXCLUDECMDHISTORY_NOTWINASS;
 					if (!(Global->Opt->ExcludeCmdHistory & ExclusionFlag) && !PluginMode)
 					{
-						string QuotedName = strFileName;
-						QuoteSpace(QuotedName);
-						Global->CtrlObject->CmdHistory->AddToHistory(QuotedName, HR_DEFAULT, nullptr, {}, m_CurDir);
+						Global->CtrlObject->CmdHistory->AddToHistory(QuoteSpace(strFileName), HR_DEFAULT, nullptr, {}, m_CurDir);
 					}
 				}
 			}
@@ -2981,7 +3004,7 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 	/*
 		// вот и зачем это? мы уже и так здесь, в Options.Folder
 		// + дальше по тексту strSetDir уже содержит полный путь
-		if ( strSetDir.empty() || strSetDir[1] != L':' || !IsSlash(strSetDir[2]))
+		if ( strSetDir.empty() || strSetDir[1] != L':' || !path::is_separator(strSetDir[2]))
 			FarChDir(Options.Folder);
 	*/
 	/* $ 26.04.2001 DJ
@@ -3558,7 +3581,7 @@ bool FileList::FindPartName(string_view const Name,int Next,int Direct)
 	int DirFind = 0;
 	string_view NameView = Name;
 
-	if (!Name.empty() && IsSlash(Name.back()))
+	if (!Name.empty() && path::is_separator(Name.back()))
 	{
 		DirFind = 1;
 		NameView.remove_suffix(1);
@@ -3606,7 +3629,7 @@ bool FileList::FindPartName(string_view const Name,int Next,int Direct)
 	int DirFind = 0;
 	string strMask = upper(Name);
 
-	if (!Name.empty() && IsSlash(Name.back()))
+	if (!Name.empty() && path::is_separator(Name.back()))
 	{
 		DirFind = 1;
 		strMask.pop_back();
@@ -3670,8 +3693,8 @@ bool FileList::GetPlainString(string& Dest, int ListPos) const
 			if (Column.type >= column_type::custom_0 && Column.type <= column_type::custom_max)
 			{
 				const size_t ColumnNumber = static_cast<size_t>(Column.type) - static_cast<size_t>(column_type::custom_0);
-				if (ColumnNumber < m_ListData[ListPos].CustomColumnNumber)
-					Dest += m_ListData[ListPos].CustomColumnData[ColumnNumber];
+				if (ColumnNumber < m_ListData[ListPos].CustomColumns.size())
+					Dest += m_ListData[ListPos].CustomColumns[ColumnNumber];
 
 				continue;
 			}
@@ -4082,6 +4105,7 @@ long FileList::SelectFiles(int Mode, string_view const Mask)
 			if (
 				Mode != SELECT_INVERT &&
 				Mode != SELECT_INVERTALL &&
+				Mode != SELECT_INVERTFILES &&
 				!(bUseFilter? Filter.FileInFilter(&i) : FileMask.check(i.AlternateOrNormal(m_ShowShortNames)))
 			)
 				continue;
@@ -4102,6 +4126,7 @@ long FileList::SelectFiles(int Mode, string_view const Mask)
 
 				case SELECT_INVERT:
 				case SELECT_INVERTALL:
+				case SELECT_INVERTFILES:
 				case SELECT_INVERTMASK:
 					Selection=!i.Selected;
 					break;
@@ -4110,7 +4135,7 @@ long FileList::SelectFiles(int Mode, string_view const Mask)
 			if (
 				bUseFilter ||
 				!(i.Attributes & FILE_ATTRIBUTE_DIRECTORY) ||
-				Global->Opt->SelectFolders ||
+				(Global->Opt->SelectFolders && Mode != SELECT_INVERTFILES) ||
 				!Selection ||
 				RawSelection ||
 				Mode == SELECT_INVERTALL ||
@@ -4389,7 +4414,7 @@ void FileList::CopyNames(bool FillPathName, bool UNC)
 		}
 
 		if (Global->Opt->QuotedName&QUOTEDNAME_CLIPBOARD)
-			QuoteSpace(strQuotedName);
+			inplace::QuoteSpace(strQuotedName);
 
 		CopyData += strQuotedName;
 	}
@@ -5570,7 +5595,7 @@ static void FileListItemToPluginPanelItemBasic(const FileListItem& From, PluginP
 	To.Description = {};
 	To.Owner = {};
 	To.CustomColumnData = {};
-	To.CustomColumnNumber = From.CustomColumnNumber;
+	To.CustomColumnNumber = From.CustomColumns.size();
 	To.Flags = From.UserFlags | (From.Selected ? PPIF_SELECTED : 0);
 	To.UserData = From.UserData;
 	To.FileAttributes = From.Attributes;
@@ -5596,10 +5621,10 @@ void FileList::FileListToPluginItem(const FileListItem& fi, PluginPanelItemHolde
 	pi.FileName = MakeCopy(fi.FileName);
 	pi.AlternateFileName = MakeCopy(fi.AlternateFileName());
 
-	auto ColumnData = std::make_unique<const wchar_t*[]>(fi.CustomColumnNumber);
-	for (size_t i = 0; i != fi.CustomColumnNumber; ++i)
+	auto ColumnData = std::make_unique<const wchar_t*[]>(fi.CustomColumns.size());
+	for (size_t i = 0; i != fi.CustomColumns.size(); ++i)
 	{
-		ColumnData[i] = fi.CustomColumnData[i]? MakeCopy(fi.CustomColumnData[i]) : nullptr;
+		ColumnData[i] = fi.CustomColumns[i]? MakeCopy(fi.CustomColumns[i]) : nullptr;
 	}
 	pi.CustomColumnData = ColumnData.release();
 
@@ -5624,8 +5649,8 @@ size_t FileList::FileListToPluginItem2(const FileListItem& fi,FarGetPluginPanelI
 		StaticSize      = aligned_sizeof<PluginPanelItem, sizeof(wchar_t)>(),
 		FilenameSize    = aligned_size(StringSizeInBytes(fi.FileName), alignof(wchar_t)),
 		AltNameSize     = aligned_size(StringSizeInBytes(fi.AlternateFileName()), alignof(wchar_t*)),
-		ColumnsSize     = aligned_size(fi.CustomColumnNumber * sizeof(wchar_t*), alignof(wchar_t)),
-		ColumnsDataSize = aligned_size(std::accumulate(fi.CustomColumnData, fi.CustomColumnData + fi.CustomColumnNumber, size_t(0), [&](size_t s, const wchar_t* i) { return s + (i? StringSizeInBytes(i) : 0); }), alignof(wchar_t)),
+		ColumnsSize     = aligned_size(fi.CustomColumns.size() * sizeof(wchar_t*), alignof(wchar_t)),
+		ColumnsDataSize = aligned_size(std::accumulate(ALL_CONST_RANGE(fi.CustomColumns), size_t(0), [&](size_t s, const wchar_t* i) { return s + (i? StringSizeInBytes(i) : 0); }), alignof(wchar_t)),
 		DescriptionSize = aligned_size(fi.DizText? StringSizeInBytes(fi.DizText) : 0, alignof(wchar_t)),
 		OwnerSize       = aligned_size(fi.IsOwnerRead() && !fi.Owner(this).empty()? StringSizeInBytes(fi.Owner(this)) : 0, alignof(wchar_t));
 
@@ -5690,16 +5715,16 @@ size_t FileList::FileListToPluginItem2(const FileListItem& fi,FarGetPluginPanelI
 			return size;
 		}
 		const auto ColumnData = const_cast<const wchar_t**>(gpi->Item->CustomColumnData);
-		for (size_t i = 0; i != fi.CustomColumnNumber; ++i)
+		for (size_t i = 0; i != fi.CustomColumns.size(); ++i)
 		{
-			if (!fi.CustomColumnData[i])
+			if (!fi.CustomColumns[i])
 			{
 				ColumnData[i] = {};
 				continue;
 			}
 
-			ColumnData[i] = CopyToBuffer(fi.CustomColumnData[i]);
-			data += StringSizeInBytes(fi.CustomColumnData[i]);
+			ColumnData[i] = CopyToBuffer(fi.CustomColumns[i]);
+			data += StringSizeInBytes(fi.CustomColumns[i]);
 		}
 
 		data = dataBegin + ColumnsDataSize;
@@ -5743,20 +5768,20 @@ FileListItem::FileListItem(const PluginPanelItem& pi)
 
 	if (pi.CustomColumnData && pi.CustomColumnNumber)
 	{
-		CustomColumnData = new wchar_t*[pi.CustomColumnNumber];
-		CustomColumnNumber = pi.CustomColumnNumber;
+		CustomColumns.reserve(pi.CustomColumnNumber);
 
 		for (size_t i = 0; i != pi.CustomColumnNumber; ++i)
 		{
 			if (!pi.CustomColumnData[i])
 			{
-				CustomColumnData[i] = nullptr;
+				CustomColumns.emplace_back();
 				continue;
 			}
 
 			string_view const Data = pi.CustomColumnData[i];
-			CustomColumnData[i] = new wchar_t[Data.size() + 1];
-			*copy_string(Data, CustomColumnData[i]) = {};
+			auto Str = std::make_unique<wchar_t[]>(Data.size() + 1);
+			*copy_string(Data, Str.get()) = {};
+			CustomColumns.emplace_back(Str.release());
 		}
 	}
 
@@ -5766,9 +5791,9 @@ FileListItem::FileListItem(const PluginPanelItem& pi)
 	if (pi.Description)
 	{
 		string_view const Description = pi.Description;
-		const auto Str = new wchar_t[Description.size() + 1];
-		*copy_string(Description, Str) = {};
-		DizText = Str;
+		auto Str = std::make_unique<wchar_t[]>(Description.size() + 1);
+		*copy_string(Description, Str.get()) = {};
+		DizText = Str.release();
 		DeleteDiz = true;
 	}
 
@@ -5907,7 +5932,7 @@ void FileList::PutDizToPlugin(FileList *DestPanel, const std::vector<PluginPanel
 		return;
 
 	const auto strSaveDir = os::fs::GetCurrentDirectory();
-	auto strDizName = concat(strTempDir, L'\\', DestPanel->strPluginDizName);
+	const auto strDizName = path::join(strTempDir, DestPanel->strPluginDizName);
 	DestPanel->Diz.Flush({}, &strDizName);
 
 	if (Move)
@@ -8342,8 +8367,8 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 					size_t ColumnNumber = static_cast<size_t>(ColumnType) - static_cast<size_t>(column_type::custom_0);
 					const wchar_t *ColumnData = nullptr;
 
-					if (ColumnNumber<m_ListData[ListPos].CustomColumnNumber)
-						ColumnData = m_ListData[ListPos].CustomColumnData[ColumnNumber];
+					if (ColumnNumber < m_ListData[ListPos].CustomColumns.size())
+						ColumnData = m_ListData[ListPos].CustomColumns[ColumnNumber];
 
 					if (!ColumnData)
 					{
@@ -8649,7 +8674,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 									Offset = SlashPos + 1;
 								}
 							}
-							else if(!Owner.empty() && IsSlash(Owner.front()))
+							else if(!Owner.empty() && path::is_separator(Owner.front()))
 							{
 								Offset = 1;
 							}
@@ -8842,18 +8867,27 @@ TEST_CASE("fat_time")
 	Tests[]
 	{
 		{ 0s,          0s,    0, },
+		{ 0s + 1ms,    0s,    0, },
 		{ 0s + 1ms,    2s,    0, },
+		{ 1s - 1ms,    0s,    0, },
 		{ 1s - 1ms,    2s,    0, },
 		{ 1s,          2s,    0, },
+		{ 1s + 1ms,    1s,    0, },
 		{ 1s + 1ms,    2s,    0, },
+		{ 2s - 1ms,    1s,    0, },
 		{ 2s - 1ms,    2s,    0, },
 		{ 2s,          2s,    0, },
+		{ 2s + 1ms,    2s,    0, },
 		{ 2s + 1ms,    4s,    0, },
+		{ 3s - 1ms,    3s,    0, },
 		{ 3s - 1ms,    4s,    0, },
 		{ 3s,          4s,    0, },
+		{ 3s + 1ms,    3s,    0, },
 		{ 3s + 1ms,    4s,    0, },
+		{ 4s - 1ms,    3s,    0, },
 		{ 4s - 1ms,    4s,    0, },
 		{ 4s,          4s,    0, },
+		{ 4s + 1ms,    4s,    0, },
 		{ 4s + 1ms,    6s,    0, },
 		{ 0s,          2s,   -1, },
 		{ 2s,          4s,   -1, },

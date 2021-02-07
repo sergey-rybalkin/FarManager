@@ -4277,7 +4277,7 @@ void Editor::DeleteBlock()
 				const auto& NextStr = NextLine->GetString();
 				if (NextStr.size() > static_cast<size_t>(NextEndSel))
 				{
-					TmpStr.append(NextStr.cbegin() + NextEndSel, NextStr.cend());
+					TmpStr.append(string_view(NextStr).substr(NextEndSel));
 				}
 			}
 
@@ -5046,7 +5046,7 @@ void Editor::DeleteVBlock()
 
 		if (CurStr.size() > TBlockX + TBlockSizeX)
 		{
-			TmpStr.append(CurStr.cbegin() + TBlockX + TBlockSizeX, CurStr.cend());
+			TmpStr.append(string_view(CurStr).substr(TBlockX + TBlockSizeX));
 		}
 
 		append(TmpStr, CurPtr->GetEOL().str());
@@ -6437,7 +6437,7 @@ Editor::numbered_iterator Editor::GetStringByNumber(int DestLine)
 
 void Editor::SetReplaceMode(bool Mode)
 {
-	::ReplaceMode=Mode;
+	ReplaceMode = Mode;
 }
 
 int Editor::GetLineCurPos() const
@@ -6952,7 +6952,7 @@ bool Editor::SetLineCodePage(iterator const& Iterator, uintptr_t const Codepage,
 	return Result;
 }
 
-bool Editor::TryCodePage(uintptr_t const Codepage, uintptr_t& ErrorCodepage, size_t& ErrorLine, size_t& ErrorPos)
+bool Editor::TryCodePage(uintptr_t const Codepage, uintptr_t& ErrorCodepage, size_t& ErrorLine, size_t& ErrorPos, wchar_t& ErrorChar)
 {
 	if (m_codepage == Codepage)
 		return true;
@@ -6972,6 +6972,7 @@ bool Editor::TryCodePage(uintptr_t const Codepage, uintptr_t& ErrorCodepage, siz
 			ErrorCodepage = m_codepage;
 			ErrorLine = LineNumber;
 			ErrorPos = *ErrorPosition;
+			ErrorChar = i->m_Str[ErrorPos];
 			return false;
 		}
 
@@ -6991,6 +6992,8 @@ bool Editor::TryCodePage(uintptr_t const Codepage, uintptr_t& ErrorCodepage, siz
 				const auto BytesCount = encoding::get_bytes(m_codepage, i->m_Str, decoded, &ErrorPosition);
 				ErrorPos = encoding::get_chars_count(m_codepage, { decoded.data(), std::min(*ErrorPosition, BytesCount) });
 			}
+
+			ErrorChar = i->m_Str[ErrorPos];
 
 			return false;
 		}

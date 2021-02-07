@@ -55,6 +55,8 @@ namespace encoding
 	{
 		[[nodiscard]] uintptr_t ansi();
 		[[nodiscard]] uintptr_t oem();
+
+		[[nodiscard]] uintptr_t normalise(uintptr_t Codepage);
 	}
 
 	[[nodiscard]] size_t get_bytes(uintptr_t Codepage, string_view Str, span<char> Buffer, error_position* ErrorPosition = {});
@@ -76,53 +78,55 @@ namespace encoding
 
 	namespace detail
 	{
+		namespace cp = codepage;
+
 		template<uintptr_t Codepage>
 		class codepage
 		{
 		public:
 			[[nodiscard]] static auto get_bytes(string_view const Str, span<char> const Buffer, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_bytes(Codepage, Str, Buffer, ErrorPosition);
+				return encoding::get_bytes(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_bytes(string_view const Str, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_bytes(Codepage, Str, ErrorPosition);
+				return encoding::get_bytes(cp::normalise(Codepage), Str, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_bytes_count(string_view const Str, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_bytes_count(Codepage, Str, ErrorPosition);
+				return encoding::get_bytes_count(cp::normalise(Codepage), Str, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_chars(std::string_view const Str, span<wchar_t> const Buffer, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_chars(Codepage, Str, Buffer, ErrorPosition);
+				return encoding::get_chars(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_chars(bytes_view const Str, span<wchar_t> const Buffer, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_chars(Codepage, Str, Buffer, ErrorPosition);
+				return encoding::get_chars(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_chars(std::string_view const Str, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_chars(Codepage, Str, ErrorPosition);
+				return encoding::get_chars(cp::normalise(Codepage), Str, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_chars(bytes_view const Str, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_chars(Codepage, Str, ErrorPosition);
+				return encoding::get_chars(cp::normalise(Codepage), Str, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_chars_count(std::string_view const Str, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_chars_count(Codepage, Str, ErrorPosition);
+				return encoding::get_chars_count(cp::normalise(Codepage), Str, ErrorPosition);
 			}
 
 			[[nodiscard]] static auto get_chars_count(bytes_view const Str, error_position* const ErrorPosition = {})
 			{
-				return encoding::get_chars_count(Codepage, Str, ErrorPosition);
+				return encoding::get_chars_count(cp::normalise(Codepage), Str, ErrorPosition);
 			}
 		};
 	}
@@ -137,7 +141,7 @@ namespace encoding
 	{
 	public:
 		NONCOPYABLE(writer);
-		writer(std::ostream& Stream, uintptr_t Codepage, bool AddSignature = true);
+		writer(std::ostream& Stream, uintptr_t Codepage, bool AddSignature = true, bool IgnoreEncodingErrors = false);
 		void write(string_view Str);
 
 	private:
@@ -145,6 +149,7 @@ namespace encoding
 		std::ostream* m_Stream;
 		uintptr_t m_Codepage;
 		bool m_AddSignature;
+		bool m_IgnoreEncodingErrors;
 	};
 
 	bool is_valid_utf8(std::string_view Str, bool PartialContent, bool& PureAscii);

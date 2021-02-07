@@ -353,9 +353,9 @@ $ #Panel control commands#
  Deselect files with the same extension as the        #Ctrl+<Gray ->#
  current file
  Invert selection including folders                   #Ctrl+<Gray *>#
- (ignore command line state)
  Select files with the same name as the current file   #Alt+<Gray +>#
  Deselect files with the same name as the current file #Alt+<Gray ->#
+ Invert selection on files, deselect folders           #Alt+<Gray *>#
  Select all files                                    #Shift+<Gray +>#
  Deselect all files                                  #Shift+<Gray ->#
  Restore previous selection                                  #Ctrl+M#
@@ -1921,13 +1921,13 @@ The logic at work this option is similar to arithmetic with negative numbers.
  <= 0  - select files in the period from the "Today"
  >= 30 - and 30-days ago, including
 
-
  #Attributes#
  Inclusion and exclusion attributes.
 
  Filter conditions are met if file attributes
 analysis is on and it has all of the inclusion
 attributes and none of the exclusion attributes:
+
  #[x]# - ^<wrap>inclusion attribute - the file must have this attribute.
  #[ ]# - ^<wrap>exclusion attribute - the file must not have this attribute.
  #[?]# - ^<wrap>ignore this attribute.
@@ -1935,7 +1935,6 @@ attributes and none of the exclusion attributes:
  The #Compressed#, #Encrypted#, #Not indexed#, #Sparse#, #Temporary# and #Offline# attributes
 are used only on disks with the NTFS file system.
 The #Integrity stream# and #No scrub data# attributes are supported only on ReFS volumes starting from Windows Server 2012.
-
 
  #Has more than one hardlink#
  Used only on disks with NTFS file system. Condition evaluates to true,
@@ -2329,13 +2328,13 @@ backslash, use quotes, e.g. #"!"\#.
 @SystemSettings
 $ #Settings dialog: system#
  #Delete to Recycle Bin#
- Enables file deletion via the Recycle Bin.The operation of deleting to the Recycle
+ Enables file deletion via the Recycle Bin. The operation of deleting to the Recycle
 Bin can be performed only for local hard disks.
 
  #Use system copy routine#
  Use the file copy functions provided by the operating system instead of internal
 file copy implementation. It can be useful on NTFS, because the system function
-(CopyFileEx) copies file extended attributes. On the other hand, when using the system
+(CopyFileEx) copies extended file attributes. On the other hand, when using the system
 function, the possibility of "smart" ~copying~@CopyFiles@ of sparse files is not available.
 
  #Copy files opened for writing#
@@ -2467,7 +2466,7 @@ This option significanty slows down displaying directories on slow network conne
  #Show free size#
  Enables displaying the current disk free space.
 
- #Show scrollbar#
+ #Show a scrollbar#
  Enables displaying file and ~tree panel~@TreePanel@ scrollbars.
 
  #Show background screens number#
@@ -3790,8 +3789,8 @@ and external ~viewer~@Viewer@.
                          the character '\0'. The character to display can be
                          set in ~far:config~@FarConfig@ #Viewer.ZeroChar#.
 
- #Show scrollbar#          Show scrollbar in the internal viewer. This
-                         option can also be switched by pressing
+ #Show a scrollbar#        Show a scrollbar in the internal viewer. This
+                         option can also be toggled by pressing
                          #Ctrl+S# in the internal viewer.
 @=
  #Save file position#      Save and restore positions in the recently
@@ -3890,7 +3889,7 @@ $ #Settings dialog: editor#
 
  #Tab size#                Number of spaces in a tab character.
 
- #Show scrollbar#          Show scrollbar.
+ #Show a scrollbar#        Show a scrollbar.
 
  #Show white space#        Make while space characters (spaces, tabulations,
                          line breaks) visible.
@@ -4225,7 +4224,6 @@ the file panel will be displayed in multicolumn form.
  By default the size of the attributes column is 6 characters. To display
 the additional attributes it is necessary to manually increase the size of the column.
 
-
  #Column widths# - used to change width of panel columns.
 If the width is equal to 0, the default value will be used. If the width of
 the Name, Description or Owner column is 0, it will be calculated
@@ -4383,8 +4381,10 @@ the same #name# as that of the item under cursor. #†#
  #Ctrl+<Gray *># inverts the current selection on all items,
 including folders.
 
- #Ctrl+M# restores the last selection.
+ #Alt+<Gray *># inverts the current selection on files only,
+folders are deselected.
 
+ #Ctrl+M# restores the last selection.
 
  #Mouse Selection#
 
@@ -4477,8 +4477,7 @@ dialog should be displayed for the read-only files.
 
  The “#Use system copy routine#” option of the ~System settings~@SystemSettings@
 dialog enables the use of Windows operating system function CopyFileEx. This may be useful
-on NTFS, because CopyFileEx optimizes disk space allocation and copies
-extended file attributes. If this option is off, the internal
+on NTFS, because CopyFileEx copies extended file attributes. If this option is off, the internal
 implementation of the file copy routine is used. The internal
 function is also used if the source file is encrypted and is being
 copied to a different volume.
@@ -5457,6 +5456,8 @@ If current value of an option is other than the default, the option is marked wi
 
  #Shift+F4#      For the integer type, hexadecimal editor dialog is opened,
                for other types works as #F4#.
+
+ #Del#           Reset the option to its default value.
 
  #Ctrl+H#        Hide/show options having default values.
 

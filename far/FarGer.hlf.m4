@@ -356,10 +356,11 @@ $ #Befehl zur Fenstersteuerung#
 
  Dateiauswahl mit aktueller Erweiterung aufheben      #Strg+<Grau ->#
 
- Auswahl inkl. Verzeichnissen aufheben                #Strg+<Grau *>#
+ Auswahl inkl. Verzeichnissen umkehren                #Strg+<Grau *>#
 
  Dateien mit aktuellem Namen auswählen                 #Alt+<Grau +>#
  Dateiauswahl mit aktuellem Namen aufheben             #Alt+<Grau ->#
+ Invert selection on files, deselect folders           #Alt+<Grau *>#
 
  Alle Dateien auswählen                              #Umsch+<Grau +>#
  Auswahl aller Dateien aufheben                      #Umsch+<Grau ->#
@@ -1983,13 +1984,13 @@ The logic at work this option is similar to arithmetic with negative numbers.
  <= 0  - select files in the period from the "Today"
  >= 30 - and 30-days ago, including
 
-
  #Attributes#
  Inclusion and exclusion attributes.
 
  Filter conditions are met if file attributes
 analysis is on and it has all of the inclusion
 attributes and none of the exclusion attributes:
+
  #[x]# - ^<wrap>inclusion attribute - the file must have this attribute.
  #[ ]# - ^<wrap>exclusion attribute - the file must not have this attribute.
  #[?]# - ^<wrap>ignore this attribute.
@@ -1997,7 +1998,6 @@ attributes and none of the exclusion attributes:
  The #Compressed#, #Encrypted#, #Not indexed#, #Sparse#, #Temporary# and #Offline# attributes
 are used only on disks with the NTFS file system.
 The #Integrity stream# and #No scrub data# attributes are supported only on ReFS volumes starting from Windows Server 2012.
-
 
  #Has more than one hardlink#
  Used only on disks with NTFS file system. Condition evaluates to true,
@@ -2411,8 +2411,7 @@ Bin can be performed only for local hard disks.
 
  #Systemkopierroutine benutzen#
  Benutzt die Windowsfunktion CopyFileEx anstelle der internen Implementation zum Kopieren von Dateien.
-Dies ist nützlich bei NTFS, weil CopyFileEx eine rationellere Speicherplatzausnutzung
-bietet und erweiterte Dateiattribute kopiert. On the other hand, when using the system
+Dies ist nützlich bei NTFS, weil CopyFileEx erweiterte Dateiattribute kopiert. On the other hand, when using the system
 function, the possibility of "smart" ~copying~@CopyFiles@ of sparse files is not available.
 
  #Zum Schreiben geöffnete Dateien kopieren#
@@ -3872,8 +3871,8 @@ für den internen und externen ~Betrachter~@Viewer@.
                          the character '\0'. The character to display can be
                          set in ~far:config~@FarConfig@ #Viewer.ZeroChar#.
 
- #Show scrollbar#          Show scrollbar in the internal viewer. This
-                         option can also be switched by pressing
+ #Show a scrollbar#        Show a scrollbar in the internal viewer. This
+                         option can also be toggled by pressing
                          #Ctrl+S# in the internal viewer.
 @=
  #Dateiposition sichern#   Sichert und restauriert die Position in
@@ -3976,7 +3975,7 @@ für den ~internen~@Editor@ und externen Editor.
  #Tabulatorgröße#          Tab zeigt die entsprechende Anzahl
                          Leerzeichen an.
 
- #Show scrollbar#          Show scrollbar.
+ #Show a scrollbar#        Show a scrollbar.
 
  #Show white space#        Make while space characters (spaces, tabulations,
                          line breaks) visible.
@@ -4318,7 +4317,6 @@ wird das Dateifenster in Mehrspaltenform dargestellt.
  By default the size of the attributes column is 6 characters. To display
 the additional attributes it is necessary to manually increase the size of the column.
 
-
 #Spaltenbreite# - zum Ändern der Breite der Fensterspalten.
 Wenn die Breite den Wert 0 besitzt, wird der Standardwert benutzt.
 Wenn die Breite der Spalte von Namen, Beschreibung oder Eigentümer
@@ -4481,8 +4479,10 @@ auf der der Cursor/Auswahlbalken steht. #†#
  #Strg+<Grau *># kehrt die aktuelle Auswahl einschließlich
 Verzeichnisse um.
 
- #Strg+M# stellte eine vorherige Auswahl wieder her.
+ #Alt+<Grau *># inverts the current selection on files only,
+folders are deselected.
 
+ #Strg+M# stellte eine vorherige Auswahl wieder her.
 
  #Mouse Selection#
 
@@ -4578,8 +4578,7 @@ dialog should be displayed for the read-only files.
  Die Option “#Systemkopierroutine benutzen#” im Dialog ~Systemeinstellungen~@SystemSettings@
 erzwingt die Benutzung der Windowsfunktion CopyFileEx anstelle der internen Implementation
 zum Kopieren von Dateien. Dies ist nützlich bei NTFS, weil CopyFileEx
-eine rationellere Speicherplatzausnutzung bietet und erweiterte
-Dateiattribute mitkopiert. If this option is off, the internal
+erweiterte Dateiattribute mitkopiert. If this option is off, the internal
 implementation of the file copy routine is used. The internal
 function is also used if the source file is encrypted and is being
 copied to a different volume.
@@ -5559,6 +5558,8 @@ If current value of an option is other than the default, the option is marked wi
 
  #Shift+F4#      For the integer type, hexadecimal editor dialog is opened,
                for other types works as #F4#.
+
+ #Del#           Reset the option to its default value.
 
  #Ctrl+H#        Hide/show options having default values.
 

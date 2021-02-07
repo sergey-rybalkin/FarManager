@@ -4,23 +4,8 @@ ANSI = 1
 NAME = FarFtp
 
 DOCS = \
-	FtpEng.hlf \
-	FtpRus.hlf \
-	FtpPol.hlf \
-	FtpGer.hlf \
-	FtpEng.lng \
-	FtpRus.lng \
-	FtpIta.lng \
-	FtpBel.lng \
-	FtpPol.lng \
-	FtpGer.lng \
-	TechInfo.reg \
-	TechInfo_rus.reg \
-	FtpCmds.txt \
-	FtpCmds_rus.txt \
-	Notes.txt \
-	Notes_rus.txt \
-	changelog
+	*.reg \
+	*.txt
 
 FSTDLIB=$(OBJDIR)\FsdLib.lib
 LIBSRC=FStdLib\FARStdLib

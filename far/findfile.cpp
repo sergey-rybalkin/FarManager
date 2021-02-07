@@ -662,7 +662,8 @@ intptr_t FindFiles::MainDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 			Dlg->SendMessage(DM_SETTEXTPTR,FAD_TEXT_TEXTHEX,const_cast<wchar_t*>(msg(Hex? lng::MFindFileHex : lng::MFindFileText).c_str()));
 			Dlg->SendMessage(DM_SETTEXTPTR,FAD_TEXT_CP,const_cast<wchar_t*>(msg(lng::MFindFileCodePage).c_str()));
 			Dlg->SendMessage(DM_SETCOMBOBOXEVENT,FAD_COMBOBOX_CP,ToPtr(CBET_KEY));
-			FarListTitles Titles={sizeof(FarListTitles),0,nullptr,0,msg(lng::MFindFileCodePageBottom).c_str()};
+			const auto BottomLine = KeysToLocalizedText(KEY_SPACE, KEY_INS);
+			FarListTitles Titles{ sizeof(FarListTitles), 0, nullptr, 0, BottomLine.c_str() };
 			Dlg->SendMessage(DM_LISTSETTITLES,FAD_COMBOBOX_CP,&Titles);
 			// Установка запомненных ранее параметров
 			CodePage = Global->Opt->FindCodePage;
@@ -2043,7 +2044,7 @@ void FindFiles::AddMenuRecord(Dialog* const Dlg, string_view const FullName, con
 			{
 				auto strArcPathName = ArcItem->strArcName + L':';
 
-				if (!IsSlash(strPathName.front()))
+				if (!path::is_separator(strPathName.front()))
 					AddEndSlash(strArcPathName);
 
 				strArcPathName += strPathName == L".\\"sv? L"\\"s : strPathName;
@@ -2357,15 +2358,14 @@ void background_searcher::ScanPluginTree(plugin_panel* hPlugin, unsigned long lo
 			if (!*CurPanelItem.FileName)
 				continue;
 
-			strPluginSearchPath += CurPanelItem.FileName;
-			strPluginSearchPath += L'\\';
+			append(strPluginSearchPath, CurPanelItem.FileName, path::separator);
 			ScanPluginTree(hPlugin, Flags, RecurseLevel);
 
-			size_t pos = strPluginSearchPath.rfind(L'\\');
+			size_t pos = strPluginSearchPath.rfind(path::separator);
 			if (pos != string::npos)
 				strPluginSearchPath.resize(pos);
 
-			if ((pos = strPluginSearchPath.rfind(L'\\')) != string::npos)
+			if ((pos = strPluginSearchPath.rfind(path::separator)) != string::npos)
 				strPluginSearchPath.resize(pos+1);
 			else
 				strPluginSearchPath.clear();
@@ -2741,7 +2741,7 @@ bool FindFiles::FindFilesProcess()
 					if (!Length)
 						break;
 
-					if (Length>1 && IsSlash(strFileName[Length-1]) && strFileName[Length-2] != L':')
+					if (Length>1 && path::is_separator(strFileName[Length-1]) && strFileName[Length-2] != L':')
 						strFileName.pop_back();
 
 					if (!os::fs::exists(strFileName) && (GetLastError() != ERROR_ACCESS_DENIED))
@@ -2761,7 +2761,7 @@ bool FindFiles::FindFilesProcess()
 					strFileName.resize(strFileName.size() - NamePtr.size());
 					Length=strFileName.size();
 
-					if (Length>1 && IsSlash(strFileName[Length-1]) && strFileName[Length-2] != L':')
+					if (Length>1 && path::is_separator(strFileName[Length-1]) && strFileName[Length-2] != L':')
 						strFileName.pop_back();
 
 					if (strFileName.empty())
@@ -2783,7 +2783,7 @@ bool FindFiles::FindFilesProcess()
 					string strDirTmp = FindPanel->GetCurDir();
 					Length=strDirTmp.size();
 
-					if (Length>1 && IsSlash(strDirTmp[Length-1]) && strDirTmp[Length-2] != L':')
+					if (Length>1 && path::is_separator(strDirTmp[Length-1]) && strDirTmp[Length-2] != L':')
 						strDirTmp.pop_back();
 
 					if (!equal_icase(strFileName, strDirTmp))

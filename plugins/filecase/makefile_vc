@@ -8,23 +8,6 @@ LINK_OBJS = \
 	$(OBJDIR)\FileMix.obj \
 	$(OBJDIR)\ProcessName.obj
 
-DOCS = \
-	CaseEng.hlf \
-	CaseRus.hlf \
-	CasePol.hlf \
-	CaseGer.hlf \
-	CaseUkr.hlf \
-	CaseEng.lng \
-	CaseRus.lng \
-	CaseSky.lng \
-	CaseSpa.lng \
-	CaseIta.lng \
-	CasePol.lng \
-	CaseBel.lng \
-	CaseGer.lng \
-	CaseUkr.lng \
-	changelog
-
 !include ..\makefile_vc_def_inc
 
 !include ..\makefile_vc_target_inc

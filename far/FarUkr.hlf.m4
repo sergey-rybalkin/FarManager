@@ -350,10 +350,11 @@ $ #Команди керування панелями#
  Зняти позначення з файлів з розширенням              #Ctrl+<Gray ->#
   як у поточного файла
  Інвертувати позначення, включаючи папки              #Ctrl+<Gray *>#
-  (без урахування стану командного рядка)
  Позначити файли з ім'ям як у поточного файла          #Alt+<Gray +>#
  Зняти позначення з файлів з ім'ям                     #Alt+<Gray ->#
  як у поточного файла
+ Інвертувати позначення файлiв,                        #Alt+<Gray *>#
+ зняти позначення з папок
  Позначити всі файли                                 #Shift+<Gray +>#
  Зняти позначення з усіх файлiв                      #Shift+<Gray ->#
  Відновити попереднє позначення                              #Ctrl+M#
@@ -1961,13 +1962,13 @@ The logic at work this option is similar to arithmetic with negative numbers.
  <= 0  - select files in the period from the "Today"
  >= 30 - and 30-days ago, including
 
-
  #Attributes#
  Inclusion and exclusion attributes.
 
  Filter conditions are met if file attributes
 analysis is on and it has all of the inclusion
 attributes and none of the exclusion attributes:
+
  #[x]# - ^<wrap>inclusion attribute - the file must have this attribute.
  #[ ]# - ^<wrap>exclusion attribute - the file must not have this attribute.
  #[?]# - ^<wrap>ignore this attribute.
@@ -1975,7 +1976,6 @@ attributes and none of the exclusion attributes:
  The #Compressed#, #Encrypted#, #Not indexed#, #Sparse#, #Temporary# and #Offline# attributes
 are used only on disks with the NTFS file system.
 The #Integrity stream# and #No scrub data# attributes are supported only on ReFS volumes starting from Windows Server 2012.
-
 
  #Has more than one hardlink#
  Used only on disks with NTFS file system. Condition evaluates to true,
@@ -2390,8 +2390,7 @@ $ #Системні параметри#
  #Використовувати системну функцію копіювання#
  Використовувати функції копіювання файлів, які надає операційна система, замість
 внутрішньої реалізації копіювання файлів. Це може бути корисне на NTFS, оскiльки
-системна функція (CopyFileEx) виконує більш ефективний розподіл дискового
-простору і копіює розширені атрибути файлів. У той же час, при увімкненій опції
+системна функція (CopyFileEx) копіює розширені атрибути файлів. У той же час, при увімкненій опції
 буде недоступною можливість of "smart" ~copying~@CopyFiles@ of sparse files.
 
  #Копіювати відкриті для запису файли#
@@ -3961,7 +3960,7 @@ $ #Конфігурація редактора#
  #Розмір табуляції#        Кількість пробілів при показі символа
                          табуляції.
 
- #Show scrollbar#          Show scrollbar.
+ #Show a scrollbar#        Show a scrollbar.
 
  #Show white space#        Make while space characters (spaces, tabulations,
                          line breaks) visible.
@@ -4307,7 +4306,6 @@ size and the unit character, e.g. #1.00k#;
  By default the size of the attributes column is 6 characters. To display
 the additional attributes it is necessary to manually increase the size of the column.
 
-
  #Ширина стовпчиків# - дозволяє змінити ширину стовпчиків панелі.
 Якщо ширина дорівнює 0, то використовується значення за замовчуванням.
 Якщо ширина стовпчика з ім'ям, описом або власником дорівнює 0,
@@ -4454,25 +4452,27 @@ combination.
 
  #Gray +# і #Gray -# вибирають або знімають позначення з групи
 з використанням однієї або кількох відокремлених комами
-~масок файлів~@FileMasks@.
+~масок файлів~@FileMasks@. #†#
 
- #Gray *# інвертує поточне позначення.
+ #Gray *# інвертує поточне позначення. #†#
 
  #Ctrl+<Gray +># і #Ctrl+<Gray -># вибирають або знімають позначення
-з усіх файлів з тим же розширенням, що й у файла під курсором.
+з усіх файлів з тим же розширенням, що й у файла під курсором. #†#
 
  #Alt+<Gray +># і #Alt+<Gray -># вибирають або знімають позначення
-з усіх файлів з тим же ім'ям, що й у файла під курсором.
+з усіх файлів з тим же ім'ям, що й у файла під курсором. #†#
+
+ #Shift+<Gray +># i #Shift+<Gray -># вибирають або знімають
+позначення з усіх файлiв. #†#
 
  #Ctrl+<Gray *># інвертує поточне позначення, включаючи папки.
 Якщо параметр #Позначати папки# у діалозі ~Конфігурація панелей~@PanelSettings@
 увімкнений, це працює аналогічно #Gray *#.
 
- #Shift+<Gray +># i #Shift+<Gray -># вибирають або знімають
-позначення з усіх файлiв.
+ #Alt+<Gray *># inverts the current selection on files only,
+folders are deselected.
 
  #Ctrl+M# відновлює обрану до цього групу.
-
 
  #Mouse Selection#
 
@@ -4571,8 +4571,7 @@ dialog should be displayed for the read-only files.
 
  Параметр “#Використати системну функцію копіювання#” з діалогу ~Системні параметри~@SystemSettings@
 вмикає використання функції Windows CopyFileEx замість внутрішньої реалізації копіювання файлів.
-Це може бути корисне на NTFS, оскільки CopyFileEx виконує більш ефективний розподіл
-дискового простору і копіює розширені атрибути файлів. If this option is off, the internal
+Це може бути корисне на NTFS, оскільки CopyFileEx копіює розширені атрибути файлів. If this option is off, the internal
 implementation of the file copy routine is used. The internal
 function is also used if the source file is encrypted and is being
 copied to a different volume.
@@ -5557,6 +5556,8 @@ If current value of an option is other than the default, the option is marked wi
 
  #Shift+F4#      For the integer type, hexadecimal editor dialog is opened,
                for other types works as #F4#.
+
+ #Del#           Reset the option to its default value.
 
  #Ctrl+H#        Hide/show options having default values.
 

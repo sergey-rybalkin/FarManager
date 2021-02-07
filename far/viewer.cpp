@@ -204,8 +204,7 @@ int Viewer::CalculateMaxBytesPerLineByScreenWidth() const
 	auto BytesCount = MininumBytesCount;
 	for (auto width = XX2 - (OffsetWidth + MininumBytesCount * ByteWidth + BytesGroupSeparatorWidth); width >= ByteWidth; width -= ByteWidth)
 	{
-		if (width >= ByteWidth)
-			++BytesCount;
+		++BytesCount;
 
 		if (!(BytesCount % s_BytesPerStripe))
 			width -= BytesGroupSeparatorWidth;
@@ -3586,7 +3585,7 @@ bool Viewer::GetWrapMode() const
 
 void Viewer::SetWrapMode(bool Wrap)
 {
-	Viewer::m_Wrap=Wrap;
+	m_Wrap = Wrap;
 }
 
 void Viewer::EnableHideCursor(int HideCursor)
@@ -3601,7 +3600,7 @@ bool Viewer::GetWrapType() const
 
 void Viewer::SetWrapType(bool TypeWrap)
 {
-	Viewer::m_WordWrap=TypeWrap;
+	m_WordWrap = TypeWrap;
 }
 
 void Viewer::SetTempViewName(string_view const Name, bool DeleteFolder)
@@ -4388,13 +4387,9 @@ int Viewer::ProcessTypeWrapMode(int newMode, bool isRedraw)
 
 uintptr_t Viewer::GetDefaultCodePage()
 {
-	intptr_t cp = Global->Opt->ViOpt.DefaultCodePage;
-	if (cp == CP_ACP)
-		cp = encoding::codepage::ansi();
-	else if (cp == CP_OEMCP)
-		cp = encoding::codepage::oem();
+	auto cp = encoding::codepage::normalise(Global->Opt->ViOpt.DefaultCodePage);
 
-	if (cp < 0 || !IsCodePageSupported(cp))
+	if (cp == CP_DEFAULT || !IsCodePageSupported(cp))
 		cp = encoding::codepage::ansi();
 
 	return cp;

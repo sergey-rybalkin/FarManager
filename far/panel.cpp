@@ -95,10 +95,10 @@ Panel::~Panel()
 }
 
 
-void Panel::SetViewMode(int ViewMode)
+void Panel::SetViewMode(int Mode)
 {
-	m_PrevViewMode=ViewMode;
-	m_ViewMode=ViewMode;
+	m_PrevViewMode = Mode;
+	m_ViewMode = Mode;
 }
 
 
@@ -256,8 +256,7 @@ void Panel::DragMessage(int X,int Y,int Move)
 		if (!SrcDragPanel->get_first_selected(Data))
 			return;
 
-		strSelName = PointToName(Data.FileName);
-		QuoteSpace(strSelName);
+		strSelName = QuoteSpace(PointToName(Data.FileName));
 	}
 	else
 	{

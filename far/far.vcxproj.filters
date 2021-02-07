@@ -1197,6 +1197,12 @@
     <CustomBuild Include="FarUkr.hlf.m4">
       <Filter>Dependencies</Filter>
     </CustomBuild>
+    <CustomBuild Include="FarCze.hlf.m4">
+      <Filter>Dependencies</Filter>
+    </CustomBuild>
+    <CustomBuild Include="FarSky.hlf.m4">
+      <Filter>Dependencies</Filter>
+    </CustomBuild>
     <CustomBuild Include="farversion.inc.m4">
       <Filter>Dependencies</Filter>
     </CustomBuild>
@@ -1220,7 +1226,6 @@
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="changelog" />
-    <CopyFileToFolders Include="changelog_eng" />
     <CopyFileToFolders Include="Far.exe.example.ini" />
   </ItemGroup>
 </Project>

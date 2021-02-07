@@ -362,11 +362,10 @@ $ #Panelvezérlő parancsok#
  A kijelölést leveszi az aktuális fájl              #Ctrl+<Szürke ->#
  kiterjesztésével megegyező fájlokról
  A kijelölést megfordítja a mappákon is             #Ctrl+<Szürke *>#
- (a parancssor állapotától és a mappák
- kijelölhetőségi opciójától függetlenül)
  Kijelöli az aktuális fájllal azonos nevű fájlokat   #Alt+<Szürke +>#
  A kijelölést leveszi az aktuális fájllal            #Alt+<Szürke ->#
  megegyező nevű fájlokról
+ Invert selection on files, deselect folders         #Alt+<Szürke *>#
  Minden fájl kijelölése                            #Shift+<Szürke +>#
  Minden fájlról leveszi a kijelölést               #Shift+<Szürke ->#
  Visszaállítja az előző kijelölést                           #Ctrl+M#
@@ -1977,13 +1976,13 @@ The logic at work this option is similar to arithmetic with negative numbers.
  <= 0  - select files in the period from the "Today"
  >= 30 - and 30-days ago, including
 
-
  #Attribútumok#
  Befoglaló és kizáró attribútumok.
 
  A szűrőfeltételek akkor teljesülnek, ha az
 attribútumelemzés be van kapcsolva és a fájl minden megadott befoglaló
 attribútummal rendelkezik, de nincs egyetlen kizáró attribútuma sem:
+
  #[x]# - ^<wrap>befoglaló attribútum - a fájlnak rendelkeznie kell az attribútummal;
  #[ ]# - ^<wrap>kizáró attribútum - a fájlnak nem lehet ilyen attribútuma;
  #[?]# - ^<wrap>az attribútum értéke nem számít.
@@ -1991,7 +1990,6 @@ attribútummal rendelkezik, de nincs egyetlen kizáró attribútuma sem:
 A #Tömörített#, #Titkosított#, #Nem indexelt#, #Ritkított#, #Átmeneti# és #Offline# attribútum csak NTFS fájlrendszerű
 lemezeken létezik. A #Virtuális# attribútumot csak a Windows Vista/2008 operációs rendszerek használják.
 The #Integrity stream# and #No scrub data# attributes are supported only on ReFS volumes starting from Windows Server 2012.
-
 
  #Has more than one hardlink#
  Used only on disks with NTFS file system. Condition evaluates to true,
@@ -4322,7 +4320,6 @@ Az attribútumok oszlopa alapértelmezés szerint 6 karakter széles.
 A többi attribútum megjelenítéséhez (T, I, O és V) kézzel kell 10
 karakteresre állítani az oszlopszélességet.
 
-
  #Oszlopszélességek# - a panelek oszlopszélességét állíthatjuk be vele.
 A "0" szélesség az alapértelmezett szélességet jelenti. Ha a Név, a
 Megjegyzés vagy a Tulajdonos oszlop értéke "0", a Far automatikusan állítja be
@@ -4477,8 +4474,10 @@ kijelölést levesz.
 
  A #Ctrl+<Szürke *># megfordítja a kijelöléseket a mappákon is.
 
- A #Jelölést visszatesz# parancs (#Ctrl+M#) visszaállítja az előző kijelölést.
+ #Alt+<<Szürke *># inverts the current selection on files only,
+folders are deselected.
 
+ A #Jelölést visszatesz# parancs (#Ctrl+M#) visszaállítja az előző kijelölést.
 
  #Mouse Selection#
 
@@ -4574,8 +4573,7 @@ felülírás előtt újabb megerősítést kér.
  A ~Rendszer beállítások~@SystemSettings@ menü "Másoláshoz a rendszerrutin
 használata" opciójával a Far a Windows operációs rendszer CopyFileEx nevű másolórutinját fogja
 használni a saját másolórutinja helyett. Ez előnyökkel járhat NTFS
-fájlrendszernél, mert a CopyFileEx ésszerűbb lemezfoglalási metódust használ
-és a fájlokat bővített attribútumkészletükkel együtt másolja át. A rendszer
+fájlrendszernél, mert a CopyFileEx a fájlokat bővített attribútumkészletükkel együtt másolja át. A rendszer
 másolórutinja nem használható akkor, ha a fájl titkosított és nem az
 aktuális meghajtóra másolunk fájlt.
 
@@ -5555,6 +5553,8 @@ If current value of an option is other than the default, the option is marked wi
 
  #Shift+F4#      For the integer type, hexadecimal editor dialog is opened,
                for other types works as #F4#.
+
+ #Del#           Reset the option to its default value.
 
  #Ctrl+H#        Hide/show options having default values.
 

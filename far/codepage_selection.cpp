@@ -309,7 +309,7 @@ void codepages::AddCodePages(DWORD codePages)
 	// default & re-detect
 	//
 	uintptr_t cp_auto = CP_DEFAULT;
-	if (0 != (codePages & ::DefaultCP))
+	if (0 != (codePages & DefaultCP))
 	{
 		AddStandardCodePage(msg(lng::MDefaultCP), CP_DEFAULT);
 		cp_auto = CP_REDETECT;
@@ -378,7 +378,7 @@ void codepages::AddCodePages(DWORD codePages)
 		const auto len = Info.MaxCharSize;
 		auto CodepageName = Info.Name;
 
-		if (!len || (len > 2 && (codePages & ::VOnly)))
+		if (!len || (len > 2 && (codePages & VOnly)))
 			continue;
 
 		const auto IsCodePageNameCustom = GetCodePageCustomName(cp, CodepageName);
@@ -541,8 +541,8 @@ void codepages::FillCodePagesVMenu(bool bViewOnly, bool bShowAutoDetect)
 
 	// Добавляем таблицы символов
 	AddCodePages(
-		(bViewOnly? ::VOnly : 0) |
-		(bShowAutoDetect? ::AutoCP : 0)
+		(bViewOnly? VOnly : 0) |
+		(bShowAutoDetect? AutoCP : 0)
 	);
 	// Восстанавливаем оригинальную таблицу символов
 	currentCodePage = codePage;
@@ -721,10 +721,10 @@ void codepages::FillCodePagesList(std::vector<DialogBuilderListItem> &List, bool
 	selectedCodePages = allowChecked;
 	// Добавляем стандартные элементы в список
 	AddCodePages(
-		(allowDefault? ::DefaultCP : 0) |
-		(allowAuto? ::AutoCP : 0) |
-		(allowAll? ::SearchAll : 0) |
-		(bViewOnly? ::VOnly : 0)
+		(allowDefault? DefaultCP : 0) |
+		(allowAuto? AutoCP : 0) |
+		(allowAll? SearchAll : 0) |
+		(bViewOnly? VOnly : 0)
 	);
 	DialogBuilderList = nullptr;
 }
@@ -742,10 +742,10 @@ size_t codepages::FillCodePagesList(Dialog* Dlg, size_t controlId, uintptr_t cod
 	selectedCodePages = allowChecked;
 	// Добавляем стандартные элементы в список
 	AddCodePages(
-		(allowDefault? ::DefaultCP : 0) |
-		(allowAuto? ::AutoCP : 0) |
-		(allowAll? ::SearchAll : 0) |
-		(bViewOnly? ::VOnly : 0)
+		(allowDefault? DefaultCP : 0) |
+		(allowAuto? AutoCP : 0) |
+		(allowAll? SearchAll : 0) |
+		(bViewOnly? VOnly : 0)
 	);
 
 	if (CallbackCallSource == CodePagesFill)
@@ -791,6 +791,19 @@ std::optional<cp_info> codepages::GetInfo(uintptr_t CodePage)
 	GetCodePageCustomName(CodePage, Copy.Name);
 
 	return Copy;
+}
+
+string codepages::FormatName(uintptr_t const CodePage)
+{
+	const auto Info = GetCodePageInfo(CodePage);
+	auto Name = Info? Info->Name : L"Unknown"s;
+	GetCodePageCustomName(CodePage, Name);
+	return format(FSTR(L"{0}: {1}"), CodePage, Name);
+}
+
+string codepages::UnsupportedCharacterMessage(wchar_t const Char)
+{
+	return format(msg(lng::MCharacterIsNotSupportedByTheCodepage), Char);
 }
 
 long long codepages::GetFavorite(uintptr_t cp)

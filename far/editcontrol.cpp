@@ -239,7 +239,7 @@ static bool EnumWithQuoutes(VMenu2& Menu, const string_view strStart, const stri
 		const auto BuildQuotedString = [&](string Str)
 		{
 			if (!StartQuote)
-				QuoteSpace(Str);
+				inplace::QuoteSpace(Str);
 
 			auto Result = concat(strStart, Str);
 			if (StartQuote)
@@ -504,7 +504,7 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,Manager::Key& BackKe
 			const auto Data = ComplMenu->GetComplexUserDataPtr<cmp_user_data>(0);
 
 			// magic
-			if (SelStart > 1 && IsSlash(m_Str[SelStart - 1]) && m_Str[SelStart - 2] == L'"' && IsSlash(FirstItem[SelStart - 2]))
+			if (SelStart > 1 && path::is_separator(m_Str[SelStart - 1]) && m_Str[SelStart - 2] == L'"' && path::is_separator(FirstItem[SelStart - 2]))
 			{
 				m_Str.erase(SelStart - 2, 1);
 				SelStart--;
