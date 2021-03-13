@@ -287,7 +287,7 @@ DEFINES=\
 
 DISABLED_WARNINGS=/FI disabled_warnings.hpp /wd5045
 
-ADDINCLUDE=/I $(BOOTSTRAPDIR).. /I ..\..\libgit2-1.0.1\include
+ADDINCLUDE=/I $(BOOTSTRAPDIR).. /I ..\..\libgit2-1.1.0\include
 
 # common
 CPPFLAGS=\
@@ -322,7 +322,7 @@ LINKFLAGS=\
 	/dynamicbase\
 	/map\
 	/out:"$(OUTDIR)\Far.exe"\
-	/LIBPATH:"..\..\libgit2-1.0.1\build\MinSizeRel\"\
+	/LIBPATH:"..\..\libgit2-1.1.0\build\MinSizeRel\"\
 
 
 ULINKFLAGS=-q -m- -ap -Gz -O- -o- -Gh -Gh- -GF:LARGEADDRESSAWARE -d*kernel32

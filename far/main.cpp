@@ -98,7 +98,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-global *Global = nullptr;
+global* Global = nullptr;
 
 static void show_help()
 {
@@ -220,18 +220,22 @@ static int MainProcess(
 		// воспользуемся тем, что ControlObject::Init() создает панели
 		// юзая Global->Opt->*
 
+		const auto
+			IsFileA = !apanel.empty() && os::fs::is_file(apanel),
+			IsFileP = !ppanel.empty() && os::fs::is_file(ppanel);
+
 		const auto SetupPanel = [&](bool active)
 		{
 			++DirCount;
 			string strPath = active ? apanel : ppanel;
-			if (os::fs::is_file(strPath))
+			if (active ? IsFileA : IsFileP)
 			{
 				CutToParent(strPath);
 			}
 
 			bool Root = false;
 			const auto Type = ParsePath(strPath, nullptr, &Root);
-				if(Root && (Type == root_type::drive_letter || Type == root_type::win32nt_drive_letter || Type == root_type::volume))
+			if (Root && (Type == root_type::drive_letter || Type == root_type::win32nt_drive_letter || Type == root_type::volume))
 			{
 				AddEndSlash(strPath);
 			}
@@ -276,7 +280,7 @@ static int MainProcess(
 					Global->CtrlObject->CmdLine()->ExecString(Info);
 					ActivePanel->Parent()->SetActivePanel(ActivePanel);
 				}
-				else
+				else if (IsFileP)
 				{
 					const auto strPath = PointToName(ppanel);
 
@@ -298,7 +302,7 @@ static int MainProcess(
 
 				Global->CtrlObject->CmdLine()->ExecString(Info);
 			}
-			else
+			else if (IsFileA)
 			{
 				const auto strPath = PointToName(apanel);
 
@@ -403,12 +407,12 @@ static void InitProfile(string& strProfilePath, string& strLocalProfilePath)
 
 	if (!Global->Opt->ReadOnlyConfig)
 	{
-		CreatePath(path::join(Global->Opt->ProfilePath, L"PluginsData"sv), true);
+		CreatePath(path::join(Global->Opt->ProfilePath, L"PluginsData"sv), false);
 
 		const auto SingleProfile = equal_icase(Global->Opt->ProfilePath, Global->Opt->LocalProfilePath);
 
 		if (!SingleProfile)
-			CreatePath(path::join(Global->Opt->LocalProfilePath, L"PluginsData"sv), true);
+			CreatePath(path::join(Global->Opt->LocalProfilePath, L"PluginsData"sv), false);
 
 		const auto RandomName = uuid::str(os::uuid::generate());
 
@@ -438,7 +442,7 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 		string strProfilePath(Args.size() > 2 ? Args[2] : L""sv), strLocalProfilePath(Args.size() > 3 ? Args[3] : L""), strTemplatePath(Args.size() > 4 ? Args[4] : L"");
 		InitTemplateProfile(strTemplatePath);
 		InitProfile(strProfilePath, strLocalProfilePath);
-		Global->m_ConfigProvider = new config_provider(Export ? config_provider::mode::m_export : config_provider::mode::m_import);
+		Global->m_ConfigProvider = std::make_unique<config_provider>(Export ? config_provider::mode::m_export : config_provider::mode::m_import);
 		ConfigProvider().ServiceMode(Args[1]);
 		return EXIT_SUCCESS;
 	}
@@ -448,7 +452,9 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 		string strProfilePath(Args.size() > 1 ? Args[1] : L""sv);
 		string strLocalProfilePath(Args.size() > 2 ? Args[2] : L""sv);
 		InitProfile(strProfilePath, strLocalProfilePath);
-		(void)config_provider{config_provider::clear_cache{}};
+		(void)config_provider {
+			config_provider::clear_cache{}
+		};
 		return EXIT_SUCCESS;
 	}
 
@@ -720,7 +726,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	InitTemplateProfile(strTemplatePath);
 	InitProfile(strProfilePath, strLocalProfilePath);
-	Global->m_ConfigProvider = new config_provider;
+	Global->m_ConfigProvider = std::make_unique<config_provider>();
 
 	Global->Opt->Load(std::move(Overrides));
 
@@ -738,18 +744,14 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	}
 
 	InitConsole();
-	if (CustomTitle.has_value())
-		ConsoleTitle::SetUserTitle(CustomTitle->empty() ? Global->strInitTitle : *CustomTitle);
 
 	SCOPE_EXIT
 	{
-		// BUGBUG, reorder to delete only in ~global()
-		delete Global->CtrlObject;
-		Global->CtrlObject = nullptr;
-
-		ClearInternalClipboard();
 		CloseConsole();
 	};
+
+	if (CustomTitle.has_value())
+		ConsoleTitle::SetUserTitle(CustomTitle->empty() ? Global->strInitTitle : *CustomTitle);
 
 	far_language::instance().load(Global->g_strFarPath, Global->Opt->strLanguage, static_cast<int>(lng::MNewFileName + 1));
 
@@ -760,7 +762,14 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	UpdateErrorMode();
 
-	Global->CtrlObject = new ControlObject;
+	ControlObject CtrlObj;
+	Global->CtrlObject = &CtrlObj;
+
+	SCOPE_EXIT
+	{
+		CtrlObj.close();
+		Global->CtrlObject = {};
+	};
 
 	NoElevationDuringBoot.reset();
 
@@ -773,11 +782,11 @@ static int mainImpl(span<const wchar_t* const> const Args)
 		},
 			[&]() -> int
 		{
-		handle_exception([&]{ return handle_unknown_exception(CurrentFunctionName); });
+			handle_exception([&] { return handle_unknown_exception(CurrentFunctionName); });
 		},
 			[&](std::exception const& e) -> int
 		{
-		handle_exception([&]{ return handle_std_exception(e, CurrentFunctionName); });
+			handle_exception([&] { return handle_std_exception(e, CurrentFunctionName); });
 		});
 }
 
@@ -844,11 +853,11 @@ static int wmain_seh()
 		},
 			[&]() -> int
 		{
-		handle_exception_final([&]{ return handle_unknown_exception(CurrentFunctionName); });
+			handle_exception_final([&] { return handle_unknown_exception(CurrentFunctionName); });
 		},
 			[&](std::exception const& e) -> int
 		{
-		handle_exception_final([&]{ return handle_std_exception(e, CurrentFunctionName); });
+			handle_exception_final([&] { return handle_std_exception(e, CurrentFunctionName); });
 		});
 }
 
@@ -857,7 +866,7 @@ int main()
 	return seh_try_with_ui(
 		[]
 		{
-		return wmain_seh();
+			return wmain_seh();
 		},
 			[]() -> int
 		{
