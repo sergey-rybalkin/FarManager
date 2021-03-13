@@ -552,6 +552,41 @@ TEST_CASE("keep_alive")
 
 //----------------------------------------------------------------------------
 
+#include "common/lazy.hpp"
+
+TEST_CASE("lazy")
+{
+	int Magic1 = 42, Magic2 = 69;
+	int CallCount;
+	lazy<int> const LazyValue([&]{ ++CallCount; return Magic1; });
+
+	{
+		CallCount = 0;
+		auto Value = LazyValue;
+
+		REQUIRE(CallCount == 0);
+		REQUIRE(*Value == Magic1);
+		REQUIRE(*Value == Magic1);
+		REQUIRE(CallCount == 1);
+
+		Value = Magic2;
+		REQUIRE(*Value == Magic2);
+		REQUIRE(CallCount == 1);
+	}
+
+	{
+		CallCount = 0;
+		auto Value = LazyValue;
+
+		Value = Magic2;
+		REQUIRE(*Value == Magic2);
+		REQUIRE(CallCount == 0);
+	}
+
+}
+
+//----------------------------------------------------------------------------
+
 #include "common/monitored.hpp"
 
 TEST_CASE("monitored")

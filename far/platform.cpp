@@ -78,7 +78,7 @@ namespace os
 
 			default:
 				// Abandoned or error
-				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"WaitForSingleobject returned {0}"), Result));
+				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"WaitForSingleobject returned {}"sv), Result));
 			}
 		}
 
@@ -100,7 +100,7 @@ namespace os
 			else
 			{
 				// Abandoned or error
-				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"WaitForMultipleObjects returned {0}"), Result));
+				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"WaitForMultipleObjects returned {}"sv), Result));
 			}
 		}
 
@@ -145,7 +145,7 @@ string GetErrorString(bool Nt, DWORD Code)
 
 string format_system_error(unsigned int const ErrorCode, string_view const ErrorMessage)
 {
-	return format(FSTR(L"0x{0:0>8X} - {1}"), ErrorCode, ErrorMessage);
+	return format(FSTR(L"0x{:0>8X} - {}"sv), ErrorCode, ErrorMessage);
 }
 
 
@@ -203,11 +203,28 @@ bool WNetGetConnection(const string_view LocalName, string &RemoteName)
 
 bool get_locale_value(LCID const LcId, LCTYPE const Id, string& Value)
 {
-	return detail::ApiDynamicErrorBasedStringReceiver(ERROR_INSUFFICIENT_BUFFER, Value, [&](span<wchar_t> Buffer)
+	last_error_guard ErrorGuard;
+	SetLastError(ERROR_SUCCESS);
+
+	if (detail::ApiDynamicErrorBasedStringReceiver(ERROR_INSUFFICIENT_BUFFER, Value, [&](span<wchar_t> Buffer)
 	{
 		const auto ReturnedSize = GetLocaleInfo(LcId, Id, Buffer.data(), static_cast<int>(Buffer.size()));
 		return ReturnedSize? ReturnedSize - 1 : 0;
-	});
+	}))
+	{
+		return true;
+	}
+
+	// An empty string returned
+	if (GetLastError() == ERROR_SUCCESS)
+	{
+		Value.clear();
+		return true;
+	}
+
+	// Something went wrong, it's better to leave the last error as is
+	ErrorGuard.dismiss();
+	return false;
 }
 
 bool get_locale_value(LCID const LcId, LCTYPE const Id, int& Value)
@@ -218,14 +235,12 @@ bool get_locale_value(LCID const LcId, LCTYPE const Id, int& Value)
 string GetPrivateProfileString(string_view const AppName, string_view const KeyName, string_view const Default, string_view const FileName)
 {
 	string Value;
-
-	(void)detail::ApiDynamicStringReceiver(Value, [&](span<wchar_t> const Buffer)
+	return detail::ApiDynamicStringReceiver(Value, [&](span<wchar_t> const Buffer)
 	{
 		const auto Size = ::GetPrivateProfileString(null_terminated(AppName).c_str(), null_terminated(KeyName).c_str(), null_terminated(Default).c_str(), Buffer.data(), static_cast<DWORD>(Buffer.size()), null_terminated(FileName).c_str());
 		return Size == Buffer.size() - 1? Buffer.size() * 2 : Size;
-	});
-
-	return Value;
+	})?
+		Value : string(Default);
 }
 
 bool GetWindowText(HWND Hwnd, string& Text)
@@ -401,9 +416,13 @@ handle OpenConsoleActiveScreenBuffer()
 				{
 					m_module.reset(LoadLibraryEx(m_name.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
 				}
-				// TODO: log if nullptr
 			}
 			return m_module.get();
+		}
+
+		FARPROC module::get_proc_address(HMODULE Module, const char* Name) const
+		{
+			return Module? ::GetProcAddress(Module, Name) : nullptr;
 		}
 	}
 
@@ -438,6 +457,43 @@ handle OpenConsoleActiveScreenBuffer()
 		void print(string const& Str)
 		{
 			print(Str.c_str());
+		}
+
+		std::vector<uintptr_t> current_stack(size_t const FramesToSkip, size_t const FramesToCapture)
+		{
+			std::vector<uintptr_t> Stack;
+			Stack.reserve(128);
+
+			// http://web.archive.org/web/20140815000000*/http://msdn.microsoft.com/en-us/library/windows/hardware/ff552119(v=vs.85).aspx
+			// In Windows XP and Windows Server 2003, the sum of the FramesToSkip and FramesToCapture parameters must be less than 63.
+			static const auto Limit = IsWindowsVistaOrGreater()? std::numeric_limits<size_t>::max() : 62;
+
+			const auto Skip = FramesToSkip + 1; // 1 for this frame
+			const auto Capture = std::min(FramesToCapture, Limit - Skip);
+
+			for (size_t i = 0; i != FramesToCapture;)
+			{
+				void* Pointers[128];
+
+				const auto Size = imports.RtlCaptureStackBackTrace(
+					static_cast<DWORD>(Skip + i),
+					static_cast<DWORD>(std::min(std::size(Pointers), Capture - i)),
+					Pointers,
+					{}
+				);
+
+				if (!Size)
+					break;
+
+				std::transform(Pointers, Pointers + Size, std::back_inserter(Stack), [](void* Ptr)
+				{
+					return reinterpret_cast<uintptr_t>(Ptr);
+				});
+
+				i += Size;
+			}
+
+			return Stack;
 		}
 	}
 }

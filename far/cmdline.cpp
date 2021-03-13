@@ -52,7 +52,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "fileedit.hpp"
 #include "scrbuf.hpp"
 #include "interf.hpp"
-#include "syslog.hpp"
 #include "config.hpp"
 #include "usermenu.hpp"
 #include "datetime.hpp"
@@ -74,6 +73,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "string_utils.hpp"
 #include "farversion.hpp"
 #include "global.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -193,8 +193,6 @@ size_t CommandLine::DrawPrompt()
 
 void CommandLine::DisplayObject()
 {
-	_OT(SysLog(L"[%p] CommandLine::DisplayObject()",this));
-
 	const auto CurLength = DrawPrompt();
 
 	CmdStr.SetObjectColor(COL_COMMANDLINE,COL_COMMANDLINESELECTED);
@@ -933,9 +931,8 @@ std::list<CommandLine::segment> CommandLine::GetPrompt()
 									size_t pos;
 									if (from_string(string_view(strExpandedDestStr).substr(it + 1 - strExpandedDestStr.cbegin()), NewPromptSize, &pos))
 										it += pos;
-									// else
-										// bad format, NewPromptSize unchanged
-										// TODO: diagnostics
+									else
+										LOGWARNING(L"Incorrect prompt width in {}"sv, strExpandedDestStr);
 								}
 							}
 						}
@@ -1062,7 +1059,7 @@ static bool ProcessFarCommands(string_view Command, function_ref<void(bool)> con
 #endif
 			L""sv;
 
-		std::wcout << L"\nCompiler:\n"sv << format(FSTR(L"{0}, version {1}.{2}.{3}{4}"), COMPILER_NAME, COMPILER_VERSION_MAJOR, COMPILER_VERSION_MINOR, COMPILER_VERSION_PATCH, CompilerInfo) << L'\n';
+		std::wcout << L"\nCompiler:\n"sv << format(FSTR(L"{}, version {}.{}.{}{}"sv), COMPILER_NAME, COMPILER_VERSION_MAJOR, COMPILER_VERSION_MINOR, COMPILER_VERSION_PATCH, CompilerInfo) << L'\n';
 
 		if (const auto& ComponentsInfo = components::GetComponentsInfo(); !ComponentsInfo.empty())
 		{
@@ -1102,6 +1099,16 @@ static bool ProcessFarCommands(string_view Command, function_ref<void(bool)> con
 		std::wcout << std::flush;
 
 		return true;
+	}
+
+	if (const auto LogCommand = L"far:log"sv; starts_with_icase(Command, LogCommand))
+	{
+		if (const auto LogParameters = Command.substr(LogCommand.size()); starts_with(LogParameters, L' ') || LogParameters.empty())
+		{
+			ConsoleActivatior(false);
+			logging::configure(trim(LogParameters));
+			return true;
+		}
 	}
 
 	return false;
@@ -1508,7 +1515,7 @@ bool CommandLine::IntChDir(string_view const CmdLine, bool const ClosePanel, boo
 	{
 		if (!Silent)
 		{
-			const auto ErrorState = error_state::fetch();
+			const auto ErrorState = last_error();
 
 			Message(MSG_WARNING, ErrorState,
 				msg(lng::MError),

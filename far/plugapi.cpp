@@ -57,7 +57,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "window.hpp"
 #include "scrbuf.hpp"
 #include "TPreRedrawFunc.hpp"
-#include "syslog.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
 #include "message.hpp"
@@ -1189,7 +1188,7 @@ intptr_t WINAPI apiMessageFn(const UUID* PluginId, const UUID* Id, unsigned long
 	return cpp_try(
 	[&]() -> intptr_t
 	{
-		const error_state_ex ErrorState = Flags & FMSG_ERRORTYPE? error_state::fetch() : error_state();
+		const error_state_ex ErrorState = Flags & FMSG_ERRORTYPE? last_error() : error_state();
 
 		if (Global->WindowManager->ManagerIsDown())
 			return -1;
@@ -1295,11 +1294,6 @@ intptr_t WINAPI apiPanelControl(HANDLE hPlugin,FILE_CONTROL_COMMANDS Command,int
 	return cpp_try(
 	[&]() -> intptr_t
 	{
-		_FCTLLOG(CleverSysLog CSL(L"Control"));
-		_FCTLLOG(SysLog(L"(hPlugin=0x%08X, Command=%s, Param1=[%d/0x%08X], Param2=[%d/0x%08X])",hPlugin,_FCTL_ToName(Command),(int)Param1,Param1,(int)Param2,Param2));
-		_ALGO(CleverSysLog clv(L"FarPanelControl"));
-		_ALGO(SysLog(L"(hPlugin=0x%08X, Command=%s, Param1=[%d/0x%08X], Param2=[%d/0x%08X])",hPlugin,_FCTL_ToName(Command),(int)Param1,Param1,(int)Param2,Param2));
-
 		if (Command == FCTL_CHECKPANELSEXIST)
 			return Global->OnlyEditorViewerUsed? FALSE : TRUE;
 

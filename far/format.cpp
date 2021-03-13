@@ -34,6 +34,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "format.hpp"
 
 // Internal:
+#include "encoding.hpp"
 #include "components.hpp"
 #include "locale.hpp"
 
@@ -44,6 +45,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // External:
 
 //----------------------------------------------------------------------------
+
+std::wostream& std::operator<<(std::wostream& Stream, std::exception const& e)
+{
+	Stream << format(FSTR(L"std::exception: {}"sv), encoding::utf8::get_chars(e.what()));
+	return Stream;
+}
 
 WARNING_PUSH(3)
 
@@ -61,6 +68,6 @@ namespace
 {
 	SCOPED_ACTION(components::component)([]
 	{
-		return components::info{ L"fmt"sv, format(FSTR(L"{0}.{1}.{2}"), FMT_VERSION / 10000, FMT_VERSION % 10000 / 100, FMT_VERSION % 100) };
+		return components::info{ L"fmt"sv, format(FSTR(L"{}.{}.{}"sv), FMT_VERSION / 10000, FMT_VERSION % 10000 / 100, FMT_VERSION % 100) };
 	});
 }

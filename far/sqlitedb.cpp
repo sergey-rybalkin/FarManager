@@ -44,6 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "delete.hpp"
 #include "mix.hpp"
 #include "global.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -117,11 +118,11 @@ namespace
 	[[noreturn]]
 	void throw_exception(string_view const DatabaseName, int const ErrorCode, string_view const ErrorString = {}, int const SystemErrorCode = 0)
 	{
-		throw MAKE_EXCEPTION(far_sqlite_exception, true, format(FSTR(L"[{0}] - SQLite error {1}: {2}{3}"),
+		throw MAKE_EXCEPTION(far_sqlite_exception, true, format(FSTR(L"[{}] - SQLite error {}: {}{}"sv),
 			DatabaseName,
 			ErrorCode,
 			ErrorString.empty()? GetErrorString(ErrorCode) : ErrorString,
-			SystemErrorCode? format(FSTR(L" ({0})"), os::format_system_error(SystemErrorCode, os::GetErrorString(false, SystemErrorCode))) : L""s
+			SystemErrorCode? format(FSTR(L" ({})"sv), os::format_system_error(SystemErrorCode, os::GetErrorString(false, SystemErrorCode))) : L""s
 		));
 	}
 
@@ -152,18 +153,28 @@ namespace
 
 void SQLiteDb::library_load()
 {
-	[[maybe_unused]]
-	const auto Result = sqlite::sqlite3_initialize() == SQLITE_OK && sqlite_unicode::sqlite3_unicode_load() == SQLITE_OK;
-	assert(Result);
+	if (const auto Result = sqlite::sqlite3_initialize(); Result != SQLITE_OK)
+	{
+		assert(false);
+		LOGERROR(L"sqlite3_initialize(): {}"sv, GetErrorString(Result));
+	}
+
+	if (const auto Result = sqlite_unicode::sqlite3_unicode_load(); Result != SQLITE_OK)
+	{
+		assert(false);
+		LOGERROR(L"sqlite3_unicode_load(): {}"sv, GetErrorString(Result));
+	}
 }
 
 void SQLiteDb::library_free()
 {
 	sqlite_unicode::sqlite3_unicode_free();
 
-	[[maybe_unused]]
-	const auto Result = sqlite::sqlite3_shutdown();
-	assert(Result == SQLITE_OK);
+	if (const auto Result = sqlite::sqlite3_shutdown(); Result != SQLITE_OK)
+	{
+		assert(false);
+		LOGERROR(L"sqlite3_shutdown(): {}"sv, GetErrorString(Result));
+	}
 }
 
 void SQLiteDb::SQLiteStmt::stmt_deleter::operator()(sqlite::sqlite3_stmt* Object) const noexcept
@@ -178,9 +189,11 @@ void SQLiteDb::SQLiteStmt::stmt_deleter::operator()(sqlite::sqlite3_stmt* Object
 	// This is called from a destructor so we can't throw here.
 	invoke(sqlite::sqlite3_db_handle(Object), [&]
 	{
-		[[maybe_unused]]
-		const auto Result = sqlite::sqlite3_finalize(Object);
-		assert(Result == SQLITE_OK);
+		if (const auto Result = sqlite::sqlite3_finalize(Object); Result != SQLITE_OK)
+		{
+			assert(false);
+			LOGERROR(L"sqlite3_finalize(): {}"sv, GetErrorString(Result));
+		}
 		return true;
 	});
 }
@@ -199,9 +212,11 @@ SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::Reset()
 	// This is called from a destructor so we can't throw here.
 	invoke(db(), [&]
 	{
-		[[maybe_unused]]
-		const auto Result = sqlite::sqlite3_reset(m_Stmt.get());
-		assert(Result == SQLITE_OK);
+		if (const auto Result = sqlite::sqlite3_reset(m_Stmt.get()); Result != SQLITE_OK)
+		{
+			assert(false);
+			LOGERROR(L"sqlite3_reset(): {}"sv, GetErrorString(Result));
+		}
 		return true;
 	});
 
@@ -344,9 +359,11 @@ SQLiteDb::SQLiteDb(busy_handler BusyHandler, initialiser Initialiser, string_vie
 
 void SQLiteDb::db_closer::operator()(sqlite::sqlite3* Object) const noexcept
 {
-	[[maybe_unused]]
-	const auto Result = sqlite::sqlite3_close(Object);
-	assert(Result == SQLITE_OK);
+	if (const auto Result = sqlite::sqlite3_close(Object); Result != SQLITE_OK)
+	{
+		assert(false);
+		LOGERROR(L"sqlite3_close(): {}"sv, GetLastErrorString(Object));
+	}
 }
 
 class SQLiteDb::implementation
@@ -393,7 +410,12 @@ public:
 				throw_exception(Path, SQLITE_READONLY);
 
 			Deleter.add(TmpDbPath);
-			(void)os::fs::set_file_attributes(TmpDbPath, FILE_ATTRIBUTE_NORMAL); //BUGBUG
+
+			if (!os::fs::set_file_attributes(TmpDbPath, FILE_ATTRIBUTE_NORMAL)) //BUGBUG
+			{
+				LOGWARNING(L"set_file_attributes({}): {}"sv, TmpDbPath, last_error());
+			}
+
 			SourceDb = open(TmpDbPath, BusyHandler);
 		}
 		else
@@ -405,9 +427,11 @@ public:
 		{
 			void operator()(sqlite::sqlite3_backup* Backup) const noexcept
 			{
-				[[maybe_unused]]
-				const auto Result = sqlite::sqlite3_backup_finish(Backup);
-				assert(Result == SQLITE_OK);
+				if (const auto Result = sqlite::sqlite3_backup_finish(Backup); Result != SQLITE_OK)
+				{
+					assert(false);
+					LOGERROR(L"sqlite3_backup_finish(): {}"sv, GetErrorString(Result));
+				}
 			}
 		};
 

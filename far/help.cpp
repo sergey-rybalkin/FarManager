@@ -64,6 +64,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cmdline.hpp"
 #include "global.hpp"
 #include "modal.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -121,8 +122,8 @@ public:
 
 static bool OpenURL(string_view URLPath);
 
-static const auto HelpFormatLink = FSTR(L"<{0}\\>{1}");
-static const auto HelpFormatLinkModule = FSTR(L"<{0}>{1}");
+static const auto HelpFormatLink = FSTR(L"<{}\\>{}"sv);
+static const auto HelpFormatLinkModule = FSTR(L"<{}>{}"sv);
 
 class Help :public Modal
 {
@@ -369,12 +370,12 @@ bool Help::ReadHelp(string_view const Mask)
 			}
 			else
 			{
-				// TODO: log tabsize out of range
+				LOGWARNING(L"CtrlTabSize value {} is out of range"sv, UserTabSize);
 			}
 		}
 		else
 		{
-			// TODO: log error reading tabsize
+			LOGWARNING(L"CtrlTabSize value {} is invalid"sv, strReadStr);
 		}
 	}
 
@@ -423,7 +424,7 @@ bool Help::ReadHelp(string_view const Mask)
 
 	os::fs::filebuf StreamBuffer(HelpFile, std::ios::in);
 	std::istream Stream(&StreamBuffer);
-	Stream.exceptions(Stream.badbit | Stream.failbit);
+	Stream.exceptions(Stream.badbit | Stream.failbit); // BUGBUG, add try/catch
 
 	enum_lines EnumFileLines(Stream, HelpFileCodePage);
 	auto FileIterator = EnumFileLines.begin();
@@ -1581,7 +1582,6 @@ bool Help::JumpTopic()
 		}
 	}
 
-	//_SVS(SysLog(L"JumpTopic() = SelTopic=%s",StackData->SelTopic));
 	// URL активатор - это ведь так просто :-)))
 	// наверное подразумевается URL
 	{
@@ -1593,7 +1593,6 @@ bool Help::JumpTopic()
 	}
 	// а вот теперь попробуем...
 
-	//_SVS(SysLog(L"JumpTopic() = SelTopic=%s, StackData->HelpPath=%s",StackData->SelTopic,StackData->HelpPath));
 	string strNewTopic;
 	if (!StackData->strHelpPath.empty() && StackData->strSelTopic.front() !=HelpBeginLink && StackData->strSelTopic != HelpOnHelpTopic)
 	{
@@ -1648,7 +1647,6 @@ bool Help::JumpTopic()
 		}
 	}
 
-	//_SVS(SysLog(L"HelpMask=%s NewTopic=%s",StackData->HelpMask,NewTopic));
 	if (StackData->strSelTopic.front() != L':' &&
 	        (!equal_icase(StackData->strSelTopic, PluginContents) || !equal_icase(StackData->strSelTopic, FoundContents))
 	   )
@@ -2008,7 +2006,7 @@ void Help::Search(const os::fs::file& HelpFile,uintptr_t nCodePage)
 
 	os::fs::filebuf StreamBuffer(HelpFile, std::ios::in);
 	std::istream Stream(&StreamBuffer);
-	Stream.exceptions(Stream.badbit | Stream.failbit);
+	Stream.exceptions(Stream.badbit | Stream.failbit); // BUGBUG, add try/catch
 
 	for (const auto& i: enum_lines(Stream, nCodePage))
 	{

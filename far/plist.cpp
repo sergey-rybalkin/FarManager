@@ -51,6 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "exception_handler.hpp"
 #include "console.hpp"
 #include "keyboard.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -140,9 +141,14 @@ static void AddMenuItem(HWND const Window, DWORD const Pid, size_t const PidWidt
 
 	if (ShowImage)
 	{
-		if (const auto Process = os::handle(OpenProcess(imports.QueryFullProcessImageNameW? PROCESS_QUERY_LIMITED_INFORMATION : PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, Pid)))
+		if (const auto Process = os::handle(OpenProcess(imports.QueryFullProcessImageNameW ? PROCESS_QUERY_LIMITED_INFORMATION : PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, Pid)))
+		{
 			// BUGBUG check result
-			(void)os::fs::GetModuleFileName(Process.native_handle(), nullptr, MenuItem);
+			if (!os::fs::get_module_file_name(Process.native_handle(), {}, MenuItem))
+			{
+				LOGWARNING(L"GetModuleFileName({}): {}"sv, Pid, last_error());
+			}
+		}
 
 		if (MenuItem.empty())
 			MenuItem = L"???"sv;
@@ -154,7 +160,7 @@ static void AddMenuItem(HWND const Window, DWORD const Pid, size_t const PidWidt
 
 	const auto Self = Pid == GetCurrentProcessId() || Window == console.GetWindow();
 
-	MenuItemEx NewItem(format(FSTR(L"{0:{1}} {2} {3}"), Pid, PidWidth, BoxSymbols[BS_V1], MenuItem), Self? MIF_CHECKED : MIF_NONE);
+	MenuItemEx NewItem(format(FSTR(L"{:{}} {} {}"sv), Pid, PidWidth, BoxSymbols[BS_V1], MenuItem), Self? MIF_CHECKED : MIF_NONE);
 	// for sorting
 	NewItem.ComplexUserData = menu_data{ WindowTitle, Pid, Window };
 	Menu->AddItem(NewItem);
@@ -238,7 +244,7 @@ void ShowProcessList()
 						const os::handle Process(OpenProcess(PROCESS_TERMINATE, FALSE, MenuData->Pid));
 						if (!Process || !TerminateProcess(Process.native_handle(), ERROR_PROCESS_ABORTED))
 						{
-							const auto ErrorState = error_state::fetch();
+							const auto ErrorState = last_error();
 
 							Message(MSG_WARNING, ErrorState,
 								msg(lng::MKillProcessTitle),

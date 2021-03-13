@@ -53,7 +53,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "manager.hpp"
 #include "filemasks.hpp"
 #include "filefilter.hpp"
-#include "syslog.hpp"
 #include "encoding.hpp"
 #include "taskbar.hpp"
 #include "interf.hpp"
@@ -81,6 +80,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "drivemix.hpp"
 #include "global.hpp"
 #include "cvtname.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.concurrency.hpp"
@@ -914,7 +914,6 @@ intptr_t FindFiles::MainDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 bool FindFiles::GetPluginFile(ArcListItem const* const ArcItem, const os::fs::find_data& FindData, const string& DestPath, string &strResultName, const UserDataItem* const UserData)
 {
 	SCOPED_ACTION(std::lock_guard)(PluginCS);
-	_ALGO(CleverSysLog clv(L"FindFiles::GetPluginFile()"));
 	OpenPanelInfo Info;
 
 	Global->CtrlObject->Plugins->GetOpenPanelInfo(ArcItem->hPlugin,&Info);
@@ -977,7 +976,10 @@ bool background_searcher::LookForString(string_view const FileName)
 
 	unsigned long long FileSize = 0;
 	// BUGBUG check result
-	(void)File.GetSize(FileSize);
+	if (!File.GetSize(FileSize))
+	{
+		LOGWARNING(L"GetSize({}): {}"sv, File.GetName(), last_error());
+	}
 
 	if (SearchInFirst)
 	{
@@ -1273,7 +1275,11 @@ bool background_searcher::IsFileIncluded(PluginPanelItem* FileItem, string_view 
 			if (!GetFile())
 			{
 				// BUGBUG check result
-				(void)os::fs::remove_directory(strTempDir);
+				if (!os::fs::remove_directory(strTempDir))
+				{
+					LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+				}
+
 				return false;
 			}
 
@@ -1392,7 +1398,7 @@ intptr_t FindFiles::FindDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 			Dlg->SendMessage(DM_SETTEXTPTR, FD_TEXT_STATUS, UNSAFE_CSTR(strSearchStr + strFM));
 			if (!strFindStr.empty())
 			{
-				Dlg->SendMessage(DM_SETTEXTPTR, FD_TEXT_STATUS_PERCENTS, UNSAFE_CSTR(format(FSTR(L"{0:3}%"), itd->GetPercent())));
+				Dlg->SendMessage(DM_SETTEXTPTR, FD_TEXT_STATUS_PERCENTS, UNSAFE_CSTR(format(FSTR(L"{:3}%"sv), itd->GetPercent())));
 			}
 
 			if (m_LastFoundNumber)
@@ -1618,7 +1624,11 @@ intptr_t FindFiles::FindDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 							if (!bGet)
 							{
 								// BUGBUG check result
-								(void)os::fs::remove_directory(strTempDir);
+								if (!os::fs::remove_directory(strTempDir))
+								{
+									LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+								}
+
 								return FALSE;
 							}
 
@@ -2106,8 +2116,6 @@ void background_searcher::AddMenuRecord(string_view const FullName, PluginPanelI
 
 void background_searcher::ArchiveSearch(string_view const ArcName)
 {
-	_ALGO(CleverSysLog clv(L"FindFiles::ArchiveSearch()"));
-
 	std::unique_ptr<plugin_panel> hArc;
 
 	{
@@ -2515,7 +2523,6 @@ void background_searcher::Search()
 
 bool FindFiles::FindFilesProcess()
 {
-	_ALGO(CleverSysLog clv(L"FindFiles::FindFilesProcess()"));
 	// Если используется фильтр операций, то во время поиска сообщаем об этом
 	string strTitle=msg(lng::MFindFileTitle);
 
@@ -2835,8 +2842,6 @@ FindFiles::FindFiles():
 	m_TimeCheck(time_check::mode::immediate, GetRedrawTimeout()),
 	m_MessageEvent(os::event::type::manual, os::event::state::signaled)
 {
-	_ALGO(CleverSysLog clv(L"FindFiles::FindFiles()"));
-
 	static string strLastFindMask = L"*.*"s, strLastFindStr;
 
 	static string strSearchFromRoot;

@@ -51,6 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "datetime.hpp"
 #include "global.hpp"
 #include "file_io.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -172,15 +173,33 @@ void DizList::Read(string_view const Path, const string* DizName)
 		return true;
 	};
 
+	const auto try_read_diz_file = [&](const string_view Name)
+	{
+		try
+		{
+			return ReadDizFile(Name);
+		}
+		catch(std::exception const& e)
+		{
+			m_DizData.clear();
+			m_DizFileName.clear();
+			m_Modified = false;
+
+			LOGWARNING(L"{}"sv, e);
+
+			return false;
+		}
+	};
+
 	if (DizName)
 	{
-		ReadDizFile(*DizName);
+		try_read_diz_file(*DizName);
 	}
 	else if (PathCanHoldRegularFile(Path))
 	{
 		for (const auto& i: enum_tokens_with_quotes(Global->Opt->Diz.strListNames.Get(), L",;"sv))
 		{
-			if (ReadDizFile(path::join(Path, i)))
+			if (try_read_diz_file(path::join(Path, i)))
 				break;
 		}
 	}
@@ -201,7 +220,7 @@ string_view DizList::Get(const string& Name, const string& ShortName, const long
 		return {};
 	}
 
-	auto Begin = Description.begin();
+	auto Begin = std::find_if_not(ALL_CONST_RANGE(Description), std::iswblank);
 
 	if (std::iswdigit(*Begin))
 	{
@@ -325,7 +344,10 @@ bool DizList::Flush(string_view const Path, const string* DizName)
 				{ lng::MYes, lng::MNo }) != Message::first_button)
 			return false;
 
-		(void)os::fs::set_file_attributes(m_DizFileName, FileAttr & ~FILE_ATTRIBUTE_READONLY); //BUGBUG
+		if (!os::fs::set_file_attributes(m_DizFileName, FileAttr & ~FILE_ATTRIBUTE_READONLY)) //BUGBUG
+		{
+			LOGWARNING(L"set_file_attributes({}): {}"sv, m_DizFileName, last_error());
+		}
 	}
 
 	try

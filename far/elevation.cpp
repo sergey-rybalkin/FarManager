@@ -54,6 +54,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "exception.hpp"
 #include "exception_handler.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.concurrency.hpp"
@@ -232,9 +233,9 @@ elevation::~elevation()
 		{
 			Write(C_SERVICE_EXIT);
 		}
-		catch (const far_exception&)
+		catch (const far_exception& e)
 		{
-			// TODO: log
+			LOGERROR(L"{}"sv, e);
 		}
 	}
 
@@ -307,14 +308,14 @@ auto elevation::execute(lng Why, string_view const Object, T Fallback, const F1&
 	{
 		return ElevatedHandler();
 	}
-	catch (const far_exception&)
+	catch (const far_exception& e)
 	{
 		// Something went really bad, it's better to stop any further attempts
 		TerminateChildProcess();
 		m_Process.close();
 		m_Pipe.close();
 
-		// TODO: log
+		LOGERROR(L"{}"sv, e);
 		return Fallback;
 	}
 }
@@ -356,12 +357,18 @@ static os::handle create_job()
 {
 	os::handle Job(CreateJobObject(nullptr, nullptr));
 	if (!Job)
+	{
+		LOGERROR(L"CreateJobObject: {}"sv, last_error());
 		return nullptr;
+	}
 
 	JOBOBJECT_EXTENDED_LIMIT_INFORMATION jeli{};
 	jeli.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
 	if (!SetInformationJobObject(Job.native_handle(), JobObjectExtendedLimitInformation, &jeli, sizeof(jeli)))
+	{
+		LOGERROR(L"SetInformationJobObject: {}"sv, last_error());
 		return nullptr;
+	}
 
 	return Job;
 }
@@ -440,7 +447,6 @@ bool elevation::Initialize()
 
 	if (m_Job)
 		AssignProcessToJobObject(m_Job.native_handle(), m_Process.native_handle());
-	//TODO: else log
 
 	if (!connect_pipe_to_process(m_Process, m_Pipe))
 	{
@@ -989,12 +995,10 @@ public:
 				return GetLastError();
 
 			string ParentProcessFileName;
-			if (!os::fs::GetModuleFileName(ParentProcess.native_handle(), nullptr, ParentProcessFileName))
+			if (!os::fs::get_module_file_name(ParentProcess.native_handle(), {}, ParentProcessFileName))
 				return GetLastError();
 
-			string CurrentProcessFileName;
-			if (!os::fs::GetModuleFileName(GetCurrentProcess(), nullptr, CurrentProcessFileName))
-				return GetLastError();
+			const auto CurrentProcessFileName = os::fs::get_current_process_file_name();
 
 			if (!equal_icase(CurrentProcessFileName, ParentProcessFileName))
 				return ERROR_INVALID_NAME;
@@ -1054,7 +1058,7 @@ private:
 		const auto SecurityAttributes = Read<security_attributes_wrapper>();
 		const auto Result = os::fs::low::create_directory(TemplateObject.c_str(), Object.c_str(), SecurityAttributes());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void RemoveDirectoryHandler() const
@@ -1063,7 +1067,7 @@ private:
 
 		const auto Result = os::fs::low::remove_directory(Object.c_str());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void DeleteFileHandler() const
@@ -1072,7 +1076,7 @@ private:
 
 		const auto Result = os::fs::low::delete_file(Object.c_str());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void CopyFileHandler() const
@@ -1087,7 +1091,7 @@ private:
 		callback_param Param{ this, reinterpret_cast<void*>(Data) };
 		const auto Result = os::fs::low::copy_file(From.c_str(), To.c_str(), UserCopyProgressRoutine? CopyProgressRoutineWrapper : nullptr, &Param, nullptr, Flags);
 
-		Write(0 /* not CallbackMagic */, error_state::fetch(), Result);
+		Write(0 /* not CallbackMagic */, last_error(), Result);
 
 		rethrow_if(Param.ExceptionPtr);
 	}
@@ -1100,7 +1104,7 @@ private:
 
 		const auto Result = os::fs::low::move_file(From.c_str(), To.c_str(), Flags);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void ReplaceFileHandler() const
@@ -1112,7 +1116,7 @@ private:
 
 		const auto Result = os::fs::low::replace_file(To.c_str(), From.c_str(), Backup.c_str(), Flags);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void GetFileAttributesHandler() const
@@ -1121,7 +1125,7 @@ private:
 
 		const auto Result = os::fs::low::get_file_attributes(Object.c_str());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void SetFileAttributesHandler() const
@@ -1131,7 +1135,7 @@ private:
 
 		const auto Result = os::fs::low::set_file_attributes(Object.c_str(), Attributes);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void CreateHardLinkHandler() const
@@ -1142,7 +1146,7 @@ private:
 
 		const auto Result = os::fs::low::create_hard_link(Object.c_str(), Target.c_str(), SecurityAttributes());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void CreateSymbolicLinkHandler() const
@@ -1153,7 +1157,7 @@ private:
 
 		const auto Result = os::fs::CreateSymbolicLinkInternal(Object, Target, Flags);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void MoveToRecycleBinHandler() const
@@ -1162,7 +1166,7 @@ private:
 
 		const auto Result = os::fs::low::move_to_recycle_bin(Object);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void SetOwnerHandler() const
@@ -1172,7 +1176,7 @@ private:
 
 		const auto Result = SetOwnerInternal(Object, Owner);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void CreateFileHandler() const
@@ -1194,7 +1198,7 @@ private:
 			}
 		}
 
-		Write(error_state::fetch(), reinterpret_cast<intptr_t>(Duplicate));
+		Write(last_error(), reinterpret_cast<intptr_t>(Duplicate));
 	}
 
 	void SetEncryptionHandler() const
@@ -1204,7 +1208,7 @@ private:
 
 		const auto Result = os::fs::low::set_file_encryption(Object.c_str(), Encrypt);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void DetachVirtualDiskHandler() const
@@ -1214,7 +1218,7 @@ private:
 
 		const auto Result = os::fs::low::detach_virtual_disk(Object.c_str(), VirtualStorageType);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void GetDiskFreeSpaceHandler() const
@@ -1224,7 +1228,7 @@ private:
 		unsigned long long FreeBytesAvailableToCaller, TotalNumberOfBytes, TotalNumberOfFreeBytes;
 		const auto Result = os::fs::low::get_disk_free_space(Object.c_str(), &FreeBytesAvailableToCaller, &TotalNumberOfBytes, &TotalNumberOfFreeBytes);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 
 		if(Result)
 		{
@@ -1239,7 +1243,7 @@ private:
 
 		const auto Result = os::fs::low::get_file_security(Object.c_str(), SecurityInformation);
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void SetFileSecurityHandler() const
@@ -1252,7 +1256,7 @@ private:
 
 		const auto Result = os::fs::low::set_file_security(Object.c_str(), SecurityInformation, SecurityDescriptor.data());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	void ResetFileSecurityHandler() const
@@ -1261,7 +1265,7 @@ private:
 
 		const auto Result = os::fs::low::reset_file_security(Object.c_str());
 
-		Write(error_state::fetch(), Result);
+		Write(last_error(), Result);
 	}
 
 	static DWORD CALLBACK CopyProgressRoutineWrapper(LARGE_INTEGER TotalFileSize, LARGE_INTEGER TotalBytesTransferred, LARGE_INTEGER StreamSize, LARGE_INTEGER StreamBytesTransferred, DWORD StreamNumber, DWORD CallbackReason, HANDLE SourceFile,HANDLE DestinationFile, LPVOID Data)
@@ -1339,7 +1343,7 @@ private:
 		}
 		catch (...)
 		{
-			// TODO: log
+			LOGERROR(L"Unknown exception"sv);
 			return false;
 		}
 	}

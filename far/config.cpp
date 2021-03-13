@@ -85,6 +85,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "locale.hpp"
 #include "console.hpp"
 #include "scrbuf.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -1487,7 +1488,7 @@ static bool ParseIntValue(string_view const sValue, long long& iValue)
 		return true;
 	}
 
-	// TODO: log
+	LOGWARNING(L"Unsupported integer value: {}"sv, sValue);
 	return false;
 }
 
@@ -1588,7 +1589,7 @@ void IntOption::Export(FarSettingsItem& To) const
 
 string IntOption::ExInfo() const
 {
-	return format(FSTR(L" = 0x{0:X}"), as_unsigned(Get()));
+	return format(FSTR(L" = 0x{:X}"sv), as_unsigned(Get()));
 }
 
 
@@ -2203,7 +2204,7 @@ static auto deserialise_sort_layers(string_view const LayersStr)
 
 static auto serialise_sort_layer(std::pair<panel_sort, sort_order> const& Layer)
 {
-	return format(FSTR(L"S{0}:O{1}"), Layer.first, Layer.second);
+	return format(FSTR(L"S{}:O{}"sv), Layer.first, Layer.second);
 }
 
 static auto serialise_sort_layers(span<std::pair<panel_sort, sort_order> const> const Layers)

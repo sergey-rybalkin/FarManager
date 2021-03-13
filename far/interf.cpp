@@ -55,6 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "taskbar.hpp"
 #include "global.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.concurrency.hpp"
@@ -197,6 +198,8 @@ static BOOL WINAPI CtrlHandler(DWORD CtrlType)
 		Global->CloseFAR = true;
 		Global->AllowCancelExit = false;
 
+		LOGNOTICE(L"CTRL_CLOSE_EVENT: exiting the thread"sv);
+
 		// trick to let wmain() finish correctly
 		ExitThread(1);
 		//return TRUE;
@@ -204,7 +207,7 @@ static BOOL WINAPI CtrlHandler(DWORD CtrlType)
 	return FALSE;
 }
 
-static bool ConsoleScrollHook(const Manager::Key& key)
+static bool ConsoleGlobalKeysHook(const Manager::Key& key)
 {
 	// Удалить после появления макрофункции Scroll
 	if (Global->Opt->WindowMode && Global->WindowManager->IsPanelsActive())
@@ -278,6 +281,15 @@ static bool ConsoleScrollHook(const Manager::Key& key)
 			return true;
 		}
 	}
+
+	switch (key())
+	{
+	case KEY_CTRLSHIFTL:
+	case KEY_RCTRLSHIFTL:
+		logging::show();
+		return true;
+	}
+
 	return false;
 }
 
@@ -303,7 +315,7 @@ void InitConsole()
 			SetStdHandle(STD_ERROR_HANDLE, ConOut.native_handle());
 		}
 
-		Global->WindowManager->AddGlobalKeyHandler(ConsoleScrollHook);
+		Global->WindowManager->AddGlobalKeyHandler(ConsoleGlobalKeysHook);
 	}
 
 	console.SetControlHandler(CtrlHandler, true);
@@ -434,12 +446,16 @@ void SetFarConsoleMode(bool SetsActiveBuffer)
 		InputMode &= ~ENABLE_MOUSE_INPUT;
 	}
 
-	// Feature: if window rect is in unusual position (shifted up or right) - enable mouse selection
+	// Feature: if window rect is in unusual position (shifted up or right), of if an alternative buffer is active - enable mouse selection
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (Global->Opt->WindowMode
-			&& GetConsoleScreenBufferInfo(console.GetOutputHandle(), &csbi)
-			&& (csbi.srWindow.Bottom != csbi.dwSize.Y - 1 || csbi.srWindow.Left))
+		if (const auto Buffer = console.GetActiveScreenBuffer(); (Buffer && Buffer != console.GetOutputHandle()) ||
+			(
+				Global->Opt->WindowMode &&
+				GetConsoleScreenBufferInfo(console.GetOutputHandle(), &csbi) &&
+				(csbi.srWindow.Bottom != csbi.dwSize.Y - 1 || csbi.srWindow.Left)
+			)
+		)
 		{
 			InputMode &= ~ENABLE_MOUSE_INPUT;
 			InputMode |= ENABLE_EXTENDED_FLAGS | ENABLE_QUICK_EDIT_MODE;
@@ -1205,7 +1221,7 @@ string make_progressbar(size_t Size, size_t Percent, bool ShowPercent, bool Prop
 	string StrPercent;
 	if (ShowPercent)
 	{
-		StrPercent = format(FSTR(L" {0:3}%"), Percent);
+		StrPercent = format(FSTR(L" {:3}%"sv), Percent);
 		Size = Size > StrPercent.size()? Size - StrPercent.size(): 0;
 	}
 	string Str(Size, BoxSymbols[BS_X_B0]);
@@ -1331,7 +1347,7 @@ size_t ConsoleChoice(string_view const Message, string_view const Choices, size_
 
 	for (;;)
 	{
-		std::wcout << format(FSTR(L"\n{0} ({1})? "), Message, join(Choices, L"/"sv)) << std::flush;
+		std::wcout << format(FSTR(L"\n{} ({})? "sv), Message, join(Choices, L"/"sv)) << std::flush;
 
 		wchar_t Input;
 		std::wcin.clear();

@@ -39,11 +39,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "scantree.hpp"
 
 // Internal:
-#include "syslog.hpp"
 #include "config.hpp"
 #include "pathmix.hpp"
 #include "cvtname.hpp"
 #include "global.hpp"
+#include "exception.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -200,12 +201,15 @@ bool ScanTree::GetNextName(os::fs::find_data& fdata,string &strFullName)
 			{
 				strFullName = strFindPathOriginal;
 				// BUGBUG check result
-				(void)os::fs::get_find_data(strFindPath, fdata);
+				if (!os::fs::get_find_data(strFindPath, fdata))
+				{
+					LOGWARNING(L"get_find_data({}): {}"sv, strFindPath, last_error());
+				}
+
 			}
 
 			CutToSlash(strFindPath);
 			strFindPath += strFindMask;
-			_SVS(SysLog(L"1. FullName='%s'",strFullName.c_str()));
 
 			if (Flags.Check(TREE_RETUPDIR))
 			{

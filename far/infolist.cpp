@@ -50,7 +50,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "fileedit.hpp"
 #include "manager.hpp"
 #include "cddrv.hpp"
-#include "syslog.hpp"
 #include "interf.hpp"
 #include "dirmix.hpp"
 #include "pathmix.hpp"
@@ -378,7 +377,7 @@ void InfoList::DisplayObject()
 			if (UseAssocPath)
 				append(SectionTitle, L' ', strAssocPath);
 
-			strDiskNumber = format(FSTR(L"{0:04X}-{1:04X}"), HIWORD(VolumeNumber), LOWORD(VolumeNumber));
+			strDiskNumber = format(FSTR(L"{:04X}-{:04X}"sv), HIWORD(VolumeNumber), LOWORD(VolumeNumber));
 		}
 		else // Error!
 			SectionTitle = strDriveRoot;
@@ -1028,7 +1027,6 @@ bool InfoList::OpenDizFile(string_view const DizFile, int const YPos)
 	{
 		DizView = std::make_unique<DizViewer>(GetOwner());
 
-		_tran(SysLog(L"InfoList::OpenDizFile() create new Viewer = %p",DizView));
 		DizView->SetRestoreScreenMode(false);
 		DizView->SetPosition({ m_Where.left + 1, YPos, m_Where.right - 1, m_Where.bottom - 1 });
 		DizView->SetStatusMode(0);

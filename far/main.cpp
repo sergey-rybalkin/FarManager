@@ -48,10 +48,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "language.hpp"
 #include "imports.hpp"
-#include "syslog.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
-#include "clipboard.hpp"
 #include "pathmix.hpp"
 #include "dirmix.hpp"
 #include "elevation.hpp"
@@ -65,7 +63,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "exception_handler.hpp"
 #include "exception_handler_test.hpp"
 #include "constitle.hpp"
-#include "string_utils.hpp"
 #include "cvtname.hpp"
 #include "drivemix.hpp"
 #include "new_handler.hpp"
@@ -73,6 +70,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "locale.hpp"
 #include "farversion.hpp"
 #include "exception.hpp"
+#include "log.hpp"
+#include "strmix.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -181,7 +180,6 @@ static int MainProcess(
 	{
 		Global->OnlyEditorViewerUsed = true;
 
-		_tran(SysLog(L"create dummy panels"));
 		Global->CtrlObject->CreateDummyFilePanels();
 		Global->WindowManager->PluginCommit();
 
@@ -191,7 +189,6 @@ static int MainProcess(
 		if (!ename.empty())
 		{
 			const auto ShellEditor = FileEditor::create(ename, CP_DEFAULT, FFILEEDIT_CANNEWFILE | FFILEEDIT_ENABLEF6, StartLine, StartChar);
-			_tran(SysLog(L"make shelleditor %p", ShellEditor));
 
 			if (!ShellEditor->GetExitCode())  // ????????????
 			{
@@ -207,8 +204,6 @@ static int MainProcess(
 			{
 				Global->WindowManager->ExitMainLoop(0);
 			}
-
-			_tran(SysLog(L"make shellviewer, %p", ShellViewer));
 		}
 
 		Global->WindowManager->EnterMainLoop();
@@ -333,6 +328,11 @@ static int MainProcess(
 	return EXIT_SUCCESS;
 }
 
+static auto full_path_expanded(string_view const Str)
+{
+	return ConvertNameToFull(unquote(os::env::expand(Str)));
+}
+
 static void InitTemplateProfile(string& strTemplatePath)
 {
 	if (strTemplatePath.empty())
@@ -342,7 +342,7 @@ static void InitTemplateProfile(string& strTemplatePath)
 
 	if (!strTemplatePath.empty())
 	{
-		strTemplatePath = ConvertNameToFull(unquote(os::env::expand(strTemplatePath)));
+		strTemplatePath = full_path_expanded(strTemplatePath);
 		DeleteEndSlash(strTemplatePath);
 
 		if (os::fs::is_directory(strTemplatePath))
@@ -359,17 +359,16 @@ static void InitProfile(string& strProfilePath, string& strLocalProfilePath)
 
 	if (!strProfilePath.empty())
 	{
-		strProfilePath = ConvertNameToFull(unquote(os::env::expand(strProfilePath)));
+		strProfilePath = full_path_expanded(strProfilePath);
 	}
 	if (!strLocalProfilePath.empty())
 	{
-		strLocalProfilePath = ConvertNameToFull(unquote(os::env::expand(strLocalProfilePath)));
+		strLocalProfilePath = full_path_expanded(strLocalProfilePath);
 	}
 
 	if (strProfilePath.empty())
 	{
-		const auto UseSystemProfiles = GetFarIniInt(L"General"sv, L"UseSystemProfiles"sv, 1);
-		if (UseSystemProfiles)
+		if (const auto UseSystemProfiles = GetFarIniInt(L"General"sv, L"UseSystemProfiles"sv, 1))
 		{
 			const auto GetShellProfilePath = [](int Idl)
 			{
@@ -390,8 +389,9 @@ static void InitProfile(string& strProfilePath, string& strLocalProfilePath)
 		{
 			const auto strUserProfileDir = GetFarIniString(L"General"sv, L"UserProfileDir"sv, path::join(L"%FARHOME%"sv, L"Profile"sv));
 			const auto strUserLocalProfileDir = GetFarIniString(L"General"sv, L"UserLocalProfileDir"sv, strUserProfileDir);
-			Global->Opt->ProfilePath = ConvertNameToFull(unquote(os::env::expand(strUserProfileDir)));
-			Global->Opt->LocalProfilePath = ConvertNameToFull(unquote(os::env::expand(strUserLocalProfileDir)));
+
+			Global->Opt->ProfilePath = full_path_expanded(strUserProfileDir);
+			Global->Opt->LocalProfilePath = full_path_expanded(strUserLocalProfileDir);
 		}
 	}
 	else
@@ -452,10 +452,13 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 		string strProfilePath(Args.size() > 1 ? Args[1] : L""sv);
 		string strLocalProfilePath(Args.size() > 2 ? Args[2] : L""sv);
 		InitProfile(strProfilePath, strLocalProfilePath);
-		(void)config_provider {
-			config_provider::clear_cache{}
-		};
+		(void)config_provider{config_provider::clear_cache{}};
 		return EXIT_SUCCESS;
+	}
+
+	if (Args.size() == 2 && logging::is_log_argument(Args[0]))
+	{
+		return logging::main(Args[1]);
 	}
 
 	return {};
@@ -477,10 +480,40 @@ static void UpdateErrorMode()
 static int handle_exception(function_ref<bool()> const Handler)
 {
 	if (Handler())
+	{
+		LOGFATAL(L"Abnormal exit"sv);
 		std::_Exit(EXIT_FAILURE);
+	}
 
 	throw;
 }
+
+#ifndef _WIN64
+std::pair<string_view, DWORD> get_hook_wow64_error();
+
+static void log_hook_wow64_status()
+{
+	const auto [Msg, Error] = get_hook_wow64_error();
+	LOG(
+		Error == ERROR_SUCCESS? logging::level::debug : logging::level::warning,
+		L"hook_wow64: {} {}"sv,
+		Msg,
+		os::format_system_error(Error, os::GetErrorString(false, Error))
+	);
+
+	if (Error == ERROR_INVALID_DATA)
+	{
+		if (const auto NtDll = GetModuleHandle(L"ntdll"))
+		{
+			if (const auto LdrLoadDll = GetProcAddress(NtDll, "LdrLoadDll"))
+			{
+				const auto FunctionData = reinterpret_cast<std::byte const*>(LdrLoadDll);
+				LOGWARNING(L"LdrLoadDll: {}"sv, BlobToHexString({ FunctionData, 32 }));
+			}
+		}
+	}
+}
+#endif
 
 static int mainImpl(span<const wchar_t* const> const Args)
 {
@@ -499,6 +532,10 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	os::memory::enable_low_fragmentation_heap();
 
+#ifndef _WIN64
+	log_hook_wow64_status();
+#endif
+
 	if (!console.IsFullscreenSupported())
 	{
 		const BYTE ReserveAltEnter = 0x8;
@@ -507,10 +544,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	os::fs::InitCurrentDirectory();
 
-	if (os::fs::GetModuleFileName(nullptr, nullptr, Global->g_strFarModuleName))
-	{
 		PrepareDiskPath(Global->g_strFarModuleName);
-	}
 
 	Global->g_strFarINI = concat(Global->g_strFarModuleName, L".ini"sv);
 	Global->g_strFarPath = Global->g_strFarModuleName;
@@ -529,8 +563,6 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	SCOPED_ACTION(listener)(update_environment, &ReloadEnvironment);
 	SCOPED_ACTION(listener)(update_intl, [] { locale.invalidate(); });
 	SCOPED_ACTION(listener)(update_devices, &UpdateSavedDrives);
-
-	_OT(SysLog(L"[[[[[[[[New Session of FAR]]]]]]]]]"));
 
 	string strEditName;
 	string strViewName;
@@ -714,7 +746,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 				}
 				else
 				{
-					auto ArgvI = ConvertNameToFull(unquote(os::env::expand(Arg)));
+					auto ArgvI = full_path_expanded(Arg);
 					if (os::fs::exists(ArgvI))
 					{
 						DestNames[CntDestName++] = ArgvI;
@@ -758,7 +790,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	os::env::set(L"FARLANG"sv, Global->Opt->strLanguage);
 
 	if (!Global->Opt->LoadPlug.strCustomPluginsPath.empty())
-		Global->Opt->LoadPlug.strCustomPluginsPath = ConvertNameToFull(unquote(os::env::expand(Global->Opt->LoadPlug.strCustomPluginsPath)));
+		Global->Opt->LoadPlug.strCustomPluginsPath = full_path_expanded(Global->Opt->LoadPlug.strCustomPluginsPath);
 
 	UpdateErrorMode();
 
@@ -773,7 +805,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	NoElevationDuringBoot.reset();
 
-	const auto CurrentFunctionName = __FUNCTION__;
+	const auto CurrentFunctionName = CURRENT_FUNCTION_NAME;
 
 	return cpp_try(
 		[&]
@@ -806,7 +838,10 @@ static void configure_exception_handling(int Argc, const wchar_t* const Argv[])
 static int handle_exception_final(function_ref<bool()> const Handler)
 {
 	if (Handler())
+	{
+		LOGFATAL(L"Abnormal exit"sv);
 		std::_Exit(EXIT_FAILURE);
+	}
 
 	restore_system_exception_handler();
 	throw;
@@ -831,7 +866,7 @@ static int wmain_seh()
 	SCOPED_ACTION(seh_terminate_handler);
 	SCOPED_ACTION(new_handler);
 
-	const auto CurrentFunctionName = __FUNCTION__;
+	const auto CurrentFunctionName = CURRENT_FUNCTION_NAME;
 
 	return cpp_try(
 		[&]
@@ -868,9 +903,10 @@ int main()
 		{
 			return wmain_seh();
 		},
-			[]() -> int
+	[](DWORD const ExceptionCode) -> int
 		{
-			std::_Exit(EXIT_FAILURE);
+		LOGFATAL(L"Abnormal exit due to SEH exception {}"sv, ExceptionCode);
+		std::_Exit(ExceptionCode? ExceptionCode : EXIT_FAILURE);
 		},
-			__FUNCTION__);
+	CURRENT_FUNCTION_NAME);
 }

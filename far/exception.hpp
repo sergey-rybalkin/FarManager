@@ -45,8 +45,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 struct error_state
 {
-	static error_state fetch();
-
 	int Errno = 0;
 	DWORD Win32Error = ERROR_SUCCESS;
 	NTSTATUS NtError = STATUS_SUCCESS;
@@ -61,6 +59,8 @@ struct error_state
 	string NtErrorStr() const;
 
 	std::array<string, 3> format_errors() const;
+
+	string to_string() const;
 };
 
 struct error_state_ex: public error_state
@@ -78,6 +78,8 @@ struct error_state_ex: public error_state
 	string What;
 };
 
+error_state last_error();
+
 namespace detail
 {
 	class far_base_exception: public error_state_ex
@@ -89,7 +91,7 @@ namespace detail
 		[[nodiscard]] const auto& location() const noexcept { return m_Location; }
 
 	protected:
-		far_base_exception(bool CaptureErrors, string_view Message, const char* Function, string_view File, int Line);
+		far_base_exception(bool CaptureErrors, string_view Message, std::string_view Function, std::string_view File, int Line);
 
 	private:
 		std::string m_Function;
@@ -147,9 +149,14 @@ class far_known_exception: public far_exception
 	using far_exception::far_exception;
 };
 
-#define MAKE_EXCEPTION(ExceptionType, ...) ExceptionType(__VA_ARGS__, __FUNCTION__, WIDE_SV(__FILE__), __LINE__)
+#define MAKE_EXCEPTION(ExceptionType, ...) ExceptionType(__VA_ARGS__, CURRENT_FUNCTION_NAME, CURRENT_FILE_NAME, __LINE__)
 #define MAKE_FAR_FATAL_EXCEPTION(...) MAKE_EXCEPTION(far_fatal_exception, true, __VA_ARGS__)
 #define MAKE_FAR_EXCEPTION(...) MAKE_EXCEPTION(far_exception, true, __VA_ARGS__)
 #define MAKE_FAR_KNOWN_EXCEPTION(...) MAKE_EXCEPTION(far_known_exception, false, __VA_ARGS__)
+
+std::wostream& operator<<(std::wostream& Stream, error_state const& e);
+std::wostream& operator<<(std::wostream& Stream, error_state_ex const& e);
+std::wostream& operator<<(std::wostream& Stream, detail::far_base_exception const& e);
+std::wostream& operator<<(std::wostream& Stream, far_exception const& e);
 
 #endif // EXCEPTION_HPP_2CD5B7D1_D39C_4CAF_858A_62496C9221DF

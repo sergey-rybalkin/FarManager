@@ -50,6 +50,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "exception.hpp"
 #include "global.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -343,6 +344,8 @@ static void LoadCustomStrings(string_view const FileName, std::unordered_map<str
 	std::istream Stream(&StreamBuffer);
 	Stream.exceptions(Stream.badbit | Stream.failbit);
 
+	const auto LastSize = Strings.size();
+
 	for (const auto& i: enum_lines(Stream, CustomFileCodepage))
 	{
 		string_view Label, Text;
@@ -365,6 +368,8 @@ static void LoadCustomStrings(string_view const FileName, std::unordered_map<str
 			break;
 		}
 	}
+
+	LOGINFO(L"Loaded {} strings from {}"sv, Strings.size() - LastSize, FileName);
 }
 
 void language::load(string_view const Path, string_view const Language, int CountNeed)
@@ -376,7 +381,7 @@ void language::load(string_view const Path, string_view const Language, int Coun
 	const auto [LangFile, LangFileName, LangFileCodePage] = OpenLangFile(Path, LangFileMask, Language);
 	if (!LangFile)
 	{
-		throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Cannot find any language files in \"{0}\""), Path));
+		throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Cannot find any language files in \"{}\""sv), Path));
 	}
 
 	Data->m_FileName = LangFile.GetName();
@@ -437,7 +442,7 @@ void language::load(string_view const Path, string_view const Language, int Coun
 	if (CountNeed != -1 && static_cast<size_t>(CountNeed) != Data->size())
 	{
 		throw MAKE_FAR_KNOWN_EXCEPTION(format(
-			FSTR(L"Language file \"{0}\" is malformed: expected {1} items, found {2}"),
+			FSTR(L"Language file \"{}\" is malformed: expected {} items, found {}"sv),
 			Data->m_FileName,
 			CountNeed,
 			Data->size()));

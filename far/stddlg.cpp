@@ -55,6 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "notification.hpp"
 #include "global.hpp"
 #include "language.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -546,7 +547,7 @@ static size_t enumerate_rm_processes(const string& Filename, DWORD& Reasons, fun
 				os::chrono::nt_clock::from_filetime(Info.Process.ProcessStartTime) == CreationTime)
 			{
 				string Name;
-				if (os::fs::GetModuleFileName(Process.native_handle(), nullptr, Name))
+				if (os::fs::get_module_file_name(Process.native_handle(), {}, Name))
 				{
 					append(Str, L", "sv, Name);
 				}
@@ -733,7 +734,7 @@ bool retryable_ui_operation(function_ref<bool()> const Action, string_view const
 {
 	while (!Action())
 	{
-		switch (const auto ErrorState = error_state::fetch(); SkipErrors? operation::skip_all : OperationFailed(ErrorState, Name, lng::MError, msg(ErrorDescription)))
+		switch (const auto ErrorState = last_error(); SkipErrors? operation::skip_all : OperationFailed(ErrorState, Name, lng::MError, msg(ErrorDescription)))
 		{
 		case operation::retry:
 			continue;
@@ -923,9 +924,9 @@ bool GoToRowCol(goto_coord& Row, goto_coord& Col, bool& Hex, string_view const H
 		GetRowCol(strData, Hex, Row, Col);
 		return true;
 	}
-	catch (const std::exception&)
+	catch (const std::exception& e)
 	{
-		// TODO: log
+		LOGWARNING(L"{}"sv, e);
 		// maybe we need to display a message in case of an incorrect input
 		return false;
 	}

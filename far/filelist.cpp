@@ -58,7 +58,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "preservelongname.hpp"
 #include "scrbuf.hpp"
 #include "filemasks.hpp"
-#include "syslog.hpp"
 #include "interf.hpp"
 #include "message.hpp"
 #include "clipboard.hpp"
@@ -100,6 +99,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "desktop.hpp"
 #include "string_sort.hpp"
 #include "global.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -838,7 +838,7 @@ void FileList::SortFileList(bool KeepPosition)
 	}
 	else
 	{
-		// TODO: log
+		LOGWARNING(L"Unknown sort mode {}"sv, m_SortMode);
 	}
 
 	if (KeepPosition)
@@ -847,9 +847,6 @@ void FileList::SortFileList(bool KeepPosition)
 
 bool FileList::SendKeyToPlugin(DWORD Key, bool Pred)
 {
-	_ALGO(CleverSysLog clv(L"FileList::SendKeyToPlugin()"));
-	_ALGO(SysLog(L"Key=%s Pred=%d",_FARKEY_ToName(Key),Pred));
-
 	if (m_PanelMode != panel_mode::PLUGIN_PANEL)
 		return false;
 
@@ -857,11 +854,9 @@ bool FileList::SendKeyToPlugin(DWORD Key, bool Pred)
 	if (MacroState != MACROSTATE_RECORDING_COMMON && MacroState != MACROSTATE_EXECUTING_COMMON && MacroState != MACROSTATE_NOMACRO)
 		return false;
 
-	_ALGO(SysLog(L"call Plugins.ProcessKey() {"));
 	INPUT_RECORD rec;
 	KeyToInputRecord(Key, &rec);
 	const auto ProcessCode = Global->CtrlObject->Plugins->ProcessKey(GetPluginHandle(), &rec, Pred);
-	_ALGO(SysLog(L"} ProcessCode=%d", ProcessCode));
 
 	return ProcessCode != 0;
 }
@@ -1261,8 +1256,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 
 		case KEY_F1:
 			{
-				_ALGO(CleverSysLog clv(L"F1"));
-				_ALGO(SysLog(L"%s, FileCount=%d", (m_PanelMode == PLUGIN_PANEL?"PluginPanel":"FilePanel"), FileCount));
 				return m_PanelMode == panel_mode::PLUGIN_PANEL && PluginPanelHelp(GetPluginHandle());
 			}
 
@@ -1560,8 +1553,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_CTRLA:
 		case KEY_RCTRLA:
 		{
-			_ALGO(CleverSysLog clv(L"Ctrl-A"));
-
 			if (!m_ListData.empty() && SetCurPath())
 			{
 				ShellSetFileAttributes(this);
@@ -1574,8 +1565,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_CTRLG:
 		case KEY_RCTRLG:
 		{
-			_ALGO(CleverSysLog clv(L"Ctrl-G"));
-
 			if (m_PanelMode != panel_mode::PLUGIN_PANEL || PluginManager::UseInternalCommand(GetPluginHandle(), PLUGIN_FAROTHER, m_CachedOpenPanelInfo))
 				if (!m_ListData.empty() && ApplyCommand())
 				{
@@ -1652,9 +1641,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_CTRLRALTNUMENTER:
 		case KEY_RCTRLALTNUMENTER:
 		{
-			_ALGO(CleverSysLog clv(L"Enter/Shift-Enter"));
-			_ALGO(SysLog(L"%s, FileCount=%d Key=%s",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(LocalKey)));
-
 			if (m_ListData.empty())
 				break;
 
@@ -1671,8 +1657,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_CTRLBACKSLASH:
 		case KEY_RCTRLBACKSLASH:
 		{
-			_ALGO(CleverSysLog clv(L"Ctrl-\\"));
-			_ALGO(SysLog(L"%s, FileCount=%d",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
 			auto NeedChangeDir = true;
 
 			if (m_PanelMode == panel_mode::PLUGIN_PANEL)// && *PluginsList[PluginsListSize-1].HostFile)
@@ -1702,9 +1686,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 
 		case KEY_SHIFTF1:
 		{
-			_ALGO(CleverSysLog clv(L"Shift-F1"));
-			_ALGO(SysLog(L"%s, FileCount=%d",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
-
 			if (!m_ListData.empty())
 			{
 				bool real_files = m_PanelMode != panel_mode::PLUGIN_PANEL;
@@ -1722,9 +1703,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		}
 		case KEY_SHIFTF2:
 		{
-			_ALGO(CleverSysLog clv(L"Shift-F2"));
-			_ALGO(SysLog(L"%s, FileCount=%d",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
-
 			if (!m_ListData.empty() && SetCurPath())
 			{
 				if (m_PanelMode == panel_mode::PLUGIN_PANEL)
@@ -1747,8 +1725,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 
 		case KEY_SHIFTF3:
 		{
-			_ALGO(CleverSysLog clv(L"Shift-F3"));
-			_ALGO(SysLog(L"%s, FileCount=%d",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
 			ProcessHostFile();
 			return true;
 		}
@@ -1766,9 +1742,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_CTRLSHIFTF4:
 		case KEY_RCTRLSHIFTF4:
 		{
-			_ALGO(CleverSysLog clv(L"Edit/View"));
-			_ALGO(SysLog(L"%s, FileCount=%d Key=%s",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(LocalKey)));
-
 			if (m_PanelMode == panel_mode::PLUGIN_PANEL)
 				Global->CtrlObject->Plugins->GetOpenPanelInfo(GetPluginHandle(),&m_CachedOpenPanelInfo);
 
@@ -1909,7 +1882,10 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 						if (!Global->CtrlObject->Plugins->GetFile(GetPluginHandle(), &PanelItem.Item, TemporaryDirectory, strFileName, OPM_SILENT | (Edit? OPM_EDIT : OPM_VIEW)))
 						{
 							// BUGBUG check result
-							(void)os::fs::remove_directory(TemporaryDirectory);
+							if (!os::fs::remove_directory(TemporaryDirectory))
+							{
+								LOGWARNING(L"remove_directory({}): {}"sv, TemporaryDirectory, last_error());
+							}
 							return true;
 						}
 					}
@@ -2127,9 +2103,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_DRAGCOPY:
 		case KEY_DRAGMOVE:
 		{
-			_ALGO(CleverSysLog clv(L"F5/F6/Alt-F6/DragCopy/DragMove"));
-			_ALGO(SysLog(L"%s, FileCount=%d Key=%s",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(LocalKey)));
-
 			ProcessCopyKeys(LocalKey);
 
 			return true;
@@ -2138,9 +2111,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_ALTF5:  // Печать текущего/выбранных файла/ов
 		case KEY_RALTF5:
 		{
-			_ALGO(CleverSysLog clv(L"Alt-F5"));
-			_ALGO(SysLog(L"%s, FileCount=%d",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
-
 			if (!m_ListData.empty() && SetCurPath())
 				PrintFiles(this);
 
@@ -2150,9 +2120,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_SHIFTF5:
 		case KEY_SHIFTF6:
 		{
-			_ALGO(CleverSysLog clv(L"Shift-F5/Shift-F6"));
-			_ALGO(SysLog(L"%s, FileCount=%d Key=%s",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(LocalKey)));
-
 			if (!m_ListData.empty() && SetCurPath())
 			{
 				assert(m_CurFile < static_cast<int>(m_ListData.size()));
@@ -2196,9 +2163,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 
 		case KEY_F7:
 		{
-			_ALGO(CleverSysLog clv(L"F7"));
-			_ALGO(SysLog(L"%s, FileCount=%d",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount));
-
 			if (SetCurPath())
 			{
 				if (m_PanelMode == panel_mode::PLUGIN_PANEL && !PluginManager::UseInternalCommand(GetPluginHandle(), PLUGIN_FARMAKEDIRECTORY, m_CachedOpenPanelInfo))
@@ -2257,9 +2221,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		{
 			if (IsRepeatedKey() /*&& !Global->Opt->Confirmation.Delete*/) // не удаляем, если зажата клавиша
 				return true;
-
-			_ALGO(CleverSysLog clv(L"F8/Shift-F8/Shift-Del/Alt-Del"));
-			_ALGO(SysLog(L"%s, FileCount=%d, Key=%s",(m_PanelMode==PLUGIN_PANEL?"PluginPanel":"FilePanel"),FileCount,_FARKEY_ToName(LocalKey)));
 
 			if (!m_ListData.empty() && SetCurPath())
 			{
@@ -2725,14 +2686,22 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 		{
 			const auto strTempDir = MakeTemp();
 			// BUGBUG check result
-			(void)os::fs::create_directory(strTempDir);
+			if (!os::fs::create_directory(strTempDir))
+			{
+				LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+			}
+
 			PluginPanelItemHolder PanelItem;
 			FileListToPluginItem(CurItem, PanelItem);
 
 			if (!Global->CtrlObject->Plugins->GetFile(GetPluginHandle(), &PanelItem.Item, strTempDir, strFileName, OPM_SILENT | OPM_EDIT))
 			{
 				// BUGBUG check result
-				(void)os::fs::remove_directory(strTempDir);
+				if (!os::fs::remove_directory(strTempDir))
+				{
+					LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+				}
+
 				return;
 			}
 			FileNameToDelete = strFileName;
@@ -3024,7 +2993,7 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 		if (!Silent && Global->WindowManager->ManagerStarted())
 		{
 			/* $ 03.11.2001 IS Укажем имя неудачного каталога */
-			Message(MSG_WARNING, error_state::fetch(),
+			Message(MSG_WARNING, last_error(),
 				msg(lng::MError),
 				{
 					IsParent? L".."s : strSetDir
@@ -4178,7 +4147,11 @@ void FileList::UpdateViewPanel()
 	{
 		const auto strTempDir = MakeTemp();
 		// BUGBUG check result
-		(void)os::fs::create_directory(strTempDir);
+		if (!os::fs::create_directory(strTempDir))
+		{
+			LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+		}
+
 		PluginPanelItemHolder PanelItem;
 		FileListToPluginItem(Current, PanelItem);
 		string strFileName;
@@ -4187,7 +4160,11 @@ void FileList::UpdateViewPanel()
 		{
 			ViewPanel->ShowFile({}, nullptr, false, nullptr);
 			// BUGBUG check result
-			(void)os::fs::remove_directory(strTempDir);
+			if (!os::fs::remove_directory(strTempDir))
+			{
+				LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+			}
+
 			return;
 		}
 
@@ -4725,7 +4702,7 @@ void FileList::SelectSortMode()
 	{
 		SetCheckAndSelect(SortModes[static_cast<size_t>(m_SortMode)].MenuPosition);
 	}
-	else if (m_SortMode >= panel_sort::BY_USER)
+	else if (m_SortMode >= panel_sort::BY_USER && mpr)
 	{
 		for (size_t i=0; i < mpr->Count; i += 3)
 		{
@@ -4738,7 +4715,7 @@ void FileList::SelectSortMode()
 	}
 	else
 	{
-		// TODO: log
+		LOGWARNING(L"Unknown sort mode {}"sv, m_SortMode);
 	}
 
 	enum SortOptions
@@ -5852,7 +5829,6 @@ plugin_item_list FileList::CreatePluginItemList()
 
 void FileList::PluginDelete()
 {
-	_ALGO(CleverSysLog clv(L"FileList::PluginDelete()"));
 	SaveSelection();
 
 	{
@@ -5878,8 +5854,6 @@ void FileList::PluginDelete()
 
 void FileList::PutDizToPlugin(FileList *DestPanel, const std::vector<PluginPanelItem>& ItemList, bool Delete, bool Move, DizList *SrcDiz) const
 {
-	_ALGO(CleverSysLog clv(L"FileList::PutDizToPlugin()"));
-
 	Global->CtrlObject->Plugins->GetOpenPanelInfo(DestPanel->GetPluginHandle(), &m_CachedOpenPanelInfo);
 
 	if (DestPanel->strPluginDizName.empty() && m_CachedOpenPanelInfo.DescrFilesNumber>0)
@@ -5957,7 +5931,6 @@ void FileList::PutDizToPlugin(FileList *DestPanel, const std::vector<PluginPanel
 
 void FileList::PluginGetFiles(const string& DestPath, bool Move)
 {
-	_ALGO(CleverSysLog clv(L"FileList::PluginGetFiles()"));
 	SaveSelection();
 
 	{
@@ -6021,8 +5994,6 @@ void FileList::PluginGetFiles(const string& DestPath, bool Move)
 
 void FileList::PluginToPluginFiles(bool Move)
 {
-	_ALGO(CleverSysLog clv(L"FileList::PluginToPluginFiles()"));
-
 	const auto AnotherFilePanel = std::dynamic_pointer_cast<FileList>(Parent()->GetAnotherPanel(this));
 	if (!AnotherFilePanel || AnotherFilePanel->GetMode() != panel_mode::PLUGIN_PANEL)
 		return;
@@ -6031,7 +6002,10 @@ void FileList::PluginToPluginFiles(bool Move)
 	auto strTempDir = MakeTemp();
 	const auto OriginalTempDir = strTempDir;
 	// BUGBUG check result
-	(void)os::fs::create_directory(strTempDir);
+	if (!os::fs::create_directory(strTempDir))
+	{
+		LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+	}
 
 	{
 		auto ItemList = CreatePluginItemList();
@@ -6070,7 +6044,10 @@ void FileList::PluginToPluginFiles(bool Move)
 
 		DeleteDirTree(strTempDir);
 		// BUGBUG check result
-		(void)os::fs::remove_directory(OriginalTempDir);
+		if (!os::fs::remove_directory(OriginalTempDir))
+		{
+			LOGWARNING(L"remove_directory({}): {}"sv, OriginalTempDir, last_error());
+		}
 	}
 
 	Update(UPDATE_KEEP_SELECTION);
@@ -6120,27 +6097,22 @@ void FileList::PluginHostGetFiles()
 			OpMode|=OPM_SILENT;
 
 		span<PluginPanelItem> Items;
-		_ALGO(SysLog(L"call Plugins.GetFindData()"));
 
 		if (Global->CtrlObject->Plugins->GetFindData(hCurPlugin.get(), Items, OpMode))
 		{
-			_ALGO(SysLog(L"call Plugins.GetFiles()"));
 			auto DestPath = strDestPath.c_str();
 			ExitLoop = Global->CtrlObject->Plugins->GetFiles(hCurPlugin.get(), Items, false, &DestPath, OpMode) != 1;
 			strDestPath=DestPath;
 
 			if (!ExitLoop)
 			{
-				_ALGO(SysLog(L"call ClearLastGetSelection()"));
 				ClearLastGetSelection();
 			}
 
-			_ALGO(SysLog(L"call Plugins.FreeFindData()"));
 			Global->CtrlObject->Plugins->FreeFindData(hCurPlugin.get(), Items, true);
 			UsedPlugins.emplace(hCurPlugin->plugin());
 		}
 
-		_ALGO(SysLog(L"call Plugins.ClosePanel"));
 		Global->CtrlObject->Plugins->ClosePanel(std::move(hCurPlugin));
 	}
 
@@ -6153,14 +6125,10 @@ void FileList::PluginHostGetFiles()
 
 void FileList::PluginPutFilesToNew()
 {
-	_ALGO(CleverSysLog clv(L"FileList::PluginPutFilesToNew()"));
-	//_ALGO(SysLog(L"FileName='%s'",(FileName?FileName:"(nullptr)")));
-	_ALGO(SysLog(L"call Plugins.OpenFilePlugin(nullptr, 0)"));
 	auto hNewPlugin = Global->CtrlObject->Plugins->OpenFilePlugin(nullptr, OPM_NONE, OFP_CREATE);
 	if (!hNewPlugin)
 		return;
 
-	_ALGO(SysLog(L"Create: FileList TmpPanel, FileCount=%d",FileCount));
 	auto TmpPanel = create(nullptr);
 	TmpPanel->SetPluginMode(std::move(hNewPlugin), {});  // SendOnFocus??? true???
 	TmpPanel->m_ModalMode = TRUE;
@@ -6227,25 +6195,20 @@ int FileList::PluginPutFilesToAnother(bool Move, panel_ptr AnotherPanel)
 			return 0;
 
 		SetCurPath();
-		_ALGO(SysLog(L"call Plugins.PutFiles"));
 		PutCode = Global->CtrlObject->Plugins->PutFiles(AnotherFilePanel->GetPluginHandle(), ItemList, Move, 0);
 
 		if (PutCode==1 || PutCode==2)
 		{
 			if (!ReturnCurrentFile)
 			{
-				_ALGO(SysLog(L"call ClearSelection()"));
 				ClearSelection();
 			}
 
-			_ALGO(SysLog(L"call PutDizToPlugin"));
 			PutDizToPlugin(AnotherFilePanel.get(), ItemList.items(), false, Move, &Diz);
 			AnotherFilePanel->SetPluginModified();
 		}
 		else if (!ReturnCurrentFile)
 			PluginClearSelection(ItemList.items());
-
-		_ALGO(SysLog(L"call DeletePluginItemList"));
 	}
 
 	Update(UPDATE_KEEP_SELECTION);
@@ -6263,8 +6226,6 @@ int FileList::PluginPutFilesToAnother(bool Move, panel_ptr AnotherPanel)
 
 void FileList::GetOpenPanelInfo(OpenPanelInfo *Info) const
 {
-	_ALGO(CleverSysLog clv(L"FileList::GetOpenPanelInfo()"));
-	//_ALGO(SysLog(L"FileName='%s'",(FileName?FileName:"(nullptr)")));
 	*Info = {};
 
 	if (m_PanelMode == panel_mode::PLUGIN_PANEL)
@@ -6277,8 +6238,6 @@ void FileList::GetOpenPanelInfo(OpenPanelInfo *Info) const
 */
 void FileList::ProcessHostFile()
 {
-	_ALGO(CleverSysLog clv(L"FileList::ProcessHostFile()"));
-
 	if (m_ListData.empty() || !SetCurPath())
 		return;
 
@@ -6288,9 +6247,7 @@ void FileList::ProcessHostFile()
 	if (m_PanelMode == panel_mode::PLUGIN_PANEL && !PluginsList.back()->m_HostFile.empty())
 	{
 		{
-			_ALGO(SysLog(L"call CreatePluginItemList"));
 			auto ItemList = CreatePluginItemList();
-			_ALGO(SysLog(L"call Plugins.ProcessHostFile"));
 			Done = Global->CtrlObject->Plugins->ProcessHostFile(GetPluginHandle(), ItemList, 0);
 
 			if (Done)
@@ -6357,7 +6314,6 @@ void FileList::ProcessHostFile()
 */
 int FileList::ProcessOneHostFile(const FileListItem* Item)
 {
-	_ALGO(CleverSysLog clv(L"FileList::ProcessOneHostFile()"));
 	int Done=-1;
 
 	auto hNewPlugin = OpenPluginForFile(Item->FileName, Item->Attributes, OFP_COMMANDS);
@@ -6365,17 +6321,13 @@ int FileList::ProcessOneHostFile(const FileListItem* Item)
 		return Done;
 
 	span<PluginPanelItem> Items;
-	_ALGO(SysLog(L"call Plugins.GetFindData"));
 
 	if (Global->CtrlObject->Plugins->GetFindData(hNewPlugin.get(), Items, OPM_TOPLEVEL))
 	{
-		_ALGO(SysLog(L"call Plugins.ProcessHostFile"));
 		Done = Global->CtrlObject->Plugins->ProcessHostFile(hNewPlugin.get(), Items, OPM_TOPLEVEL);
-		_ALGO(SysLog(L"call Plugins.FreeFindData"));
 		Global->CtrlObject->Plugins->FreeFindData(hNewPlugin.get(), Items, true);
 	}
 
-	_ALGO(SysLog(L"call Plugins.ClosePanel"));
 	Global->CtrlObject->Plugins->ClosePanel(std::move(hNewPlugin));
 
 	return Done;
@@ -6597,9 +6549,6 @@ enum ReadDizFlags
 
 void FileList::Update(int Mode)
 {
-	_ALGO(CleverSysLog clv(L"FileList::Update"));
-	_ALGO(SysLog(L"(Mode=[%d/0x%08X] %s)",Mode,Mode,(Mode==UPDATE_KEEP_SELECTION?L"UPDATE_KEEP_SELECTION":L"")));
-
 	if (m_EnableUpdate)
 	{
 		switch (m_PanelMode)
@@ -6735,7 +6684,10 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	if (Global->Opt->ShowPanelFree)
 	{
 		// BUGBUG check result
-		(void)os::fs::get_disk_size(m_CurDir, nullptr, nullptr, &FreeDiskSize);
+		if (!os::fs::get_disk_size(m_CurDir, nullptr, nullptr, &FreeDiskSize))
+		{
+			LOGWARNING(L"get_disk_size({}): {}"sv, m_CurDir, last_error());
+		}
 	}
 
 	if (!m_ListData.empty())
@@ -6763,7 +6715,10 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	DWORD FileSystemFlags = 0;
 	string FileSystemName;
 	// BUGBUG check result
-	(void)os::fs::GetVolumeInformation(GetPathRoot(m_CurDir), nullptr, nullptr, nullptr, &FileSystemFlags, &FileSystemName);
+	if (const auto Root = GetPathRoot(m_CurDir); !os::fs::GetVolumeInformation(Root, nullptr, nullptr, nullptr, &FileSystemFlags, &FileSystemName))
+	{
+		LOGWARNING(L"GetVolumeInformation({}): {}"sv, Root, last_error());
+	}
 
 	m_HardlinksSupported = true;
 	m_StreamsSupported = true;
@@ -6844,7 +6799,7 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 
 	for (const auto& fdata: Find)
 	{
-		ErrorState = error_state::fetch();
+		ErrorState = last_error();
 
 		if (fdata.Attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) && !Global->Opt->ShowHidden)
 			continue;
@@ -6918,7 +6873,7 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	}
 
 	if (!ErrorState)
-		ErrorState = error_state::fetch();
+		ErrorState = last_error();
 
 	if (!(ErrorState->Win32Error == ERROR_SUCCESS || ErrorState->Win32Error == ERROR_NO_MORE_FILES || ErrorState->Win32Error == ERROR_FILE_NOT_FOUND))
 	{
@@ -6936,13 +6891,18 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 		FillParentPoint(NewItem);
 
 		os::chrono::time_point TwoDotsTimes[4];
-		// BUGBUG check result
-		(void)os::fs::GetFileTimeSimple(m_CurDir, &TwoDotsTimes[0], &TwoDotsTimes[1], &TwoDotsTimes[2], &TwoDotsTimes[3]);
+		if (os::fs::GetFileTimeSimple(m_CurDir, &TwoDotsTimes[0], &TwoDotsTimes[1], &TwoDotsTimes[2], &TwoDotsTimes[3]))
+		{
+			NewItem.CreationTime = TwoDotsTimes[0];
+			NewItem.LastAccessTime = TwoDotsTimes[1];
+			NewItem.LastWriteTime = TwoDotsTimes[2];
+			NewItem.ChangeTime = TwoDotsTimes[3];
+		}
+		else
+		{
+			LOGWARNING(L"GetFileTimeSimple({}): {}"sv, m_CurDir, last_error());
+		}
 
-		NewItem.CreationTime = TwoDotsTimes[0];
-		NewItem.LastAccessTime = TwoDotsTimes[1];
-		NewItem.LastWriteTime = TwoDotsTimes[2];
-		NewItem.ChangeTime = TwoDotsTimes[3];
 		NewItem.Position = m_ListData.size();
 		m_ListData.emplace_back(std::move(NewItem));
 	}
@@ -7169,9 +7129,6 @@ void FileList::MoveSelection(list_data& From, list_data& To)
 
 void FileList::UpdatePlugin(int KeepSelection, int UpdateEvenIfPanelInvisible)
 {
-	_ALGO(CleverSysLog clv(L"FileList::UpdatePlugin"));
-	_ALGO(SysLog(L"(KeepSelection=%d, IgnoreVisible=%d)",KeepSelection,UpdateEvenIfPanelInvisible));
-
 	if (!IsVisible() && !UpdateEvenIfPanelInvisible)
 	{
 		UpdateRequired = true;
@@ -7195,7 +7152,10 @@ void FileList::UpdatePlugin(int KeepSelection, int UpdateEvenIfPanelInvisible)
 		if (m_CachedOpenPanelInfo.Flags & OPIF_REALNAMES)
 		{
 			// BUGBUG check result
-			(void)os::fs::get_disk_size(m_CurDir, nullptr, nullptr, &FreeDiskSize);
+			if (!os::fs::get_disk_size(m_CurDir, nullptr, nullptr, &FreeDiskSize))
+			{
+				LOGWARNING(L"get_disk_size({}): {}"sv, m_CurDir, last_error());
+			}
 		}
 		else if (m_CachedOpenPanelInfo.Flags & OPIF_USEFREESIZE)
 			FreeDiskSize = m_CachedOpenPanelInfo.FreeSize;
@@ -7439,7 +7399,10 @@ void FileList::ReadDiz(span<PluginPanelItem> const Items)
 							}
 
 							// BUGBUG check result
-							(void)os::fs::remove_directory(strTempDir);
+							if (!os::fs::remove_directory(strTempDir))
+							{
+								LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+							}
 							//ViewPanel->ShowFile(nullptr,FALSE,nullptr);
 						}
 					}
@@ -7501,7 +7464,6 @@ void FileList::UpdateHeight()
 void FileList::DisplayObject()
 {
 	UpdateHeight();
-	_OT(SysLog(L"[%p] FileList::DisplayObject()",this));
 
 	if (UpdateRequired)
 	{
@@ -7650,7 +7612,7 @@ void FileList::ShowFileList(bool Fast)
 		}
 		else
 		{
-			// TODO: log
+			LOGWARNING(L"Unknown sort mode {}"sv, m_SortMode);
 		}
 
 		if (Indicator)

@@ -38,9 +38,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "imports.hpp"
 #include "encoding.hpp"
 #include "pathmix.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
+#include "platform.concurrency.hpp"
 
 // Common:
 #include "common.hpp"
@@ -91,7 +93,7 @@ static auto platform_specific_data(CONTEXT const& ContextRecord)
 // StackWalk64() may modify context record passed to it, so we will use a copy.
 static auto GetBackTrace(CONTEXT ContextRecord, HANDLE ThreadHandle)
 {
-	std::vector<DWORD64> Result;
+	std::vector<uintptr_t> Result;
 
 	const auto Data = platform_specific_data(ContextRecord);
 
@@ -110,13 +112,17 @@ static auto GetBackTrace(CONTEXT ContextRecord, HANDLE ThreadHandle)
 
 	while (imports.StackWalk64(Data.MachineType, GetCurrentProcess(), ThreadHandle, &StackFrame, &ContextRecord, nullptr, imports.SymFunctionTableAccess64, imports.SymGetModuleBase64, nullptr))
 	{
-		Result.emplace_back(StackFrame.AddrPC.Offset);
+		// Cast to uintptr_t is ok here: although this function can be used
+		// to capture a stack of 64-bit process from a 32-bit one,
+		// we always use it with the current process only.
+		Result.emplace_back(static_cast<uintptr_t>(StackFrame.AddrPC.Offset));
 	}
 
 	return Result;
 }
-
-static void GetSymbols(string_view const ModuleName, span<DWORD64 const> const BackTrace, function_ref<void(string&&, string&&, string&&)> const Consumer)
+template<typename>
+class DT;
+static void GetSymbols(string_view const ModuleName, span<uintptr_t const> const BackTrace, function_ref<void(string&&, string&&, string&&)> const Consumer)
 {
 	SCOPED_ACTION(tracer::with_symbols)(ModuleName);
 
@@ -124,7 +130,14 @@ static void GetSymbols(string_view const ModuleName, span<DWORD64 const> const B
 	const auto MaxNameLen = MAX_SYM_NAME;
 	const auto BufferSize = sizeof(SYMBOL_INFO) + MaxNameLen + 1;
 
-	imports.SymSetOptions(SYMOPT_LOAD_LINES | SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_INCLUDE_32BIT_MODULES);
+	imports.SymSetOptions(
+		SYMOPT_UNDNAME |
+		SYMOPT_DEFERRED_LOADS |
+		SYMOPT_LOAD_LINES |
+		SYMOPT_FAIL_CRITICAL_ERRORS |
+		SYMOPT_INCLUDE_32BIT_MODULES |
+		SYMOPT_NO_PROMPTS
+	);
 
 	block_ptr<SYMBOL_INFOW, BufferSize> SymbolW(BufferSize);
 	SymbolW->SizeOfStruct = sizeof(SYMBOL_INFOW);
@@ -134,29 +147,42 @@ static void GetSymbols(string_view const ModuleName, span<DWORD64 const> const B
 	Symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
 	Symbol->MaxNameLen = MaxNameLen;
 
-	const auto FormatAddress = [](DWORD64 const Value)
+	string NameBuffer;
+
+	const auto FormatAddress = [](uintptr_t const Value)
 	{
 		// It is unlikely that RVAs will be above 4 GiB,
 		// so we can save some screen space here.
-		return format(FSTR(L"0x{0:0{1}X}"), Value, (Value & 0xffffffff00000000)? 16 : 8);
+		const auto Width =
+#ifdef _WIN64
+			Value & 0xffffffff00000000? 16 : 8
+#else
+			8
+#endif
+			;
+
+		return format(FSTR(L"0x{:0{}X}"sv), Value, Width);
 	};
 
-	const auto GetName = [&](DWORD64 const Address)
+	const auto GetName = [&](uintptr_t const Address) -> string_view
 	{
 		if (imports.SymFromAddrW && imports.SymFromAddrW(Process, Address, nullptr, SymbolW.data()))
-			return string(SymbolW->Name);
+			return { SymbolW->Name, SymbolW->NameLen };
 
 		if (imports.SymFromAddr && imports.SymFromAddr(Process, Address, nullptr, Symbol.data()))
-			return encoding::ansi::get_chars(Symbol->Name);
+		{
+			NameBuffer = encoding::ansi::get_chars({ Symbol->Name, Symbol->NameLen });
+			return NameBuffer;
+		}
 
-		return L"<unknown> (get the pdb)"s;
+		return L"<unknown> (get the pdb)"sv;
 	};
 
-	const auto GetLocation = [&](DWORD64 const Address)
+	const auto GetLocation = [&](uintptr_t const Address)
 	{
 		const auto Location = [](string_view const File, unsigned const Line)
 		{
-			return format(FSTR(L"{0}:{1}"), File, Line);
+			return format(FSTR(L"{}({})"sv), File, Line);
 		};
 
 		DWORD Displacement;
@@ -185,14 +211,14 @@ static void GetSymbols(string_view const ModuleName, span<DWORD64 const> const B
 	}
 }
 
-std::vector<DWORD64> tracer::get(string_view const Module, CONTEXT const& ContextRecord, HANDLE ThreadHandle)
+std::vector<uintptr_t> tracer::get(string_view const Module, CONTEXT const& ContextRecord, HANDLE ThreadHandle)
 {
 	SCOPED_ACTION(tracer::with_symbols)(Module);
 
 	return GetBackTrace(ContextRecord, ThreadHandle);
 }
 
-void tracer::get_symbols(string_view const Module, span<DWORD64 const> const Trace, function_ref<void(string&& Line)> const Consumer)
+void tracer::get_symbols(string_view const Module, span<uintptr_t const> const Trace, function_ref<void(string&& Line)> const Consumer)
 {
 	GetSymbols(Module, Trace, [&](string&& Address, string&& Name, string&& Source)
 	{
@@ -208,7 +234,7 @@ void tracer::get_symbols(string_view const Module, span<DWORD64 const> const Tra
 
 void tracer::get_symbol(string_view const Module, const void* Ptr, string& Address, string& Name, string& Source)
 {
-	DWORD64 const Stack[]{ reinterpret_cast<DWORD_PTR>(Ptr) };
+	uintptr_t const Stack[]{ reinterpret_cast<uintptr_t>(Ptr) };
 	GetSymbols(Module, Stack, [&](string&& StrAddress, string&& StrName, string&& StrSource)
 	{
 		Address = std::move(StrAddress);
@@ -218,17 +244,19 @@ void tracer::get_symbol(string_view const Module, const void* Ptr, string& Addre
 }
 
 static int s_SymInitialised = 0;
+static os::concurrency::critical_section s_CS;
 
 void tracer::sym_initialise(string_view Module)
 {
+	SCOPED_ACTION(std::lock_guard)(s_CS);
+
 	if (s_SymInitialised)
 	{
 		++s_SymInitialised;
 		return;
 	}
 
-	string Path;
-	(void)os::fs::GetModuleFileName(nullptr, nullptr, Path);
+	auto Path = os::fs::get_current_process_file_name();
 	CutToParent(Path);
 
 	if (!Module.empty())
@@ -246,6 +274,8 @@ void tracer::sym_initialise(string_view Module)
 
 void tracer::sym_cleanup()
 {
+	SCOPED_ACTION(std::lock_guard)(s_CS);
+
 	if (s_SymInitialised)
 		--s_SymInitialised;
 

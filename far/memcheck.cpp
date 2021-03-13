@@ -130,7 +130,7 @@ static string format_type(allocation_type Type, size_t Size)
 		throw MAKE_FAR_FATAL_EXCEPTION(L"Unknown allocation type"sv);
 	}
 
-	return format(FSTR(L"{0} ({1} bytes)"), sType, Size);
+	return format(FSTR(L"{} ({} bytes)"sv), sType, Size);
 }
 
 static string printable_string(string Str)
@@ -255,15 +255,15 @@ private:
 		auto Message = L"Memory leaks detected:\n"s;
 
 		if (m_CallNewDeleteVector)
-			format_to(Message, FSTR(L" new[]:   {0}\n"), m_CallNewDeleteVector);
+			format_to(Message, FSTR(L" new[]:   {}\n"sv), m_CallNewDeleteVector);
 		if (m_CallNewDeleteScalar)
-			format_to(Message, FSTR(L" new:     {0}\n"), m_CallNewDeleteScalar);
+			format_to(Message, FSTR(L" new:     {}\n"sv), m_CallNewDeleteScalar);
 
 		Message += L'\n';
 
-		format_to(Message, FSTR(L" Blocks:  {0}\n"), m_AllocatedMemoryBlocks);
-		format_to(Message, FSTR(L" Payload: {0}\n"), m_AllocatedPayloadSize);
-		format_to(Message, FSTR(L" Bytes:   {0}\n"), m_AllocatedMemorySize);
+		format_to(Message, FSTR(L" Blocks:  {}\n"sv), m_AllocatedMemoryBlocks);
+		format_to(Message, FSTR(L" Payload: {}\n"sv), m_AllocatedPayloadSize);
+		format_to(Message, FSTR(L" Bytes:   {}\n"sv), m_AllocatedMemorySize);
 
 		append(Message, L"\nNot freed blocks:\n"sv);
 
@@ -284,7 +284,7 @@ private:
 				L"\nWide: "sv, printable_wide_string(UserAddress, std::min(BlockSize, Width * sizeof(wchar_t))),
 				L"\nStack:\n"sv);
 
-			DWORD64 Stack[ARRAYSIZE(MEMINFO::Stack)];
+			uintptr_t Stack[ARRAYSIZE(MEMINFO::Stack)];
 			size_t StackSize;
 
 			for (StackSize = 0; StackSize != std::size(Stack) && i->Stack[StackSize]; ++StackSize)
@@ -330,7 +330,8 @@ static void* debug_allocator(size_t const size, std::align_val_t Alignment, allo
 
 			const auto FramesToSkip = 2; // This function and the operator
 			// RtlCaptureStackBackTrace is invoked directly since we don't need to make debug builds Win2k compatible
-			Info->Stack[RtlCaptureStackBackTrace(FramesToSkip, static_cast<DWORD>(std::size(Info->Stack)), Info->Stack, {})] = {};
+			if (const auto Captured = RtlCaptureStackBackTrace(FramesToSkip, static_cast<DWORD>(std::size(Info->Stack)), Info->Stack, {}); Captured < std::size(Info->Stack))
+				Info->Stack[Captured] = {};
 
 			Info->end_marker() = EndMarker;
 			Checker.register_block(Info);

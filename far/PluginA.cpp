@@ -62,6 +62,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "plugapi.hpp"
 #include "exception_handler.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -186,7 +187,7 @@ public:
 		auto Module = std::make_unique<oem_plugin_module>(filename);
 		if (!*Module)
 		{
-			const auto ErrorState = error_state::fetch();
+			const auto ErrorState = last_error();
 
 			Message(MSG_WARNING | MSG_NOPLUGINS, ErrorState,
 				msg(lng::MError),
@@ -202,7 +203,7 @@ public:
 		return Module;
 	}
 
-	std::unique_ptr<Plugin> CreatePlugin(const string& filename) override;
+	std::unique_ptr<Plugin> CreatePlugin(const string& FileName, size_t FileSize) override;
 
 	const std::string& PluginsRootKey()
 	{
@@ -224,6 +225,8 @@ private:
 		// module with ANY known export can be OEM plugin
 		return contains(select(m_ExportsNames, [](const export_name& Item) { return Item.AName; }), ExportName);
 	}
+
+	string_view kind() const override { return L"legacy"sv; }
 
 	std::string m_userName;
 };
@@ -5714,9 +5717,9 @@ WARNING_POP()
 			PluginLang = std::make_unique<ansi_plugin_language>(Path, Language);
 			return true;
 		}
-		catch (const std::exception&)
+		catch (const std::exception& e)
 		{
-			// TODO: log
+			LOGERROR(L"{}"sv, e);
 			return false;
 		}
 	}
@@ -5992,9 +5995,9 @@ static const char* GetPluginMsg(const Plugin* PluginInstance, int MsgId)
 	return static_cast<const PluginA*>(PluginInstance)->GetMsgA(MsgId);
 }
 
-std::unique_ptr<Plugin> oem_plugin_factory::CreatePlugin(const string& filename)
+std::unique_ptr<Plugin> oem_plugin_factory::CreatePlugin(const string& FileName, size_t FileSize)
 {
-	return IsPlugin(filename)? std::make_unique<PluginA>(this, filename) : nullptr;
+	return IsPlugin(FileName, FileSize)? std::make_unique<PluginA>(this, FileName) : nullptr;
 }
 
 #undef OLDFAR_TO_FAR_MAP

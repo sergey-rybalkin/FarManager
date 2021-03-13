@@ -57,6 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "farversion.hpp"
 #include "clipboard.hpp"
 #include "eol.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -116,8 +117,13 @@ static std::atomic_bool UseTerminateHandler = false;
 
 void disable_exception_handling()
 {
+	if (!HandleCppExceptions && !HandleSehExceptions)
+		return;
+
 	HandleCppExceptions = false;
 	HandleSehExceptions = false;
+
+	LOGWARNING(L"Exception handling disabled"sv);
 }
 
 void force_stderr_exception_ui(bool const Force)
@@ -131,30 +137,7 @@ constexpr NTSTATUS
 	EXCEPTION_MICROSOFT_CPLUSPLUS = 0xE06D7363, // EH_EXCEPTION_NUMBER
 	EXCEPTION_TERMINATE           = 0xE074726D; // 'trm'
 
-static std::vector<DWORD64> current_stack()
-{
-	std::vector<DWORD64> Stack;
-	Stack.reserve(128);
-
-	for (DWORD i = 0; ;)
-	{
-		void* Pointers[128];
-		const auto Size = imports.RtlCaptureStackBackTrace(i, static_cast<DWORD>(std::size(Pointers)), Pointers, {});
-		if (!Size)
-			break;
-
-		std::transform(Pointers, Pointers + Size, std::back_inserter(Stack), [](void* Ptr)
-		{
-			return reinterpret_cast<uintptr_t>(Ptr);
-		});
-
-		i += Size;
-	}
-
-	return Stack;
-}
-
-static void get_backtrace(string_view const Module, span<DWORD64 const> const Stack, span<DWORD64 const> const NestedStack, function_ref<void(string&&)> const Consumer)
+static void get_backtrace(string_view const Module, span<uintptr_t const> const Stack, span<uintptr_t const> const NestedStack, function_ref<void(string&&)> const Consumer)
 {
 	const auto Separator = [&](string&& Message)
 	{
@@ -172,10 +155,10 @@ static void get_backtrace(string_view const Module, span<DWORD64 const> const St
 	tracer::get_symbols(Module, Stack, Consumer);
 
 	Separator(L"Current stack:"s);
-	tracer::get_symbols(Module, current_stack(), Consumer);
+	tracer::get_symbols(Module, os::debug::current_stack(), Consumer);
 }
 
-static void show_backtrace(string_view const Module, span<DWORD64 const> const Stack, span<DWORD64 const> const NestedStack, bool const UseDialog)
+static void show_backtrace(string_view const Module, span<uintptr_t const> const Stack, span<uintptr_t const> const NestedStack, bool const UseDialog)
 {
 	if (UseDialog)
 	{
@@ -236,7 +219,7 @@ static string file_version(string_view const Name)
 	if (!FixedInfo)
 		return L"Unknown"s;
 
-	return format(FSTR(L"{0}.{1}.{2}.{3}"),
+	return format(FSTR(L"{}.{}.{}.{}"sv),
 		HIWORD(FixedInfo->dwFileVersionMS),
 		LOWORD(FixedInfo->dwFileVersionMS),
 		HIWORD(FixedInfo->dwFileVersionLS),
@@ -250,7 +233,7 @@ static void read_modules(span<HMODULE const> const Modules, string& To, string_v
 	for (const auto& i: Modules)
 	{
 
-		if (os::fs::GetModuleFileName(nullptr, i, Name))
+		if (os::fs::get_module_file_name({}, i, Name))
 			append(To, Name, L' ', file_version(Name), Eol);
 		else
 			append(To, str(static_cast<void const*>(i)), Eol);
@@ -282,9 +265,9 @@ static void read_modules(string& To, string_view const Eol)
 
 static string self_version()
 {
-	const auto Version = format(FSTR(L"{0} {1}"), version_to_string(build::version()), build::platform());
+	const auto Version = format(FSTR(L"{} {}"sv), version_to_string(build::version()), build::platform());
 	const auto ScmRevision = build::scm_revision();
-	return ScmRevision.empty()? Version : Version + format(FSTR(L" ({0:.7})"), ScmRevision);
+	return ScmRevision.empty()? Version : Version + format(FSTR(L" ({:.7})"sv), ScmRevision);
 }
 
 static bool get_os_version(OSVERSIONINFOEX& Info)
@@ -307,7 +290,7 @@ static string os_version_from_api()
 	if (!get_os_version(Info))
 		return L"Unknown"s;
 
-	return format(FSTR(L"{0}.{1}.{2}.{3}.{4}.{5}.{6}.{7}"),
+	return format(FSTR(L"{}.{}.{}.{}.{}.{}.{}.{}"sv),
 		Info.dwMajorVersion,
 		Info.dwMinorVersion,
 		Info.dwBuildNumber,
@@ -331,7 +314,7 @@ static string os_version_from_registry()
 	if (!Key.get(L"ReleaseId"sv, ReleaseId) || !Key.get(L"CurrentBuild"sv, CurrentBuild) || !Key.get(L"UBR"sv, UBR))
 		return {};
 
-	return format(FSTR(L" (version {0}, OS build {1}.{2})"), ReleaseId, CurrentBuild, UBR);
+	return format(FSTR(L" (version {}, OS build {}.{})"sv), ReleaseId, CurrentBuild, UBR);
 }
 
 static string os_version()
@@ -347,7 +330,7 @@ static string kernel_version()
 struct dialog_data_type
 {
 	const exception_context* Context;
-	span<DWORD64 const> NestedStack;
+	span<uintptr_t const> NestedStack;
 	string_view Module;
 	span<string_view const> Labels, Values;
 	size_t LabelsWidth;
@@ -357,7 +340,7 @@ static void read_registers(string& To, CONTEXT const& Context, string_view const
 {
 	const auto r = [&](string_view const Name, auto const Value)
 	{
-		format_to(To, FSTR(L"{0:3} = {1:0{2}X}{3}"), Name, Value, sizeof(Value) * 2, Eol);
+		format_to(To, FSTR(L"{:3} = {:0{}X}{}"sv), Name, Value, sizeof(Value) * 2, Eol);
 	};
 
 #if defined _M_X64
@@ -401,7 +384,7 @@ static void read_registers(string& To, CONTEXT const& Context, string_view const
 
 static void copy_information(
 	exception_context const& Context,
-	span<DWORD64 const> NestedStack,
+	span<uintptr_t const> NestedStack,
 	string_view const Module,
 	span<string_view const> const Labels,
 	span<string_view const> const Values,
@@ -415,7 +398,7 @@ static void copy_information(
 
 	for (const auto& [Label, Value]: zip(Labels, Values))
 	{
-		format_to(Strings, FSTR(L"{0:{1}} {2}{3}"), Label, LabelsWidth, Value, Eol);
+		format_to(Strings, FSTR(L"{:{}} {}{}"sv), Label, LabelsWidth, Value, Eol);
 	}
 
 	append(Strings, Eol);
@@ -574,7 +557,7 @@ static intptr_t ExcDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* Param2
 					}
 					else
 					{
-						const auto ErrorState = error_state::fetch();
+						const auto ErrorState = last_error();
 						Message(MSG_WARNING, ErrorState,
 							msg(lng::MError),
 							{
@@ -606,7 +589,7 @@ static size_t max_item_size(span<string_view const> const Items)
 
 static bool ExcDialog(
 	exception_context const& Context,
-	span<DWORD64 const> const NestedStack,
+	span<uintptr_t const> const NestedStack,
 	string_view const ModuleName,
 	span<string_view const> const Labels,
 	span<string_view const> const Values,
@@ -682,7 +665,7 @@ static bool ExcDialog(
 
 static bool ExcConsole(
 	exception_context const& Context,
-	span<DWORD64 const> const NestedStack,
+	span<uintptr_t const> const NestedStack,
 	string_view const ModuleName,
 	span<string_view const> const Labels,
 	span<string_view const> const Values,
@@ -739,7 +722,7 @@ static bool ExcConsole(
 				if (write_minidump(Context, Path))
 					std::wcout << Eol << Path << std::endl;
 				else
-					std::wcerr << Eol << error_state::fetch().Win32ErrorStr() << std::endl;
+					std::wcerr << Eol << last_error().Win32ErrorStr() << std::endl;
 			}
 			break;
 
@@ -767,7 +750,7 @@ static bool ShowExceptionUI(
 	string_view const ModuleName,
 	string_view const PluginInformation,
 	Plugin const* const PluginModule,
-	span<DWORD64 const> const NestedStack
+	span<uintptr_t const> const NestedStack
 )
 {
 	SCOPED_ACTION(tracer::with_symbols)(PluginModule? ModuleName : L""sv);
@@ -842,6 +825,25 @@ static bool ShowExceptionUI(
 
 	static_assert(std::size(Labels) == std::size(Values));
 	static_assert(std::size(Labels) == (ed_last_line - ed_first_line) / 2 + 1);
+
+	const auto log_message = [&]
+	{
+		auto Message = join(select(zip(Labels, Values), [](auto const& Pair)
+		{
+			return format(FSTR(L"{} {}"sv), std::get<0>(Pair), std::get<1>(Pair));
+		}), L"\n"sv);
+
+		Message += L"\n\n"sv;
+
+		get_backtrace(ModuleName, tracer::get(ModuleName, Context.context_record(), Context.thread_handle()), NestedStack, [&](string_view const Line)
+		{
+			append(Message, Line, L'\n');
+		});
+
+		return Message;
+	};
+
+	LOG(PluginModule? logging::level::error : logging::level::fatal, L"\n{}\n"sv, log_message());
 
 	return (UseDialog? ExcDialog : ExcConsole)(
 		Context,
@@ -1070,7 +1072,7 @@ static string exception_name(EXCEPTION_RECORD const& ExceptionRecord, string_vie
 
 	const auto ItemIterator = std::find_if(CONST_RANGE(KnownExceptions, i) { return static_cast<DWORD>(i.second) == ExceptionRecord.ExceptionCode; });
 	const auto Name = ItemIterator != std::cend(KnownExceptions) ? ItemIterator->first : L"Unknown exception"sv;
-	return WithType(format(FSTR(L"0x{0:0>8X} - {1}"), ExceptionRecord.ExceptionCode, Name));
+	return WithType(format(FSTR(L"0x{:0>8X} - {}"sv), ExceptionRecord.ExceptionCode, Name));
 }
 
 static string exception_details(EXCEPTION_RECORD const& ExceptionRecord, string_view const Message)
@@ -1092,7 +1094,7 @@ static string exception_details(EXCEPTION_RECORD const& ExceptionRecord, string_
 			}
 		}(ExceptionRecord.ExceptionInformation[0]);
 
-		return format(FSTR(L"Memory at {0} could not be {1}"), AccessedAddress, Mode);
+		return format(FSTR(L"Memory at {} could not be {}"sv), AccessedAddress, Mode);
 	}
 
 	case EXCEPTION_MICROSOFT_CPLUSPLUS:
@@ -1111,8 +1113,8 @@ static bool handle_generic_exception(
 	Plugin const* const PluginModule,
 	string_view const Type,
 	string_view const Message,
-	error_state const& ErrorState = error_state::fetch(),
-	span<DWORD64 const> const NestedStack = {}
+	error_state const& ErrorState = last_error(),
+	span<uintptr_t const> const NestedStack = {}
 )
 {
 	static bool ExceptionHandlingIgnored = false;
@@ -1141,15 +1143,9 @@ static bool handle_generic_exception(
 
 	if (!PluginModule)
 	{
-		if (Global)
-		{
-			strFileName=Global->g_strFarModuleName;
-		}
-		else
-		{
-			// BUGBUG check result
-			(void)os::fs::GetModuleFileName(nullptr, nullptr, strFileName);
-		}
+		strFileName = Global?
+			Global->g_strFarModuleName :
+			os::fs::get_current_process_file_name();
 	}
 	else
 	{
@@ -1159,7 +1155,7 @@ static bool handle_generic_exception(
 	const auto Exception = exception_name(Context.exception_record(), Type);
 	const auto Details = exception_details(Context.exception_record(), Message);
 
-	const auto PluginInformation = PluginModule? format(FSTR(L"{0} {1} ({2}, {3})"),
+	const auto PluginInformation = PluginModule? format(FSTR(L"{} {} ({}, {})"sv),
 		PluginModule->Title(),
 		version_to_string(PluginModule->version()),
 		PluginModule->Description(),
@@ -1240,21 +1236,21 @@ static EXCEPTION_POINTERS exception_information()
 class far_wrapper_exception: public far_exception
 {
 public:
-	far_wrapper_exception(const char* const Function, string_view const File, int const Line):
+	far_wrapper_exception(std::string_view const Function, std::string_view const File, int const Line):
 		far_exception(true, L"exception_ptr"sv, Function, File, Line),
 		m_ThreadHandle(std::make_shared<os::handle>(os::OpenCurrentThread())),
 		m_Stack(tracer::get({}, *exception_information().ContextRecord, m_ThreadHandle->native_handle()))
 	{
 	}
 
-	span<DWORD64 const> get_stack() const noexcept { return m_Stack; }
+	span<uintptr_t const> get_stack() const noexcept { return m_Stack; }
 
 private:
 	std::shared_ptr<os::handle> m_ThreadHandle;
-	std::vector<DWORD64> m_Stack;
+	std::vector<uintptr_t> m_Stack;
 };
 
-std::exception_ptr wrap_current_exception(const char* const Function, string_view const File, int const Line)
+std::exception_ptr wrap_current_exception(std::string_view const Function, std::string_view const File, int const Line)
 {
 	try
 	{
@@ -1363,7 +1359,7 @@ static bool handle_std_exception(
 		const auto NestedStack = [&]
 		{
 			const auto Wrapper = dynamic_cast<const far_wrapper_exception*>(&e);
-			return Wrapper? Wrapper->get_stack() : span<DWORD64 const>{};
+			return Wrapper? Wrapper->get_stack() : span<uintptr_t const>{};
 		}();
 
 		return handle_generic_exception(Context, FarException->function(), FarException->location(), Module, Type, What, *FarException, NestedStack);
@@ -1418,7 +1414,7 @@ static void seh_terminate_handler_impl()
 		!is_fake_cpp_exception(Context.exception_record())
 	)
 	{
-		if (handle_seh_exception(Context, __FUNCTION__, {}))
+		if (handle_seh_exception(Context, CURRENT_FUNCTION_NAME, {}))
 			std::abort();
 	}
 
@@ -1431,12 +1427,12 @@ static void seh_terminate_handler_impl()
 		}
 		catch(std::exception const& e)
 		{
-			if (handle_std_exception(e, __FUNCTION__, {}))
+			if (handle_std_exception(e, CURRENT_FUNCTION_NAME, {}))
 				std::abort();
 		}
 		catch (...)
 		{
-			if (handle_unknown_exception(__FUNCTION__, {}))
+			if (handle_unknown_exception(CURRENT_FUNCTION_NAME, {}))
 				std::abort();
 		}
 	}
@@ -1448,7 +1444,7 @@ static void seh_terminate_handler_impl()
 		static_cast<CONTEXT*>(*dummy_current_exception_context())
 	});
 
-	if (handle_generic_exception(Context, __FUNCTION__, {}, {}, {}, L"Abnormal termination"sv))
+	if (handle_generic_exception(Context, CURRENT_FUNCTION_NAME, {}, {}, {}, L"Abnormal termination"sv))
 		std::abort();
 
 	restore_system_exception_handler();
@@ -1473,7 +1469,7 @@ static LONG WINAPI unhandled_exception_filter_impl(EXCEPTION_POINTERS* const Poi
 	}
 
 	detail::set_fp_exceptions(false);
-	if (handle_seh_exception(exception_context(*Pointers), __FUNCTION__, {}))
+	if (handle_seh_exception(exception_context(*Pointers), CURRENT_FUNCTION_NAME, {}))
 	{
 		std::_Exit(EXIT_FAILURE);
 	}
@@ -1528,7 +1524,7 @@ namespace detail
 
 	static thread_local bool StackOverflowHappened;
 
-	void seh_try(function_ref<void()> const Callable, function_ref<DWORD(EXCEPTION_POINTERS*)> const Filter, function_ref<void()> const Handler)
+	void seh_try(function_ref<void()> const Callable, function_ref<DWORD(EXCEPTION_POINTERS*)> const Filter, function_ref<void(DWORD)> const Handler)
 	{
 #if COMPILER(GCC) || (COMPILER(CLANG) && !defined _WIN64 && defined __GNUC__)
 		// GCC doesn't support these currently
@@ -1555,7 +1551,7 @@ namespace detail
 				StackOverflowHappened = false;
 			}
 
-			Handler();
+			Handler(GetExceptionCode());
 		}
 
 #if COMPILER(CLANG)
@@ -1608,7 +1604,7 @@ namespace detail
 		return EXCEPTION_EXECUTE_HANDLER;
 	}
 
-	void seh_thread_handler()
+	void seh_thread_handler(DWORD)
 	{
 		// The thread is about to quit, but we still need it to get a stack trace / write a minidump.
 		// It will be released once the corresponding exception context is destroyed.

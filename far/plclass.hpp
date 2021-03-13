@@ -135,8 +135,8 @@ public:
 
 	virtual ~plugin_factory() = default;
 
-	virtual std::unique_ptr<Plugin> CreatePlugin(const string& filename);
-	virtual bool IsPlugin(const string& filename) const = 0;
+	virtual std::unique_ptr<Plugin> CreatePlugin(const string& FileName, size_t FileSize);
+	virtual bool IsPlugin(const string& FileName, size_t FileSize) const = 0;
 	virtual plugin_module_ptr Create(const string& filename) = 0;
 	virtual bool Destroy(plugin_module_ptr& module) = 0;
 	virtual function_address Function(const plugin_module_ptr& Instance, const export_name& Name) = 0;
@@ -189,7 +189,7 @@ public:
 	NONCOPYABLE(native_plugin_factory);
 	using plugin_factory::plugin_factory;
 
-	bool IsPlugin(const string& FileName) const override;
+	bool IsPlugin(const string& FileName, size_t FileSize) const override;
 	plugin_module_ptr Create(const string& filename) override;
 	bool Destroy(plugin_module_ptr& instance) override;
 	function_address Function(const plugin_module_ptr& Instance, const export_name& Name) override;
@@ -197,7 +197,8 @@ public:
 private:
 	// This shouldn't be here, just an optimization for OEM plugins
 	virtual bool FindExport(std::string_view ExportName) const;
-	bool IsPlugin(const void* Data) const;
+	virtual string_view kind() const { return L"native"sv; }
+	bool IsPlugin(string_view FileName, span<unsigned char const> Buffer) const;
 };
 
 template<export_index id, bool native>

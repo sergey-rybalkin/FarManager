@@ -57,7 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "eol.hpp"
 #include "interf.hpp"
 #include "datetime.hpp"
-#include "delete.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -352,7 +352,13 @@ static void MakeListFile(panel_ptr const& Panel, string& ListFileName, bool cons
 	if (!ListFile)
 		throw MAKE_FAR_EXCEPTION(msg(lng::MCannotCreateListTemp));
 
-	SCOPE_FAIL { (void)os::fs::delete_file(ListFileName); }; // BUGBUG
+	SCOPE_FAIL
+	{
+		if (!os::fs::delete_file(ListFileName)) // BUGBUG
+		{
+			LOGWARNING(L"delete_file({}): {}"sv, ListFileName, last_error());
+		}
+	};
 
 	os::fs::filebuf StreamBuffer(ListFile, std::ios::out);
 	std::ostream Stream(&StreamBuffer);
@@ -669,7 +675,7 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 
 	const auto GenerateHistoryName = [&](size_t const Index)
 	{
-		return format(FSTR(L"{0}{1}"), HistoryAndVariablePrefix, Index);
+		return format(FSTR(L"{}{}"sv), HistoryAndVariablePrefix, Index);
 	};
 
 	constexpr auto ExpectedTokensCount = 64;
@@ -848,7 +854,7 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 			continue;
 
 		const auto Index = (&i - DlgData.data() - 1) / 2;
-		const auto VariableName = format(FSTR(L"%{0}{1}"), HistoryAndVariablePrefix, Index + 1);
+		const auto VariableName = format(FSTR(L"%{}{}"sv), HistoryAndVariablePrefix, Index + 1);
 		replace_icase(strTmpStr, VariableName, i.strData);
 
 		if (!i.strHistory.empty() && i.strHistory != GenerateHistoryName(Index))

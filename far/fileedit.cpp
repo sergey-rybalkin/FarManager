@@ -58,7 +58,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "savescr.hpp"
 #include "filestr.hpp"
 #include "TPreRedrawFunc.hpp"
-#include "syslog.hpp"
 #include "taskbar.hpp"
 #include "interf.hpp"
 #include "message.hpp"
@@ -80,6 +79,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cvtname.hpp"
 #include "global.hpp"
 #include "file_io.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -419,8 +419,15 @@ FileEditor::~FileEditor()
 				DeleteFileWithFolder(strFullFileName);
 			else
 			{
-				(void)os::fs::set_file_attributes(strFullFileName,FILE_ATTRIBUTE_NORMAL); // BUGBUG
-				(void)os::fs::delete_file(strFullFileName); //BUGBUG
+				if (!os::fs::set_file_attributes(strFullFileName, FILE_ATTRIBUTE_NORMAL)) // BUGBUG
+				{
+					LOGWARNING(L"set_file_attributes({}): {}"sv, strFullFileName, last_error());
+				}
+
+				if (!os::fs::delete_file(strFullFileName)) //BUGBUG
+				{
+					LOGWARNING(L"delete_file({}): {}"sv, strFullFileName, last_error());
+				}
 			}
 		}
 	}
@@ -1003,9 +1010,6 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 
 	bool ProcessedNext = true;
 
-	_SVS(if (LocalKey=='n' || LocalKey=='m'))
-		_SVS(SysLog(L"%d Key='%c'",__LINE__,LocalKey));
-
 	const auto MacroState = Global->CtrlObject->Macro.GetState();
 	if (!CalledFromControl && (MacroState == MACROSTATE_RECORDING_COMMON || MacroState == MACROSTATE_EXECUTING_COMMON || MacroState == MACROSTATE_NOMACRO))
 	{
@@ -1484,7 +1488,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 	os::fs::file EditFile(Name, FILE_READ_DATA, FILE_SHARE_READ | (Global->Opt->EdOpt.EditOpenedForWrite? (FILE_SHARE_WRITE | FILE_SHARE_DELETE) : 0), nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN);
 	if(!EditFile)
 	{
-		ErrorState = error_state::fetch();
+		ErrorState = last_error();
 		if ((ErrorState.Win32Error != ERROR_FILE_NOT_FOUND) && (ErrorState.Win32Error != ERROR_PATH_NOT_FOUND))
 		{
 			UserBreak = -1;
@@ -1515,7 +1519,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 				{
 					EditFile.Close();
 					SetLastError(ERROR_OPEN_FAILED); //????
-					ErrorState = error_state::fetch();
+					ErrorState = last_error();
 					UserBreak=1;
 					m_Flags.Set(FFILEEDIT_OPENFAILED);
 					return false;
@@ -1535,7 +1539,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 			{
 				EditFile.Close();
 				SetLastError(ERROR_OPEN_FAILED); //????
-				ErrorState = error_state::fetch();
+				ErrorState = last_error();
 				UserBreak=1;
 				m_Flags.Set(FFILEEDIT_OPENFAILED);
 				return false;
@@ -1585,7 +1589,11 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 
 		unsigned long long FileSize = 0;
 		// BUGBUG check result
-		(void)EditFile.GetSize(FileSize);
+		if (!EditFile.GetSize(FileSize))
+		{
+			LOGWARNING(L"GetSize({}): {}"sv, EditFile.GetName(), last_error());
+		}
+
 		const time_check TimeCheck;
 
 		os::fs::filebuf StreamBuffer(EditFile, std::ios::in);
@@ -1619,14 +1627,18 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 
 				SetCursorType(false, 0);
 				const auto CurPos = EditFile.GetPointer();
-				auto Percent = CurPos * 100 / FileSize;
+				auto Percent = FileSize? CurPos * 100 / FileSize : 0;
 				// В случае если во время загрузки файл увеличивается размере, то количество
 				// процентов может быть больше 100. Обрабатываем эту ситуацию.
 				if (Percent > 100)
 				{
 					// BUGBUG check result
-					(void)EditFile.GetSize(FileSize);
-					Percent = std::min(CurPos * 100 / FileSize, 100ull);
+					if (!EditFile.GetSize(FileSize))
+					{
+						LOGWARNING(L"GetSize({}): {}"sv, EditFile.GetName(), last_error());
+					}
+
+					Percent = FileSize? std::min(CurPos * 100 / FileSize, 100ull) : 100;
 				}
 				Editor::EditorShowMsg(msg(lng::MEditTitle), msg(lng::MEditReading), Name, Percent);
 			}
@@ -1648,7 +1660,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 			{
 				EditFile.Close();
 				SetLastError(ERROR_OPEN_FAILED); //????
-				ErrorState = error_state::fetch();
+				ErrorState = last_error();
 				UserBreak=1;
 				m_Flags.Set(FFILEEDIT_OPENFAILED);
 				return false;
@@ -1672,9 +1684,13 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 
 	EditFile.Close();
 	m_editor->SetCacheParams(pc, m_bAddSignature);
-	ErrorState = error_state::fetch();
+	ErrorState = last_error();
 	// BUGBUG check result
-	(void)os::fs::get_find_data(Name, FileInfo);
+	if (!os::fs::get_find_data(Name, FileInfo))
+	{
+		LOGWARNING(L"get_find_data({}): {}"sv, Name, last_error());
+	}
+
 	EditorGetFileAttributes(Name);
 	return true;
 
@@ -1685,7 +1701,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 		m_editor->FreeAllocatedData();
 		m_Flags.Set(FFILEEDIT_OPENFAILED);
 		SetLastError(ERROR_NOT_ENOUGH_MEMORY);
-		ErrorState = error_state::fetch();
+		ErrorState = last_error();
 		return false;
 	}
 	catch (const std::exception&)
@@ -1695,7 +1711,7 @@ bool FileEditor::LoadFile(const string& Name,int &UserBreak, error_state_ex& Err
 		// TODO: better diagnostics
 		m_editor->FreeAllocatedData();
 		m_Flags.Set(FFILEEDIT_OPENFAILED);
-		ErrorState = error_state::fetch();
+		ErrorState = last_error();
 		return false;
 	}
 }
@@ -1850,7 +1866,10 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 				{}, &EditorSavedROId) != Message::first_button)
 				return SAVEFILE_CANCEL;
 
-			(void)os::fs::set_file_attributes(Name, FileAttr & ~FILE_ATTRIBUTE_READONLY); //BUGBUG
+			if (!os::fs::set_file_attributes(Name, FileAttr & ~FILE_ATTRIBUTE_READONLY)) //BUGBUG
+			{
+				LOGWARNING(L"set_file_attributes({}): {}"sv, Name, last_error());
+			}
 		}
 	}
 	else
@@ -1866,7 +1885,7 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 				CreatePath(strCreatedPath);
 				if (!os::fs::exists(strCreatedPath))
 				{
-					ErrorState = error_state::fetch();
+					ErrorState = last_error();
 					return SAVEFILE_ERROR;
 				}
 			}
@@ -1907,7 +1926,6 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 		Если было произведено сохранение с любым результатом, то не удалять файл
 	*/
 	m_Flags.Clear(FFILEEDIT_DELETEONCLOSE|FFILEEDIT_DELETEONLYFILEONCLOSE);
-	//_D(SysLog(L"%08d EE_SAVE",__LINE__));
 
 	if (!IsUnicodeOrUtfCodePage(Codepage))
 	{
@@ -2011,7 +2029,11 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 	}
 
 	// BUGBUG check result
-	(void)os::fs::get_find_data(Name, FileInfo);
+	if (!os::fs::get_find_data(Name, FileInfo))
+	{
+		LOGWARNING(L"get_find_data({}): {}"sv, Name, last_error());
+	}
+
 	EditorGetFileAttributes(Name);
 
 	if (m_editor->m_Flags.Check(Editor::FEDITOR_MODIFIED) || NewFile)
@@ -2081,8 +2103,6 @@ void FileEditor::SetScreenPosition()
 
 void FileEditor::OnDestroy()
 {
-	_OT(SysLog(L"[%p] FileEditor::OnDestroy()",this));
-
 	if (Global->CtrlObject && !m_Flags.Check(FFILEEDIT_DISABLEHISTORY) && !equal_icase(strFileName, msg(lng::MNewFileName)))
 		Global->CtrlObject->ViewHistory->AddToHistory(strFullFileName, m_editor->m_Flags.Check(Editor::FEDITOR_LOCKMODE) ? HR_EDITOR_RO : HR_EDITOR);
 
@@ -2187,28 +2207,28 @@ string FileEditor::GetTitle() const
 
 static std::pair<string, size_t> char_code(std::optional<wchar_t> const& Char, int const Codebase)
 {
-	const auto process = [&](string_view const Format, string_view const Max)
+	const auto process = [&](const auto& Format, string_view const Max)
 	{
-		return std::pair{ Char.has_value()? format(Format, unsigned(*Char)) : L""s, Max.size() };
+		return std::pair{ Char.has_value()? format(Format, static_cast<unsigned>(*Char)) : L""s, Max.size() };
 	};
 
 	switch (Codebase)
 	{
 	case 0:
-		return process(L"0{0:o}"sv, L"0177777"sv);
+		return process(FSTR(L"0{:o}"sv), L"0177777"sv);
 
 	case 2:
-		return process(L"{0:X}h"sv, L"FFFFh"sv);
+		return process(FSTR(L"{:X}h"sv), L"FFFFh"sv);
 
 	case 1:
 	default:
-		return process(L"{0}"sv, L"65535"sv);
+		return process(FSTR(L"{}"sv), L"65535"sv);
 	}
 }
 
 static std::pair<string, size_t> ansi_char_code(std::optional<wchar_t> const& Char, int const Codebase, uintptr_t const Codepage)
 {
-	const auto process = [&](string_view const Format, string_view const Max)
+	const auto process = [&](const auto& Format, string_view const Max)
 	{
 		std::optional<unsigned> CharCode;
 
@@ -2229,14 +2249,14 @@ static std::pair<string, size_t> ansi_char_code(std::optional<wchar_t> const& Ch
 	switch (Codebase)
 	{
 	case 0:
-		return process(L"0{0:<3o}"sv, L"0377"sv);
+		return process(FSTR(L"0{:<3o}"sv), L"0377"sv);
 
 	case 2:
-		return process(L"{0:02X}h"sv, L"FFh"sv);
+		return process(FSTR(L"{:02X}h"sv), L"FFh"sv);
 
 	case 1:
 	default:
-		return process(L"{0:<3}"sv, L"255"sv);
+		return process(FSTR(L"{:<3}"sv), L"255"sv);
 	}
 }
 
@@ -2280,11 +2300,11 @@ void FileEditor::ShowStatus() const
 	}
 
 	//предварительный расчет
-	const auto LinesFormat = FSTR(L"{0}/{1}");
+	const auto LinesFormat = FSTR(L"{}/{}"sv);
 	const auto SizeLineStr = format(LinesFormat, m_editor->Lines.size(), m_editor->Lines.size()).size();
 	const auto strLineStr = format(LinesFormat, m_editor->m_it_CurLine.Number() + 1, m_editor->Lines.size());
 	const auto strAttr = *AttrStr? L"│"s + AttrStr : L""s;
-	auto StatusLine = format(FSTR(L"│{0}{1}│{2:5.5}│{3:.3} {4:>{5}}│{6:.3} {7:<3}│{8:.3} {9:<3}{10}│{11}"),
+	auto StatusLine = format(FSTR(L"│{}{}│{:5.5}│{:.3} {:>{}}│{:.3} {:<3}│{:.3} {:<3}{}│{}"sv),
 		m_editor->m_Flags.Check(Editor::FEDITOR_MODIFIED)?L'*':L' ',
 		m_editor->m_Flags.Check(Editor::FEDITOR_LOCKMODE)? L'-' : m_editor->m_Flags.Check(Editor::FEDITOR_PROCESSCTRLQ)? L'"' : L' ',
 		ShortReadableCodepageName(m_codepage),
@@ -2402,19 +2422,6 @@ void FileEditor::OnChangeFocus(bool focus)
 
 intptr_t FileEditor::EditorControl(int Command, intptr_t Param1, void *Param2)
 {
-#if defined(SYSLOG_KEYMACRO)
-	_KEYMACRO(CleverSysLog SL(L"FileEditor::EditorControl()"));
-
-	if (Command == ECTL_READINPUT || Command == ECTL_PROCESSINPUT)
-	{
-		_KEYMACRO(SysLog(L"(Command=%s, Param2=[%d/0x%08X]) Macro.IsExecuting()=%d",_ECTL_ToName(Command),(int)((intptr_t)Param2),(int)((intptr_t)Param2),Global->CtrlObject->Macro.IsExecuting()));
-	}
-
-#else
-	_ECTLLOG(CleverSysLog SL(L"FileEditor::EditorControl()"));
-	_ECTLLOG(SysLog(L"(Command=%s, Param2=[%d/0x%08X])",_ECTL_ToName(Command),(int)Param2,Param2));
-#endif
-
 	if(m_editor->EditorControlLocked()) return FALSE;
 	if (m_bClosing && (Command != ECTL_GETINFO) && (Command != ECTL_GETBOOKMARKS) && (Command!=ECTL_GETFILENAME))
 		return FALSE;
@@ -2623,18 +2630,6 @@ intptr_t FileEditor::EditorControl(int Command, intptr_t Param1, void *Param2)
 						break;
 				}
 
-#if defined(SYSLOG_KEYMACRO)
-
-				if (rec->EventType == KEY_EVENT)
-				{
-					SysLog(L"ECTL_READINPUT={KEY_EVENT,{%d,%d,Vk=0x%04X,0x%08X}}",
-					       rec->Event.KeyEvent.bKeyDown,
-					       rec->Event.KeyEvent.wRepeatCount,
-					       rec->Event.KeyEvent.wVirtualKeyCode,
-					       rec->Event.KeyEvent.dwControlKeyState);
-				}
-
-#endif
 				return TRUE;
 			}
 
@@ -2653,19 +2648,6 @@ intptr_t FileEditor::EditorControl(int Command, intptr_t Param1, void *Param2)
 					ProcessMouse(&rec.Event.MouseEvent);
 				else
 				{
-#if defined(SYSLOG_KEYMACRO)
-
-					if (!rec.EventType || rec.EventType == KEY_EVENT)
-					{
-						SysLog(L"ECTL_PROCESSINPUT={%s,{%d,%d,Vk=0x%04X,0x%08X}}",
-						       (rec.EventType == KEY_EVENT?L"KEY_EVENT":L"(internal, macro)_KEY_EVENT"),
-						       rec.Event.KeyEvent.bKeyDown,
-						       rec.Event.KeyEvent.wRepeatCount,
-						       rec.Event.KeyEvent.wVirtualKeyCode,
-						       rec.Event.KeyEvent.dwControlKeyState);
-					}
-
-#endif
 					const auto Key = ShieldCalcKeyCode(&rec, false);
 					ReProcessKey(Manager::Key(Key, rec));
 				}

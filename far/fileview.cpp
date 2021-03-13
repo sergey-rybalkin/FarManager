@@ -46,7 +46,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "fileedit.hpp"
 #include "cmdline.hpp"
 #include "savescr.hpp"
-#include "syslog.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
 #include "config.hpp"
@@ -116,8 +115,6 @@ fileviewer_ptr FileViewer::create(
 	uintptr_t aCodePage)
 {
 	const auto FileViewerPtr = std::make_shared<FileViewer>(private_tag(), true, Title);
-
-	_OT(SysLog(L"[%p] FileViewer::FileViewer(II variant...)", this));
 
 	// BUGBUG WHY ALL THIS?
 	if (Position.left < 0)
@@ -390,7 +387,7 @@ bool FileViewer::ProcessKey(const Manager::Key& Key)
 				const auto strViewFileName = m_View->GetFileName();
 				while(!os::fs::file(strViewFileName, FILE_READ_DATA, FILE_SHARE_READ|(Global->Opt->EdOpt.EditOpenedForWrite?FILE_SHARE_WRITE:0), nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 				{
-					if (OperationFailed(error_state::fetch(), strViewFileName, lng::MEditTitle, msg(lng::MEditCannotOpen), false) != operation::retry)
+					if (OperationFailed(last_error(), strViewFileName, lng::MEditTitle, msg(lng::MEditCannotOpen), false) != operation::retry)
 						return true;
 				}
 				const auto FilePos = m_View->GetFilePos();
@@ -490,13 +487,10 @@ void FileViewer::SetTempViewName(string_view const Name, bool const DeleteFolder
 
 FileViewer::~FileViewer()
 {
-	_OT(SysLog(L"[%p] ~FileViewer::FileViewer()",this));
 }
 
 void FileViewer::OnDestroy()
 {
-	_OT(SysLog(L"[%p] FileViewer::OnDestroy()",this));
-
 	m_bClosing = true;
 
 	if (!m_DisableHistory && (Global->CtrlObject->Cp()->ActivePanel() || m_Name != L"-"sv))
@@ -513,8 +507,6 @@ bool FileViewer::CanFastHide() const
 
 int FileViewer::ViewerControl(int Command, intptr_t Param1, void *Param2) const
 {
-	_VCTLLOG(CleverSysLog SL(L"FileViewer::ViewerControl()"));
-	_VCTLLOG(SysLog(L"(Command=%s, Param2=[%d/0x%08X])",_VCTL_ToName(Command),(int)Param2,Param2));
 	const auto result = m_View->ViewerControl(Command, Param1, Param2);
 	if (result&&VCTL_GETINFO==Command)
 	{
@@ -550,7 +542,7 @@ void FileViewer::ShowStatus() const
 	SetColor(COL_VIEWERSTATUS);
 	GotoXY(m_Where.left, m_Where.top);
 
-	auto StatusLine = format(FSTR(L"│{0}│{1:5.5}│{2:<10}│{3:.3} {4:<3}│{5:4}"),
+	auto StatusLine = format(FSTR(L"│{}│{:5.5}│{:<10}│{:.3} {:<3}│{:4}"sv),
 		L"thd"[m_View->m_DisplayMode],
 		ShortReadableCodepageName(m_View->m_Codepage),
 		m_View->FileSize,
