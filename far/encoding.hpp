@@ -60,6 +60,7 @@ namespace encoding
 	}
 
 	[[nodiscard]] size_t get_bytes(uintptr_t Codepage, string_view Str, span<char> Buffer, error_position* ErrorPosition = {});
+	void get_bytes(uintptr_t Codepage, string_view Str, std::string& Buffer, error_position* ErrorPosition = {});
 	[[nodiscard]] std::string get_bytes(uintptr_t Codepage, string_view Str, error_position* ErrorPosition = {});
 
 	[[nodiscard]] size_t get_bytes_count(uintptr_t Codepage, string_view Str, error_position* ErrorPosition = {});
@@ -67,7 +68,9 @@ namespace encoding
 	//-------------------------------------------------------------------------
 
 	[[nodiscard]] size_t get_chars(uintptr_t Codepage, std::string_view Str, span<wchar_t> Buffer, error_position* ErrorPosition = {});
+	void get_chars(uintptr_t Codepage, std::string_view Str, string& Buffer, error_position* ErrorPosition = {});
 	[[nodiscard]] size_t get_chars(uintptr_t Codepage, bytes_view Str, span<wchar_t> Buffer, error_position* ErrorPosition = {});
+	void get_chars(uintptr_t Codepage, bytes_view Str, string& Buffer, error_position* ErrorPosition = {});
 	[[nodiscard]] string get_chars(uintptr_t Codepage, std::string_view Str, error_position* ErrorPosition = {});
 	[[nodiscard]] string get_chars(uintptr_t Codepage, bytes_view Str, error_position* ErrorPosition = {});
 
@@ -75,6 +78,9 @@ namespace encoding
 	[[nodiscard]] size_t get_chars_count(uintptr_t Codepage, bytes_view Str, error_position* ErrorPosition = {});
 
 	//-------------------------------------------------------------------------
+
+	[[noreturn]]
+	void raise_exception(uintptr_t Codepage, string_view Str, size_t Position);
 
 	namespace detail
 	{
@@ -85,6 +91,11 @@ namespace encoding
 		{
 		public:
 			[[nodiscard]] static auto get_bytes(string_view const Str, span<char> const Buffer, error_position* const ErrorPosition = {})
+			{
+				return encoding::get_bytes(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
+			}
+
+			static auto get_bytes(string_view const Str, std::string& Buffer, error_position* const ErrorPosition = {})
 			{
 				return encoding::get_bytes(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
 			}
@@ -104,7 +115,17 @@ namespace encoding
 				return encoding::get_chars(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
 			}
 
+			static auto get_chars(std::string_view const Str, string& Buffer, error_position* const ErrorPosition = {})
+			{
+				return encoding::get_chars(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
+			}
+
 			[[nodiscard]] static auto get_chars(bytes_view const Str, span<wchar_t> const Buffer, error_position* const ErrorPosition = {})
+			{
+				return encoding::get_chars(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
+			}
+
+			static auto get_chars(bytes_view const Str, string& Buffer, error_position* const ErrorPosition = {})
 			{
 				return encoding::get_chars(cp::normalise(Codepage), Str, Buffer, ErrorPosition);
 			}
@@ -145,18 +166,39 @@ namespace encoding
 		void write(string_view Str);
 
 	private:
-		std::vector<char> m_Buffer;
+		std::string m_Buffer;
 		std::ostream* m_Stream;
 		uintptr_t m_Codepage;
 		bool m_AddSignature;
 		bool m_IgnoreEncodingErrors;
 	};
 
+	class memory_writer
+	{
+	public:
+		NONCOPYABLE(memory_writer);
+		explicit memory_writer(uintptr_t Codepage, bool AddSignature = true);
+		void write(string_view Str, const bool validate=true);
+
+		void flush_to(std::ostream& Stream);
+
+	private:
+		std::list<std::string> m_Data;
+		uintptr_t m_Codepage;
+		bool m_AddSignature;
+	};
+
 	bool is_valid_utf8(std::string_view Str, bool PartialContent, bool& PureAscii);
 
-	inline constexpr wchar_t bom_char      = L'\xFEFF'; // Zero Length Space
-	inline constexpr wchar_t replace_char  = L'\xFFFD'; // Replacement
-	inline constexpr wchar_t continue_char = L'\x203A'; // Single Right-Pointing Angle Quotation Mark
+	inline constexpr wchar_t bom_char      = L'﻿'; // Zero Length Space
+	inline constexpr wchar_t replace_char  = L'�'; // Replacement
+	inline constexpr wchar_t continue_char = L'›'; // Single Right-Pointing Angle Quotation Mark
+
+	namespace utf16
+	{
+		unsigned int extract_codepoint(string_view Str);
+		std::array<wchar_t, 2> to_surrogate(unsigned int Codepoint);
+	}
 }
 
 void swap_bytes(const void* Src, void* Dst, size_t SizeInBytes);

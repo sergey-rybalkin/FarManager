@@ -16,10 +16,14 @@ final.*.gcc*
 
 # VS
 .vs
+bin
+obj
+/misc/hlf-checker/Properties
 ipch
 *.db
 *.opendb
 *.vcxproj.user
+*.csproj.user
 *.suo
 
 #InteliJ

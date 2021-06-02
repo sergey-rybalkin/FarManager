@@ -188,6 +188,46 @@ namespace tests
 		}
 	}
 
+	static void cpp_pure_virtual_call()
+	{
+		struct base
+		{
+			base()
+			{
+				bar();
+			}
+
+			virtual ~base() = default;
+
+			virtual void foo() = 0;
+
+			void bar()
+			{
+				foo();
+			}
+		};
+
+		struct derived1: base
+		{
+			void foo() override
+			{
+			}
+		};
+
+		struct derived2 : base
+		{
+			void foo() override
+			{
+			}
+		};
+
+		// Nondeterminitic condition to prevent devirtualization
+		if (std::chrono::system_clock().now().time_since_epoch() / 1s & 1)
+			derived1{};
+		else
+			derived2{};
+	}
+
 	static void cpp_memory_leak()
 	{
 		const auto Str1 = "We're walking in the air"sv;
@@ -201,6 +241,14 @@ namespace tests
 		Global->WindowManager->ExitMainLoop(FALSE);
 	}
 
+	static void cpp_invalid_parameter()
+	{
+#if IS_MICROSOFT_SDK()
+		const auto Func = printf;
+		Func({});
+#endif
+	}
+
 	static void seh_access_violation_read()
 	{
 		volatile const int* InvalidAddress = nullptr;
@@ -208,15 +256,26 @@ namespace tests
 		volatile const auto Result = *InvalidAddress;
 	}
 
+	static volatile const int ReadOnly = 0;
 	static void seh_access_violation_write()
 	{
+		// Try something real first to see the address
+		const_cast<int&>(ReadOnly) = 42;
+
+		// Fallback
 		volatile int* InvalidAddress = nullptr;
 		*InvalidAddress = 42;
 	}
 
+	static volatile const int NotExecutable = 42;
 	static void seh_access_violation_execute()
 	{
 		using func_t = void(*)();
+
+		// Try something real first to see the address
+		reinterpret_cast<func_t>(const_cast<int*>(&NotExecutable))();
+
+		// Fallback
 		volatile const func_t InvalidAddress = nullptr;
 		InvalidAddress();
 	}
@@ -351,7 +410,9 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::cpp_unknown_nested,           L"C++ unknown exception (nested)"sv },
 		{ tests::cpp_terminate,                L"C++ terminate"sv },
 		{ tests::cpp_terminate_unwind,         L"C++ terminate unwind"sv },
+		{ tests::cpp_pure_virtual_call,        L"C++ pure virtual call"sv },
 		{ tests::cpp_memory_leak,              L"C++ memory leak"sv },
+		{ tests::cpp_invalid_parameter,        L"C++ invalid parameter"sv },
 		{ tests::seh_access_violation_read,    L"SEH access violation (read)"sv },
 		{ tests::seh_access_violation_write,   L"SEH access violation (write)"sv },
 		{ tests::seh_access_violation_execute, L"SEH access violation (execute)"sv },

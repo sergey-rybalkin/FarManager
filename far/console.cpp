@@ -44,6 +44,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "exception.hpp"
 #include "palette.hpp"
+#include "encoding.hpp"
+#include "char_width.hpp"
 
 // Platform:
 #include "platform.version.hpp"
@@ -71,42 +73,78 @@ static wchar_t ReplaceControlCharacter(wchar_t const Char)
 {
 	switch (Char)
 	{
-	case 0x00: return L'\x0020'; //   Space
-	case 0x01: return L'\x263a'; // ☺ white smiling face
-	case 0x02: return L'\x263b'; // ☻ black smiling face
-	case 0x03: return L'\x2665'; // ♥ black heart suit
-	case 0x04: return L'\x2666'; // ♦ black diamond suit
-	case 0x05: return L'\x2663'; // ♣ black club suit
-	case 0x06: return L'\x2660'; // ♠ black spade suit
-	case 0x07: return L'\x2022'; // • bullet
-	case 0x08: return L'\x25d8'; // ◘ inverse bullet
-	case 0x09: return L'\x25cb'; // ○ white circle
-	case 0x0a: return L'\x25d9'; // ◙ inverse white circle
-	case 0x0b: return L'\x2642'; // ♂ male sign
-	case 0x0c: return L'\x2640'; // ♀ female sign
-	case 0x0d: return L'\x266a'; // ♪ eighth note
-	case 0x0e: return L'\x266b'; // ♫ beamed eighth notes
-	case 0x0f: return L'\x263c'; // ☼ white sun with rays
-	case 0x10: return L'\x25ba'; // ► black right - pointing pointer
-	case 0x11: return L'\x25c4'; // ◄ black left - pointing pointer
-	case 0x12: return L'\x2195'; // ↕ up down arrow
-	case 0x13: return L'\x203c'; // ‼ double exclamation mark
-	case 0x14: return L'\x00b6'; // ¶ pilcrow sign
-	case 0x15: return L'\x00a7'; // § section sign
-	case 0x16: return L'\x25ac'; // ▬ black rectangle
-	case 0x17: return L'\x21a8'; // ↨ up down arrow with base
-	case 0x18: return L'\x2191'; // ↑ upwards arrow
-	case 0x19: return L'\x2193'; // ↓ downwards arrow
-	case 0x1a: return L'\x2192'; // → rightwards arrow
-	case 0x1b: return L'\x2190'; // ← leftwards arrow
-	case 0x1c: return L'\x221f'; // ∟ right angle
-	case 0x1d: return L'\x2194'; // ↔ left right arrow
-	case 0x1e: return L'\x25b2'; // ▲ black up - pointing triangle
-	case 0x1f: return L'\x25bc'; // ▼ black down - pointing triangle
-	case 0x7f: return L'\x2302'; // ⌂ house
-	case 0x9b: return L'\x203a'; // › single right-pointing angle quotation mark
+	// C0
+	case 0x00: return L' '; // space
+	case 0x01: return L'☺'; // white smiling face
+	case 0x02: return L'☻'; // black smiling face
+	case 0x03: return L'♥'; // black heart suit
+	case 0x04: return L'♦'; // black diamond suit
+	case 0x05: return L'♣'; // black club suit
+	case 0x06: return L'♠'; // black spade suit
+	case 0x07: return L'•'; // bullet
+	case 0x08: return L'◘'; // inverse bullet
+	case 0x09: return L'○'; // white circle
+	case 0x0A: return L'◙'; // inverse white circle
+	case 0x0B: return L'♂'; // male sign
+	case 0x0C: return L'♀'; // female sign
+	case 0x0D: return L'♪'; // eighth note
+	case 0x0E: return L'♫'; // beamed eighth notes
+	case 0x0F: return L'☼'; // white sun with rays
+	case 0x10: return L'►'; // black right - pointing pointer
+	case 0x11: return L'◄'; // black left - pointing pointer
+	case 0x12: return L'↕'; // up down arrow
+	case 0x13: return L'‼'; // double exclamation mark
+	case 0x14: return L'¶'; // pilcrow sign
+	case 0x15: return L'§'; // section sign
+	case 0x16: return L'▬'; // black rectangle
+	case 0x17: return L'↨'; // up down arrow with base
+	case 0x18: return L'↑'; // upwards arrow
+	case 0x19: return L'↓'; // downwards arrow
+	case 0x1A: return L'→'; // rightwards arrow
+	case 0x1B: return L'←'; // leftwards arrow
+	case 0x1C: return L'∟'; // right angle
+	case 0x1D: return L'↔'; // left right arrow
+	case 0x1E: return L'▲'; // black up - pointing triangle
+	case 0x1F: return L'▼'; // black down - pointing triangle
+	case 0x7F: return L'⌂'; // house
 
-	default: return Char;
+	// C1
+	// These are considered control characters too now.
+	// Unlike C0, it is unclear what glyphs to use, so just remap to the private area for now.
+	case 0x80: return L'\xE080';
+	case 0x81: return L'\xE081';
+	case 0x82: return L'\xE082';
+	case 0x83: return L'\xE083';
+	case 0x84: return L'\xE084';
+	case 0x85: return L'\xE085';
+	case 0x86: return L'\xE086';
+	case 0x87: return L'\xE087';
+	case 0x88: return L'\xE088';
+	case 0x89: return L'\xE089';
+	case 0x8A: return L'\xE08A';
+	case 0x8B: return L'\xE08B';
+	case 0x8C: return L'\xE08C';
+	case 0x8D: return L'\xE08D';
+	case 0x8E: return L'\xE08E';
+	case 0x8F: return L'\xE08F';
+	case 0x90: return L'\xE090';
+	case 0x91: return L'\xE091';
+	case 0x92: return L'\xE092';
+	case 0x93: return L'\xE093';
+	case 0x94: return L'\xE094';
+	case 0x95: return L'\xE095';
+	case 0x96: return L'\xE096';
+	case 0x97: return L'\xE097';
+	case 0x98: return L'\xE098';
+	case 0x99: return L'\xE099';
+	case 0x9A: return L'\xE09A';
+	case 0x9B: return L'\xE09B';
+	case 0x9C: return L'\xE09C';
+	case 0x9D: return L'\xE09D';
+	case 0x9E: return L'\xE09E';
+	case 0x9F: return L'\xE09F';
+
+	default:   return Char;
 	}
 }
 
@@ -696,31 +734,74 @@ namespace console_detail
 
 		Str.pop_back();
 
-		if (Attributes.Flags & FCF_FG_UNDERLINE)
+		const auto set_style = [&](FARCOLORFLAGS const Style, string_view const On, string_view const Off)
 		{
-			if (!LastColor.has_value() || !(LastColor->Flags & FCF_FG_UNDERLINE))
-				Str += L";4"sv;
-		}
-		else
-		{
-			if (LastColor.has_value() && LastColor->Flags & FCF_FG_UNDERLINE)
-				Str += L";24"sv;
-		}
+			if (Attributes.Flags & Style)
+			{
+				if (!LastColor.has_value() || !(LastColor->Flags & Style))
+					Str += On;
+			}
+			else
+			{
+				if (LastColor.has_value() && LastColor->Flags & Style)
+					Str += Off;
+			}
+		};
+
+		set_style(FCF_FG_BOLD,       L";1"sv,  L";22"sv);
+		set_style(FCF_FG_ITALIC,     L";3"sv,  L";23"sv);
+		set_style(FCF_FG_UNDERLINE,  L";4"sv,  L";24"sv);
+		set_style(FCF_FG_UNDERLINE2, L";21"sv, L";24"sv);
+		set_style(FCF_FG_OVERLINE,   L";53"sv, L";55"sv);
+		set_style(FCF_FG_STRIKEOUT,  L";9"sv,  L";29"sv);
+		set_style(FCF_FG_FAINT,      L";2"sv,  L";22"sv);
+		set_style(FCF_FG_BLINK,      L";5"sv,  L";25"sv);
 
 		Str += L'm';
 	}
 
 	static void make_vt_sequence(span<const FAR_CHAR_INFO> Input, string& Str, std::optional<FarColor>& LastColor)
 	{
+		const auto CharWidthEnabled = char_width::is_enabled();
+
+		std::optional<wchar_t> LeadingChar;
+
 		for (const auto& i: Input)
 		{
-			if (!LastColor.has_value() || i.Attributes != *LastColor)
+			if (CharWidthEnabled)
 			{
-				make_vt_attributes(i.Attributes, Str, LastColor);
-				LastColor = i.Attributes;
+				if (LeadingChar&& i.Char == *LeadingChar && i.Attributes.Flags & COMMON_LVB_TRAILING_BYTE)
+				{
+					LeadingChar.reset();
+					continue;
+				}
+
+				LeadingChar.reset();
 			}
 
-			Str += ReplaceControlCharacter(i.Char);
+			auto Attributes = i.Attributes;
+
+			if (CharWidthEnabled && Attributes.Flags & COMMON_LVB_LEADING_BYTE)
+			{
+				LeadingChar = i.Char;
+				flags::clear(Attributes.Flags, COMMON_LVB_LEADING_BYTE);
+			}
+
+			if (!LastColor.has_value() || Attributes != *LastColor)
+			{
+				make_vt_attributes(Attributes, Str, LastColor);
+				LastColor = Attributes;
+			}
+
+			if (CharWidthEnabled && i.Char == encoding::replace_char && Attributes.Reserved[0] > std::numeric_limits<wchar_t>::max())
+			{
+				const auto Pair = encoding::utf16::to_surrogate(Attributes.Reserved[0]);
+				Str.append(ALL_CONST_RANGE(Pair));
+			}
+			else
+			{
+				Str += ReplaceControlCharacter(i.Char);
+			}
 		}
 	}
 
@@ -813,18 +894,18 @@ namespace console_detail
 				assert(BufferSize.x == WriteRegion.width());
 				assert(BufferSize.y == WriteRegion.height());
 
-
-				for (auto& i: span(Buffer, BufferSize.x * BufferSize.y))
+				const auto invert_colors = [&]
 				{
-					i.Attributes = (i.Attributes & FCF_RAWATTR_MASK) | LOBYTE(~i.Attributes);
-				}
+					for (auto& i: span(Buffer, BufferSize.x* BufferSize.y))
+						i.Attributes = (i.Attributes & FCF_RAWATTR_MASK) | LOBYTE(~i.Attributes);
+				};
 
-				auto WriteRegionCopy = WriteRegion;
-				WriteOutputNTImpl(Buffer, BufferSize, WriteRegionCopy);
+				invert_colors();
+
+				WriteOutputNTImpl(Buffer, BufferSize, WriteRegion);
 				Sleep(50);
 
-				for (auto& i: span(Buffer, BufferSize.x * BufferSize.y))
-					i.Attributes = (i.Attributes & FCF_RAWATTR_MASK) | LOBYTE(~i.Attributes);
+				invert_colors();
 			}
 
 			return WriteOutputNTImpl(Buffer, BufferSize, WriteRegion) != FALSE;
@@ -913,10 +994,7 @@ namespace console_detail
 			BufferCoord.y + WriteRegion.height() - 1
 		};
 
-		DWORD Mode = 0;
-		const auto IsVT = sEnableVirtualTerminal && GetMode(GetOutputHandle(), Mode) && Mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-
-		return (IsVT? implementation::WriteOutputVT : implementation::WriteOutputNT)(Buffer, SubRect, WriteRegion);
+		return (IsVtEnabled()? implementation::WriteOutputVT : implementation::WriteOutputNT)(Buffer, SubRect, WriteRegion);
 	}
 
 	bool console::Read(string& Buffer, size_t& Size) const
@@ -997,10 +1075,7 @@ namespace console_detail
 		if (ExternalConsole.Imports.pSetTextAttributes)
 			return ExternalConsole.Imports.pSetTextAttributes(&Attributes) != FALSE;
 
-		DWORD Mode;
-		const auto IsVT = sEnableVirtualTerminal && GetMode(GetOutputHandle(), Mode) && Mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-
-		return (IsVT? implementation::SetTextAttributesVT : implementation::SetTextAttributesNT)(Attributes);
+		return (IsVtEnabled()? implementation::SetTextAttributesVT : implementation::SetTextAttributesNT)(Attributes);
 	}
 
 	bool console::GetCursorInfo(CONSOLE_CURSOR_INFO& ConsoleCursorInfo) const
@@ -1276,7 +1351,7 @@ namespace console_detail
 		return false;
 #else
 		CONSOLE_SCREEN_BUFFER_INFOEX csbiex{ sizeof(csbiex) };
-		if (imports.GetConsoleScreenBufferInfoEx(GetOutputHandle(), &csbiex))
+		if (imports.GetConsoleScreenBufferInfoEx && imports.GetConsoleScreenBufferInfoEx(GetOutputHandle(), &csbiex))
 			return csbiex.bFullscreenSupported != FALSE;
 
 		return true;
@@ -1414,8 +1489,48 @@ namespace console_detail
 		return GetDelta() != 0;
 	}
 
+	bool console::IsVtEnabled() const
+	{
+		DWORD Mode;
+		return sEnableVirtualTerminal && GetMode(GetOutputHandle(), Mode) && Mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+	}
+
+	bool console::IsWidePreciseExpensive(unsigned int const Codepoint, bool const ClearCacheOnly)
+	{
+		// It ain't stupid if it works
+
+		if (ClearCacheOnly)
+		{
+			m_WidthTestScreen = {};
+			return false;
+		}
+
+		if (!m_WidthTestScreen)
+		{
+			m_WidthTestScreen.reset(CreateConsoleScreenBuffer(GENERIC_READ | GENERIC_WRITE, {}, {}, CONSOLE_TEXTMODE_BUFFER, {}));
+			SetConsoleScreenBufferSize(m_WidthTestScreen.native_handle(), { 10, 1 });
+		}
+
+		if (!SetConsoleCursorPosition(m_WidthTestScreen.native_handle(), {}))
+			return false;
+
+		DWORD Written;
+		auto Pair = encoding::utf16::to_surrogate(Codepoint);
+		if (!WriteConsole(m_WidthTestScreen.native_handle(), Pair.data(), Pair[1]? 2 : 1, &Written, {}))
+			return false;
+
+		CONSOLE_SCREEN_BUFFER_INFO Info;
+		if (!GetConsoleScreenBufferInfo(m_WidthTestScreen.native_handle(), &Info))
+			return false;
+
+		return Info.dwCursorPosition.X > 1;
+	}
+
 	bool console::GetPalette(std::array<COLORREF, 16>& Palette) const
 	{
+		if (!imports.GetConsoleScreenBufferInfoEx)
+			return false;
+
 		CONSOLE_SCREEN_BUFFER_INFOEX csbi{ sizeof(csbi) };
 		if (!imports.GetConsoleScreenBufferInfoEx(GetOutputHandle(), &csbi))
 			return false;
@@ -1448,18 +1563,6 @@ namespace console_detail
 	bool console::SetCursorRealPosition(point const Position) const
 	{
 		return SetConsoleCursorPosition(GetOutputHandle(), make_coord(Position)) != FALSE;
-	}
-
-	console::temporary_stream_buffers_overrider::temporary_stream_buffers_overrider():
-		m_StreamBuffersOverrider(std::make_unique<stream_buffers_overrider>())
-	{
-	}
-
-	console::temporary_stream_buffers_overrider::~temporary_stream_buffers_overrider() = default;
-
-	std::unique_ptr<console::temporary_stream_buffers_overrider> console::create_temporary_stream_buffers_overrider()
-	{
-		return std::make_unique<temporary_stream_buffers_overrider>();
 	}
 }
 

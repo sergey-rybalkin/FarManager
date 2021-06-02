@@ -430,15 +430,12 @@ Dialog::~Dialog()
 	Dialog::Hide();
 	if (Global)
 	{
-		if (Global->Opt->Clock && Global->WindowManager->IsPanelsActive(true))
-			ShowTime();
-
 		if (!CheckDialogMode(DMODE_ISMENU))
 			Global->ScrBuf->Flush();
 	}
 
-//	INPUT_RECORD rec;
-//	PeekInputRecord(&rec);
+	//INPUT_RECORD rec;
+	//PeekInputRecord(&rec);
 	RemoveFromList();
 }
 
@@ -665,7 +662,7 @@ void Dialog::InitDialogObjects(size_t ID)
 
 		if (Item.Type==DI_BUTTON && Item.Flags&DIF_SETSHIELD)
 		{
-			static const auto Shield = L"\x2580\x2584 "sv;
+			static const auto Shield = L"▀▄ "sv;
 			Item.strData.insert(0, Shield);
 		}
 
@@ -1020,7 +1017,7 @@ void Dialog::ProcessLastHistory(DialogItemEx *CurItem, int MsgIndex)
 			const auto& DlgHistory = EditPtr->GetHistory();
 			if(DlgHistory)
 			{
-				DlgHistory->ReadLastItem(CurItem->strHistory, strData);
+				strData = DlgHistory->LastItem();
 			}
 
 			if (MsgIndex != -1)
@@ -1364,14 +1361,14 @@ void Dialog::GetDialogObjectsData()
 			}
 			case DI_LISTBOX:
 				/*
-				  if(i->ListPtr)
-				  {
-				    i->ListPos=Items[I].ListPtr->GetSelectPos();
-				    break;
-				  }
+				if(i->ListPtr)
+				{
+					i->ListPos=Items[I].ListPtr->GetSelectPos();
+					break;
+				}
 				*/
 				break;
-				/**/
+
 			default:
 				break;
 		}
@@ -1481,7 +1478,7 @@ intptr_t Dialog::CtlColorDlgItem(FarColor Color[4], size_t ItemPos, FARDIALOGITE
 					// Select
 					Color[1] = colors::PaletteColorToFarColor(DisabledItem? COL_WARNDIALOGEDITDISABLED : Focus? COL_WARNDIALOGEDITSELECTED : COL_WARNDIALOGEDIT);
 					// Unchanged
-					Color[2] = colors::PaletteColorToFarColor(DisabledItem? COL_WARNDIALOGEDITDISABLED : COL_WARNDIALOGEDITUNCHANGED); //???
+					Color[2] = colors::PaletteColorToFarColor(DisabledItem? COL_WARNDIALOGEDITDISABLED : Focus? COL_WARNDIALOGEDITSELECTED : COL_WARNDIALOGEDITUNCHANGED);
 					// History
 					Color[3] = colors::PaletteColorToFarColor(DisabledItem? COL_WARNDIALOGDISABLED : COL_WARNDIALOGTEXT);
 				}
@@ -1492,7 +1489,7 @@ intptr_t Dialog::CtlColorDlgItem(FarColor Color[4], size_t ItemPos, FARDIALOGITE
 					// Select
 					Color[1] = colors::PaletteColorToFarColor(DisabledItem? COL_DIALOGEDITDISABLED: Focus? COL_DIALOGEDITSELECTED : COL_DIALOGEDIT);
 					// Unchanged
-					Color[2] = colors::PaletteColorToFarColor(DisabledItem? COL_DIALOGEDITDISABLED : COL_DIALOGEDITUNCHANGED); //???
+					Color[2] = colors::PaletteColorToFarColor(DisabledItem? COL_DIALOGEDITDISABLED :  Focus? COL_DIALOGEDITSELECTED : COL_DIALOGEDITUNCHANGED);
 					// History
 					Color[3] = colors::PaletteColorToFarColor(DisabledItem? COL_DIALOGDISABLED : COL_DIALOGTEXT);
 				}
@@ -1934,7 +1931,7 @@ void Dialog::ShowDialog(size_t ID)
 				}
 				else
 				{
-					const auto Dot = Item.Selected? L'\x2022' : L' ';
+					const auto Dot = Item.Selected? L'•' : L' ';
 
 					if (Item.Flags&DIF_MOVESELECT)
 					{
@@ -1986,7 +1983,10 @@ void Dialog::ShowDialog(size_t ID)
 				if(Item.Flags & DIF_SETSHIELD)
 				{
 					int startx = m_Where.left + CX1 + (Item.Flags&DIF_NOBRACKETS? 0 : 2);
-					Global->ScrBuf->ApplyColor({ startx, m_Where.top + CY1, startx + 1, m_Where.top + CY1 }, colors::ConsoleColorToFarColor(B_YELLOW | F_LIGHTBLUE));
+					Global->ScrBuf->ApplyColor(
+						{ startx, m_Where.top + CY1, startx + 1, m_Where.top + CY1 },
+						colors::ConsoleColorToFarColor(B_YELLOW | F_LIGHTBLUE)
+					);
 				}
 				break;
 			}
@@ -2024,8 +2024,7 @@ void Dialog::ShowDialog(size_t ID)
 				if (ItemHasDropDownArrow(&Item))
 				{
 					const auto EditPos = EditPtr->GetPosition();
-					//Text((CurItem->Type == DI_COMBOBOX?"\x1F":"\x19"));
-					Text({ EditPos.right + 1, EditPos.top }, ItemColor[3], L"\x2193"sv);
+					Text({ EditPos.right + 1, EditPos.top }, ItemColor[3], L"↓"sv);
 				}
 
 				if (Item.Type == DI_COMBOBOX && GetDropDownOpened() && Item.ListPtr->IsVisible()) // need redraw VMenu?
@@ -2904,11 +2903,14 @@ bool Dialog::ProcessKey(const Manager::Key& Key)
 					switch (LocalKey())
 					{
 						case KEY_BS:
-						{	// В начале строки????
+						{
+							// В начале строки????
 							if (!edt->GetCurPos())
-							{	// а "выше" тоже DIF_EDITOR?
+							{
+								// а "выше" тоже DIF_EDITOR?
 								if (m_FocusPos > 0 && IsEmulatedEditorLine(Items[m_FocusPos - 1]))
-								{	// добавляем к предыдущему и...
+								{
+									// добавляем к предыдущему и...
 									bool last = false;
 									const auto prev = static_cast<DlgEdit*>(Items[m_FocusPos - 1].ObjPtr);
 									auto strStr = prev->GetString();
@@ -3853,9 +3855,7 @@ int Dialog::SetAutomation(WORD IDParent,WORD id,
 	if (IDParent < Items.size() && (Items[IDParent].Flags&DIF_AUTOMATION) &&
 	        id < Items.size() && IDParent != id) // Сами себя не юзаем!
 	{
-		Ret = Items[IDParent].AddAutomation(&Items[id], UncheckedSet, UncheckedSkip,
-			                                    CheckedSet, CheckedSkip,
-				 						        Checked3Set, Checked3Skip);
+		Ret = Items[IDParent].AddAutomation(&Items[id], UncheckedSet, UncheckedSkip, CheckedSet, CheckedSkip, Checked3Set, Checked3Skip);
 	}
 
 	return Ret;
@@ -3955,17 +3955,17 @@ bool Dialog::SelectFromEditHistory(DialogItemEx const* const CurItem, DlgEdit* c
 		HistoryMenu->SetMenuFlags(VMENU_SHOWAMPERSAND);
 		HistoryMenu->SetBoxType(SHORT_SINGLE_BOX);
 		HistoryMenu->SetId(SelectFromEditHistoryId);
-//		SetDropDownOpened(TRUE); // Установим флаг "открытия" комбобокса.
+		//SetDropDownOpened(TRUE); // Установим флаг "открытия" комбобокса.
 		// запомним (для прорисовки)
-//		CurItem->ListPtr=&HistoryMenu;
+		//CurItem->ListPtr=&HistoryMenu;
 		SetDropDownOpened(TRUE); // Установим флаг "открытия" комбобокса.
 		DlgProc(DN_DROPDOWNOPENED, m_FocusPos, ToPtr(1));
 		ret = DlgHist->Select(*HistoryMenu, Global->Opt->Dialogs.CBoxMaxHeight, this, strStr);
 		SetDropDownOpened(FALSE); // Установим флаг "открытия" комбобокса.
 		DlgProc(DN_DROPDOWNOPENED, m_FocusPos, nullptr);
 		// забудем (не нужен)
-//		CurItem->ListPtr=nullptr;
-//		SetDropDownOpened(FALSE); // Установим флаг "закрытия" комбобокса.
+		//CurItem->ListPtr=nullptr;
+		//SetDropDownOpened(FALSE); // Установим флаг "закрытия" комбобокса.
 	}
 
 	if (ret != HRT_CANCEL)
@@ -5115,6 +5115,7 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 
 			return FALSE;
 		}
+
 		/*****************************************************************/
 		case DM_GETCURSORPOS:
 		{
@@ -5686,7 +5687,7 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 							EditLine->SetReadOnly(ReadOnly);
 
 							// не меняем clear-флаг, пока не проиницализировались
-							EditLine->SetClearFlag(DialogMode.Check(DMODE_OBJECTS_INITED)? true : IsUnchanged);
+							EditLine->SetClearFlag(DialogMode.Check(DMODE_OBJECTS_INITED)? false : IsUnchanged);
 						}
 
 						break;

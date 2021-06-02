@@ -232,7 +232,7 @@ user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
  Affects only 1.x Far Manager plugins
  Například: far -u host
 
- Manažer Far přepne ~systémovou proměnnou~@FarEnv@ "FARUSER" na hodnotu <jméno uživatele>.
+ Manažer Far přepne ~systémovou proměnnou~@FAREnv@ "FARUSER" na hodnotu <jméno uživatele>.
 
  #-v <název souboru>#
  Zobrazuje určený soubor. Pokud je <název souboru> `#-#', jsou data čteny z stdin.
@@ -391,7 +391,7 @@ $ #Ovládání panelů#
  Třídit soubory v aktivním okně podle data přístupu         #Ctrl+F9#
  Třídit soubory v aktivním okně podle popisu               #Ctrl+F10#
  Třídit soubory v aktivním okně podle vlastníka souboru    #Ctrl+F11#
- Zobrazit menu módů třídění                                #Ctrl+F12#
+ Zobrazit menu ~módů třídění~@PanelCmdSort@                                #Ctrl+F12#
  Použít třídění skupin                                    #Shift+F11#
  Zobrazovat nejdříve vybrané soubory                      #Shift+F12#
 
@@ -584,11 +584,11 @@ v závislosti na typu souboru a ~nastavení externího editoru~@EditorSettings@.
  #Ctrl+Shift+F4# ignoruje závislosti souborů a vždy volá interní editor.
  #F4# a #Ctrl+Shift+F4# stisknuté na adresáři vyvolá dialog pro změnu ~atributů~@FileAttrDlg@ souboru.
 
- Kopírovat                                                       #F5#
+ ~Kopírovat~@CopyFiles@                                                       #F5#
  Kopírování souborů a adresářů. Pokud si přejete vytvořit cílový adresář
 před kopírováním, ukončete název zpětným lomítkem.
 
- Přejmenovat nebo přesunout                                      #F6#
+ ~Přejmenovat nebo přesunout~@CopyFiles@                                      #F6#
  Přesouvání nebo přejmenovávání souborů a adresářů. Pokud si přejete před
 přesunutím vytvořit cílový adresář, ukončete název zpětným lomítkem.
 
@@ -651,7 +651,7 @@ výšku obrazu mezi 25 a 50 řádky. Pro více informací se podívejte na
  Rozbaluje soubory z archívu                               #Shift+F2#
  Provádí příkazy správy archívu                            #Shift+F3#
 
- Vytvoření a úprava ~nového souboru~@FileOpenCreate                          #Shift+F4#
+ Vytvoření a úprava ~nového souboru~@FileOpenCreate@                         #Shift+F4#
  When a new file is opened, the same code page is used as in the last opened
 editor. If the editor is opened for the first time in the current Far session,
 the default code page is used.
@@ -667,7 +667,7 @@ moved into #d:\folder2\folder1\#;
  - ^<wrap>otherwise contents of #c:\folder1\# is moved into the
 newly created #d:\folder2\#.
 
- Smaže soubor pod kurzorem                                 #Shift+F8#
+ ~Smaže soubor~@DeleteFile@ pod kurzorem                                 #Shift+F8#
 
  Uložení konfigurace                                       #Shift+F9#
 
@@ -695,9 +695,7 @@ vykonán ~přiřazený příkaz~@FileAssoc@, nebo je otevřen archív.
 command configuration.
 
  Změní na rodičovský adresář                              #Ctrl+PgUp#
- Pokud je volba "~Použít Ctrl+PgUp pro změnu disku~@InterfSettings@"
-zapnuta, stisknutím Ctrl+PgUp v kořenovém adresáři přepnete do
-síťového pluginu, nebo se zobrazí ~menu pro výběr disku~@DriveDlg@.
+ The behavior in root folders depends on "Use Ctrl+PgUp to change drive~@InterfSettings@" option.
 
  Vytvoří skratku na aktuální adresář                #Ctrl+Shift+0…9#
 
@@ -880,7 +878,7 @@ takže nepoužívané pluginy nezabírají další paměť. Pokud jste si jisti,
 některé pluginy nepotřebujete, můžete je pro ušetření místa na disku smazat.
 
  Pluginy mohou být volány buď z ~menu změny jednotky~@DriveDlg@, nebo
-z menu #Příkazy pluginů#, spouštěném klávesou #F11#, nebo odpovídající
+z menu ~Příkazy pluginů~@PluginCommands@, spouštěném klávesou #F11#, nebo odpovídající
 položkou z ~Příkazového menu~@CmdMenu@. #F4# v menu "Příkazy pluginů"
 umožňuje přiřadit položce horkou klávesu (to dělá snadnější volání pluginů
 pomocí ~klávesových maker~@KeyMacro@). Toto menu je přístupné ze souborových
@@ -965,7 +963,8 @@ entered, then Far sets the hotkey automatically.
 @PluginsConfig
 $ #Nastavení Pluginů#
  Nainstalované ~plugin moduly~@Plugins@ můžete nakonfiurovat pomocí
-příkazu #"Nastavení pluginů"# z menu ~Nastavení~@OptMenu@.
+příkazu #"Nastavení pluginů"# z menu ~Nastavení~@OptMenu@ or by pressing
+#Alt+Shift+F9# in the ~Change drive menu~@DriveDlg@ or plugins menu.
 
  Pro získání nápovědy o aktuálně vybraném pluginu, stiskněte #Shift+F1#
 - kontextově-závislá nápověda o konfiguraci pluginu. Pokud plugin nemá
@@ -1102,7 +1101,7 @@ souboru a datum přístupu.
 souborový, potom je po změně módu nebo jednotky automaticky
 přepnut na souborový.
 
- #Rychlé hledání# může být použito pro dosažení požadovaného souboru
+ ~Rychlé hledání~@FastFind@ může být použito pro dosažení požadovaného souboru
 pomocí prvního znaku jeho názvu.
 
  See also the list of ~macro keys~@KeyMacroShellList@, available in the panels.
@@ -1247,7 +1246,6 @@ Supported types: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW and DVD-RAM.
  The output format depends on the domain structure, group policies and DNS settings.
 
  #User name format#
-
  Can be one of:
 
  - #Logon Name#
@@ -1297,7 +1295,7 @@ displayed in the panel. Soubory registrovaných typů Windows jsou zobrazeny jak
 komprimovaná velikost, počet souborů a podadresářů, velikost clusterů,
 opravdová velikost a mrtvé místo (součet nevyužitých částí clusterů).
 
- Pokud provedete ve zběžné zobrazení na oddělovacích tečkách, bude také zobrazena cesta do zdrojového adresáře.
+ Pokud provedete ve zběžné zobrazení na ~oddělovacích tečkách~@HardSymLink@, bude také zobrazena cesta do zdrojového adresáře.
 
  For folders, the total size value may not match the actual value:
  - ^<wrap>If the folder or its subfolders contain symbolic links and the option
@@ -1493,7 +1491,7 @@ $ #Menu Příkazy#
 
  #Filtr panelu souborů# Umožňuje ovládat obsah souborových panelů.
                       Pro detailní popis se podívejte na
-                      ~Filtr panelu souborů~@Filter@.
+                      ~Filtr panelu souborů~@FiltersMenu@.
 
  #Příkazy pluginů#      Zobrazí seznam ~příkazů pluginů~@Plugins@.
 
@@ -1522,7 +1520,7 @@ $ #Menu Nastavení#
                       Pro uložení zvolených jazyku použijte
                       "Uložit nastavení".
 
- #Konfigurace Pluginů#  Konfigurace ~plugin~@Plugins@ modulů.
+ #Konfigurace Pluginů#  Konfigurace ~plugin~@PluginsConfig@ modulů.
 
  #Plugin manager#        Shows ~Plugin manager settings~@PluginsManagerSettings@ dialog.
  #settings#
@@ -1546,9 +1544,8 @@ $ #Menu Nastavení#
 
  #Popisy souborů#       Seznam souborů obsahujících ~popisy souborů~@FileDiz@.
 
- #Soubory popisů#       Určení názvů (~značky~@FileMasks@ jsou povoleny) souborů
- #adresářů#             zobrazovaných v ~Info panelu~@InfoPanel@ jako popisy
-                      adresářů.
+ #Soubory popisů#       Shows ~Soubory popisů adresářů~@FolderDiz@ dialog.
+ #adresářů#
 
  #Nastavení Prohlížeče# Nastavené externího a interního ~prohlížeče~@ViewerSettings@.
 
@@ -2519,11 +2516,8 @@ Pokud není povolen, musíte pro změnu adresáře ze stromu stisknout #Enter#.
 
 @InterfSettings
 $ #Dialog nastavení rozhraní#
- #Hodiny v panelech#
+ #Hodiny#
  Ukazovat hodiny v pravém roku obrazovky.
-
- #Hodiny v prohlížeči a editoru#
- Ukazovat hodiny v prohlížeči a editoru.
 
  #Myš#
  Používat myš.
@@ -2561,6 +2555,15 @@ to calculate the total files count.
  Stisknutí #Ctrl+PgUp# v kořenovém adresáři zobrazí panel s menu pro výběr disku.
  If Network plugin is installed, for network folders (and network drives, if switch
 is in the third state) a list of server shared resources  will be shown.
+
+ #Use Virtual Terminal for rendering#
+ Render the output using ANSI escape sequences.
+ This allows using 24-bit colors and may (or may not) work better (or worse) with some Unicode characters.
+ Requires Windows 10 and above.
+
+ #Fullwidth-aware rendering#
+ Take into account the fact that East Asian characters require two screen cells instead of one.
+ The support is rudimentary and experimental. It may work or not, depending on your OS, locale, terminal, font and other settings.
 
  #ClearType friendly redraw#
  Redraw the window in such a way that ClearType related artifacts do not appear.
@@ -3135,14 +3138,14 @@ behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
  #Shift+F2#                ~Uložit soubor jako…~@FileSaveAs@
  #Shift+F4#                Edit ~new file~@FileOpenCreate@
  #F6#                      Přepnutí do ~prohlížeče~@Viewer@
- #F7#                      Hledat
- #Ctrl+F7#                 Nahradit
+ #F7#                      ~Hledat~@EditorSearch@
+ #Ctrl+F7#                 ~Nahradit~@EditorSearch@
  #Shift+F7#                Opakovat hledání/nahrazení
  #Alt+F7#                  Opakovat hledání/nahrazení in "reverse" mode
  #F8#                      Přepíná mezi DOS/Windows textovým režimem
  #Shift+F8#                Výběr OEM/ANSI code page
  #Alt+F8#                  ~Jdi na~@EditorGotoPos@ určený řádek a sloupec
- #Alt+F9#                  Přepíná velikost konzolového okna Faru
+ #Alt+F9#                  Přepíná velikost konzolového okna Faru; see also ~Interface.AltF9~@Interface.AltF9@
  #Alt+Shift+F9#            Zobrazí dialog ~Nastavení Editoru~@EditorSettings@
  #F10, F4, Esc#            Konec
  #Shift+F10#               Ulož a konec
@@ -3594,7 +3597,7 @@ display modes, press twice to see);
  #F9# shows the ~dialog~@ChangeDriveMode@ to control displaying
 of this information.
 
- Pokud je zapnuto nastavení "~Použít Ctrl+PgUp pro změnu disku"~@InterfSettings@",
+ Pokud je zapnuto nastavení "~Použít Ctrl+PgUp pro změnu disku~@InterfSettings@",
 stisk #Ctrl+PgUp# funguje stejně jako stisknutí #Esc# - ukončí výběr
 disku a zavře menu.
 
@@ -3784,7 +3787,7 @@ Windows Server 2012.
 @ViewerSettings
 $ #Nastavení Prohlížeče#
  Tento dialog umožňuje změnít nastavení interního, nebo externího
-prohlížeče.
+~prohlížeče~@Viewer@.
 
 @=
 ^#Prohlížeč#
@@ -3804,7 +3807,7 @@ prohlížeče.
                          moving the cursor.
 
  #Search dialog#           Always returns focus to the search text field in
- #auto-focus#              the ~Viewer~@Viewer@ search dialog.
+ #auto-focus#              the Viewer ~Search~@ViewerSearch@ dialog.
 
  #Velikost Tabulátoru#     Počet mezer ve znaku tabulátoru.
 
@@ -4177,7 +4180,7 @@ files will be listed on a single stripe.
  N[M[D],O,R[F],N] - název souboru, kde:
                     M - ^<wrap>zobrazovat značky výběru, kde:
                         D - dynamic selection marks;
-                    O - ^<wrap>zobrazovat názvy bez cest (zamýšleno hlavně pro pluginy);
+                    O - ^<wrap>zobrazovat názvy bez cest (zamýšleno hlavně pro ~pluginy~@Plugins@);
                     R - ^<wrap>zarovnávat názvy doprava, kde:
                         F - right align all names;
                     N - ^<wrap>do not show extensions in name column;
@@ -4752,7 +4755,7 @@ displays the active code page number.
  #SET proměnná=[řetězec]#
  Nastaví systémovou proměnnou "proměnná" na hodnotu "řetězec". Pokud není
 "řetězec" specifikován, bude systémová proměnná "proměnná" odstraněna.
-Při startu manažer Far nastaví několik ~systémových proměnných~@FarEnv@ sám.
+Při startu manažer Far nastaví několik ~systémových proměnných~@FAREnv@ sám.
 
  #IF [NOT] EXIST název_souboru příkaz#
  Provede příkaz "příkaz" pokud soubor "název_souboru" existuje. Prefix "NOT" -
@@ -5220,7 +5223,7 @@ zobrazeny po ukončení přehrávání příkazu makra.
 
  2. ^<wrap>Some key combinations (including #Enter#, #Esc#, #F1# and #Ctrl+F5#,
 #MsWheelUp#, #MsWheelDown# and other mouse keys combined with #Ctrl#, #Shift#, #Alt#) cannot be entered
-directly because they have special functions in the dialog. To assign a macro
+directly because they have special functions in the dialog. To ~assign a macro~@KeyMacroAssign@
 to one of those key combinations, select it from the drop-down list.
 
 
@@ -5966,25 +5969,6 @@ of the parameter. If the parameter is set to #-1#, random values will
 be used.
 
  Default value: 0.
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
-@System.FlagPosixSemantics
-$ #far:config System.FlagPosixSemantics#
- This Boolean parameter specifies whether inserting files into
-~view and edit history~@HistoryViews@ is case sensitive.
-
- If a file being added already exists in the history, it is not inserted
-again; instead, the existing history entry is moved to the most recent
-position.
-
- False - ^<wrap>Case insensitive comparison is used to search the
-history for duplicates.
- True  - Case sensitive comparison is used to search the history for
-duplicates.
-
- Default value: True (the search is case sensitive).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 

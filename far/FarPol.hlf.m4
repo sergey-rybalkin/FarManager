@@ -87,6 +87,7 @@ $^#Copyright © 1996-2000 Eugene Roshal#
  ~Powiązania plików~@FileAssoc@
  ~Polecenia systemu operacyjnego~@OSCommands@
  ~Skróty do folderów~@FolderShortcuts@
+ ~Grupy sortowania~@SortGroups@
  ~Menu filtry~@FiltersMenu@
  ~Przełączanie ekranów~@ScrSwitch@
  ~Lista zadań~@TaskList@
@@ -102,7 +103,7 @@ $^#Copyright © 1996-2000 Eugene Roshal#
 
  ~Podświetlanie plików i sortowanie grup~@Highlight@
  ~Opisy plików~@FileDiz@
- ~Ustawienia przeglądarki~@ViewerSettings@
+ ~Ustawienia podglądu~@ViewerSettings@
  ~Ustawienia edytora~@EditorSettings@
 
  ~Kopiowanie, przenoszenie, zmiana nazw i tworzenie linków~@CopyFiles@
@@ -271,7 +272,7 @@ zastąpione standardowym tekstem okna Far, zależnym od kontekstu programu.
  Tryb tylko-do-odczytu lub normalny tryb pracy (nadpisuje ustawienia z pliku ini).
 
  #-set:<parametr>=<wartość>#
- Nadpisuje parametr konfiguracyjny, zobacz szczegóły w ~far:config~@Konfiguracji FAR@.
+ Nadpisuje parametr konfiguracyjny, zobacz szczegóły w ~edytorze konfiguracji~@FarConfig@.
 
  #-x#
  Wyłącza obsługę wyjątków. Ten parametr jest przeznaczony dla programistów i nie jest
@@ -737,7 +738,7 @@ $ #Zrzut ekranu#
  Aby przesunąć kursor użyj #strzałek# lub kliknij #lewym klawiszem myszy#.
  Aby zaznaczyć tekst użyj klawiszy #Shift+strzałka# lub przeciągnij kursor myszy trzymając
 wciśnięty #lewy klawisz myszy#.
- Aby rozszerzyć lub zmniejszyć zaznaczony obszar użyj klawiszy #Alt+Shitf+strzałka#.
+ Aby rozszerzyć lub zmniejszyć zaznaczony obszar użyj klawiszy #Alt+Shift+strzałka#.
  Aby przenieść zaznaczenie użyj klawiszy #Alt+strzałka#.
  #Enter#, #Ctrl+Ins#, #prawy klawisz myszy# lub #podwójne kliknięcie# kopiują
 zaznaczony tekst do schowka, #Ctrl+<Szary +># dołączają tekst do zawartości schowka.
@@ -824,7 +825,7 @@ $ #Myszka: obsługa rolki#
 
  #Edytor#
  Obracanie rolki przewija tekst bez zmiany pozycji kursora na ekranie
-(podobnie do #Ctrl+Up#/#Ctrl+Down#).
+(podobnie do #Ctrl+Góra#/#Ctrl+Dół#).
 
  #Podgląd#
  Obracanie rolki przewija tekst.
@@ -856,11 +857,11 @@ Po wykryciu nowej wtyczki Far zapisuje informację o niej, a później wczytuje 
 gdy jest potrzebna - nie używane wtyczki nie zajmują dodatkowej pamięci.
 Ale jeżeli któraś wtyczka nie będzie już potrzebna, można ją usunąć oszczędzając miejsce na dysku.
 
- Wtyczki mogą być wywołane z menu ~Zmień dysk~@DriveDlg@ lub #Listy wtyczek# włączanej klawiszem
+ Wtyczki mogą być wywołane z menu ~Zmień dysk~@DriveDlg@ lub ~Listy wtyczek~@PluginCommands@ włączanej klawiszem
 #F11# lub odpowiadającemu menu ~Polecenia~@CmdMenu@. Wciśnięcie #F4# na ~"Liście wtyczek"~@PluginCommands@
 pozwala przypisać klawisz skrótu do menu (ułatwia to wywoływanie wtyczek w ~makrach klawiatury~@KeyMacro@).
 Menu to jest dostępne w panelu plików, oknach dialogowych oraz (tylko po wciśnięciu klawisza #F11#)
-w oknie podglądu i edycji. Tylko specjalnie przygotowane wtyczki będą pokazywane w oknach dialogowych,
+w oknie podglądu i edycji. Tylko specjalnie przygotowane wtyczki będą wywoływane w oknach dialogowych,
 przeglądarce lub edytorze.
 
  Można ustawić parametry wtyczek używając polecenia ~Konfiguracja wtyczek~@PluginsConfig@
@@ -1159,7 +1160,7 @@ wartość ta może być zbyt niedokładna do rzeczywistości).
 @InfoPanelShowMode
 $ #Panel informacyjny - tryby wyświetlania#
  Tryby wyświetlania ~Panelu informacyjnego~@InfoPanel@ (InfoPanel) mogą być zmieniane po wciśnięciu klawiszy
-#Ctrl+F12#. Można włączać lub wyłączać następujące informacje::
+#Ctrl+F12#. Można włączać lub wyłączać następujące informacje:
 
  - informacja o dysku
  - informacja o pamięci
@@ -1213,7 +1214,6 @@ Obsługiwane typy: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW i DVD-RAM.
  Format wyjściowy zależy od struktury domeny, polityk grup i ustawień DNS.
 
  #Format nazwy użytkownika#
-
  Do wyboru z listy:
 
  - #Nazwa logowania#
@@ -1264,7 +1264,7 @@ przydzielonego miejsca, liczbę plików i podfolderów w tym folderze, bieżąc�
 klastra na dysku, rzeczywistą wielkość pliku z ilością utraconej pojemności
 (suma nieużywanych części klastra).
 
- Przy podglądzie punktów dowiązania, pokazywana jest także ścieżka do folderu źródłowego.
+ Przy podglądzie ~punktów dowiązania~@HardSymLink@, pokazywana jest także ścieżka do folderu źródłowego.
 
  Dla folderów, wartość całkowitej wielkości może nie być dokładnie obliczana:
  - ^<wrap>Jeżeli folder lub podfoldery zawierają linki symboliczne, a opcja
@@ -1482,7 +1482,7 @@ $ #Menus: menu opcje#
  #Język programu#        Wybór języka programu i pomocy. Użyj opcji "Zapisz ustawienia",
                        aby zapamiętać wybrany język
 
- #Konfiguracja#          Okno konfiguracji ~wtyczek~@Plugins@.
+ #Konfiguracja#          Pokazuje okno ~konfiguracji wtyczek~@PluginsConfig@.
  #wtyczek#
 
  #Ustawienia managera#   Pokazuje okno ~Ustawień managera wtyczek~@PluginsManagerSettings@.
@@ -1511,8 +1511,7 @@ $ #Menus: menu opcje#
 
  #Opisy plików#          ~Pliki opisów~@FileDiz@ dla list plików i uaktualnienia tych list.
 
- #Pliki opisu folderów#  Lista nazw (dopuszczalne ~maski~@FileMasks@) plików wyświetlanych
-                       w ~Panelu informacyjnym~@InfoPanel@ jako opisy folderów i plików.
+ #Pliki opisu folderów#  Pokazuje okno ~Plików opisu folderów~@FolderDiz@.
 
  #Ustawienia podglądu#   Ustawienia zewnętrznego i wewnętrznego ~Podglądu~@ViewerSettings@.
 
@@ -2001,7 +2000,7 @@ kursorów, dodatkowo dostępne są poniższe skróty klawiszowe:
  Po użyciu danej pozycji z historii jest ona przenoszona na koniec listy.
 Wciśnięcie #Shift+Enter# wybiera dany plik, bez zmiany pozycji na liście.
 
-Jeżeli historia ma zostać zapisana po wyjściu z Far, należy włączyć
+ Jeżeli historia ma zostać zapisana po wyjściu z Far, należy włączyć
 odpowiednią opcję w ~Ustawieniach systemowych~@SystemSettings@ programu.
 
  Uwagi:
@@ -2117,7 +2116,7 @@ menu użytkownika folderu nadrzędnego wciskając klawisz #Backspace#.
 wyświetlana w separatorze. Aby usunąć separator menu, należy przejść do edycji pliku
 menu za pomocą klawiszy #Alt+F4#.
 
- Polecenia w menu można przenosić za pomocą kombinacji klawiszy #Ctrl+Up# lub #Ctrl+Down#.
+ Polecenia w menu można przenosić za pomocą kombinacji klawiszy #Ctrl+Góra# lub #Ctrl+Dół#.
 
  Aby wykonać polecenie użytkownika, należy je wybrać za pomocą klawiszy kursora
 i nacisnąć klawisz #Enter#. Można wybrać też klawisz skrótu przypisany do danej pozycji
@@ -2172,9 +2171,9 @@ różnych poleceń do uruchamiania, podglądu i edycji plików z podaną ~maską
 
  #Del#        - usuń bieżące przypisanie
 
- #Ctrl+Up#    - przenieś przypisanie wyżej (na liście)
+ #Ctrl+Góra#  - przenieś przypisanie wyżej (na liście)
 
- #Ctrl+Down#  - przenieś przypisanie niżej (na liście)
+ #Ctrl+Dół#   - przenieś przypisanie niżej (na liście)
 
  Zobacz także: polecenia ~menu~@MenuCmd@.
 
@@ -2407,7 +2406,7 @@ Opcji tej należy używać z uwagą i ostrożnością.
 
 
 @PanelSettings
-$ #Settings dialog: panel#
+$ #Okno ustawień: panel#
  #Pokazuj pliki ukryte i systemowe#
  Włącza wyświetlanie plików z atrybutem Ukryty lub Systemowy. Opcję można także przełączyć naciskając #Ctrl+H#.
 
@@ -2486,9 +2485,6 @@ $ #Okno ustawień: interfejs#
  #Zegar#
  Pokazuje zegar w prawym górnym rogu okna.
 
- #Zegar w podglądzie i edytorze#
- Pokazuje zegar w podglądzie i edytorze.
-
  #Mysz#
  Pozwala na używanie myszki w programie.
 
@@ -2527,6 +2523,15 @@ całkowitą liczbę plików.
 (i dysków sieciowych - jeżeli przełącznik znajduje się w trzecim stanie) zostanie
 wyświetlona lista współdzielonych zasobów serwera.
 
+ #Use Virtual Terminal for rendering#
+ Render the output using ANSI escape sequences.
+ This allows using 24-bit colors and may (or may not) work better (or worse) with some Unicode characters.
+ Requires Windows 10 and above.
+
+ #Fullwidth-aware rendering#
+ Take into account the fact that East Asian characters require two screen cells instead of one.
+ The support is rudimentary and experimental. It may work or not, depending on your OS, locale, terminal, font and other settings.
+
  #Rysowanie zgodne z ClearType#
  Przerysowuje okno w taki sposób, aby nie pojawiały się artefakty związane
 z technologią ClearType.
@@ -2549,405 +2554,396 @@ Może zawierać dowolny tekst, w tym zmienne środowiskowe (np. "%USERDOMAIN%\%U
 
 
 @DialogSettings
-$ #Settings dialog: dialogs#
- #History in dialog#       Keep history in edit controls of some
- #edit controls#           Far dialogs. The previous strings history
-                         list can be activated with the mouse or using
-                         #Ctrl+Up# and #Ctrl+Down#. If you do not wish
-                         to track such history, for example due to
-                         security reasons, switch this option off.
+$ #Okno ustawień: okna#
+ #Historia w polach#       Zachowaj historię kontrolek edycji niektórych
+ #edycyjnych#              okien dialogowych Far. Listę historii poprzednich
+                         wpisów można aktywować za pomocą myszki lub skrótów
+                         #Ctrl+Góra# i #Ctrl+Dół#. Jeżeli nie chcesz śledzić
+                         takich historii, np. z powodów bezpieczeństwa, wyłącz
+                         tę opcję.
 
- #Persistent blocks#       Do not remove block selection after moving
- #in edit controls#        the cursor in dialog edit controls and
-                         command line.
+ #Trwałe bloki#            Nie usuwaj zaznaczenia bloków po przesunięciu kursora
+ #podczas edycji#          w oknie dialogowym i w wierszu poleceń.
 
- #Del removes blocks#      If a block is selected, pressing Del will
- #in edit controls#        not remove the character under cursor, but
-                         this block.
+ #DEL usuwa blok#          Jeżeli zaznaczony jest blok, wciśnięcie klawisza #Del#
+ #podczas edycji#          nie usunie znaku pod kursorem, ale zaznaczony blok.
 
- #AutoComplete#            Allows to use the AutoComplete function
- #in edit controls#        in edit controls that have a history list
-                         or in combo boxes. When the option is
-                         disabled, you can use the #Ctrl+End# key
-                         to autocomplete a line. The autocomplete
-                         feature is disabled while a macro is
-                         being recorded or executed.
+ #AutoUzupełnianie#        Pozwala na korzystanie z funkcji automatycznego
+ #podczas edycji#          uzupełniania w tych kontrolkach edycji, które mają
+                         listę historii lub polach kombi. Gdy opcja jest wyłączona,
+                         można użyć skrótu #Ctrl+End# aby uzupełnić linię.
+                         AutoUzupełnianie jest wyłączone, gdy nagrywane
+                         lub uruchamiane jest makro.
 
- #Backspace deletes#       If the option is on, pressing #BackSpace#
- #unchanged text#          in an unchanged edit string deletes
-                         the entire text, as if #Del# had been
-                         pressed.
+ #BACKSPACE usuwa#         Jeżeli opcja jest włączona, naciśnięcie #Backspace#
+ #nie zmieniony tekst#     na nie zmienionym tekście usuwa cały ciąg tekstu,
+                         tak samo jak naciśnięcie klawisza #Del#.
 
- #Mouse click outside#     #Right/left mouse click# outside a dialog
- #a dialog closes it#      closes the dialog (see ~Common~@MiscCmd@).
-                         This option allows to switch off this
-                         functionality.
+ #Kliknięcie myszy#        Kliknięcie #prawym/lewym klawiszem myszy# poza oknem
+ #poza oknem zamyka je#    dialogowym, zamyka to okno (zobacz ~Polecenia sterowania~@MiscCmd@).
+                         Opcja ta pozwala na wyłączenie tej funkcjonalności.
 
- See also the list of ~macro keys~@KeyMacroDialogList@, available in dialogs.
+ Zobacz także listę ~klawiszy makro~@KeyMacroDialogList@, dostępną w oknach dialogowych.
 
 
 @VMenuSettings
-$ #Menu settings#
- #Left/Right/Middle mouse click outside a menu#
- You can choose action for mouse buttons, when click occures outside a menu:
-#Cancel menu#, #Execute selected item# or #Do nothing#.
+$ #Ustawienia menu#
+ #Lewy/Prawy/Środkowy przycisk myszy kliknięty poza menu#
+ Możesz wybrać akcje dla przycisków myszki, po kliknięciu poza menu:
+#Anuluj menu#, #Uruchom wybraną opcję# or #Nic nie rób#.
 
 
 @CmdlineSettings
-$ #Settings dialog: command line#
- #Persistent blocks#
- Do not remove block selection after moving the cursor in command line.
+$ #Okno ustawień: wiersz poleceń#
+ #Trwałe bloki#
+ Nie usuwaj zaznaczenia bloku po przesunięciu kursora w wierszu poleceń.
 
- #Del removes blocks#
- If a block is selected, pressing Del will not remove the character under cursor, but this block.
+ #Usuwaj bloki klawiszem DEL#
+ Jeżeli zaznaczony jest blok, wciśnięcie #Del# nie usuwa znaku pod kursorem ale ten blok.
 
- #AutoComplete#
- Allows to use the AutoComplete function in command line. When the option is
-disabled, you can use the #Ctrl+Space# key to autocomplete a line. The autocomplete
-feature is disabled while a macro is being recorded or executed.
+ #AutoUzupełnianie#
+ Pozwala na użycie funkcji AutoUzupełniania w wierszu poleceń. Gdy opcja jest wyłączona,
+możesz użyć skrótu #Ctrl+Spacja# aby uzupełnić wiersz. AutoUzupełnianie jest wyłączona
+automatycznie podczas nagrywania lub wykonywania makro.
 
- #Set command line prompt format#
- This option allows to set the default Far command ~line prompt~@CommandPrompt@.
+ #Wygląd znaku zachęty wiersza poleceń#
+ Ta opcja pozwala ustawić domyślny ~format zachęty~@CommandPrompt@ wiersza poleceń Far.
 
- #Use home dir#
- This option specifies the target folder of ~CD ~~~@OSCommands@ command.
-If the string is empty, #CD ~~# will attempt to change the current path
-to real “~~” directory (and fail if this is impossible, e.g. because
-the directory does not exist). Default value is string “%FARHOME%” which
-denotes Far home directory.
+ #Użyj folderu domowego#
+ Opcja określa docelowy folder dla polecenia ~CD ~~~@OSCommands@.
+Jeżeli ciąg jest pusty, #CD ~~# spróbuje zmienić bieżącą ścieżkę
+na prawdziwy folder o nazwie "~~" (co będzie niemożliwe, ponieważ taki
+folder nie może istnieć). Domyślną wartością jest łańcuch "%FARHOME%",
+wskazujący folder w którym zainstalowany jest Far.
 
 
 @AutoCompleteSettings
-$ #Settings dialog: AutoComplete#
- #Show a list#
- Show completion suggestions as a list.
+$ #Okno ustawień: AutoUzupełnianie#
+ #Pokaż listę#
+ Pokaż sugestie uzupełnienia jako listę.
 
- #Modal mode#
- Make the list modal.
+ #Tryb modalny#
+ Ustaw listę jako modalną.
 
- #Append the first matched item#
- Append the first matched item to the command line text as you type.
+ #Dołącz pierwszy pasujący element#
+ Dołącz pierwszy pasujący element do tekstu wiersza poleceń podczas pisania.
 
- There are several additional options to control what data sources will be used to populate the completion list:
+ Istnieje kilka dodatkowych opcji kontrolowania, które źródła danych będą użyte do wypełnienia listy uzupełnień:
  - #Interface.Completion.UseFilesystem#
  - #Interface.Completion.UseHistory#
  - #Interface.Completion.UsePath#
  - #Interface.Completion.UseEnvironment#
- All parameters are 3-state - yes / no / only if called manually (using #Ctrl+Space#).
-These parameters can be changed via ~far:config~@FarConfig@
+ Wszystkie parametry są trój-stanowe - tak / nie / tylko przy ręcznym wywołaniu (za pomocą skrótu #Ctrl+Spacja#).
+Parametry te można zmieniać za pomocą ~edytora konfiguracji~@FarConfig@.
 
 
 @CommandPrompt
-$ #Command line prompt format#
- Far allows to change the command line prompt format.
-To change it you have to enter the needed sequence of variables and
-special code words in the #Set command line prompt format# input field
-of the ~Command line settings~@CmdlineSettings@ dialog, this will allow showing
-additional information in the command prompt.
+$ #Format zachęty wiersza poleceń#
+ Far pozwala na zmianę formatu znaków zachęty wiersza poleceń.
+Aby zmienić należy wprowadzić wymaganą sekwencję zmiennych i kodów
+specjalnych w pole #Format zachęty wiersza poleceń# w oknie dialogowym
+~Ustawienia wiersza poleceń~@CmdlineSettings@, pozwoli to na wyświetlenie
+dodatkowych informacji w wierszu poleceń.
 
- It is allowed to use environment variables and the following special code words:
+ Dozwolone jest używanie zmiennych środowiskowych i następujących kodów specjalnych:
 
- $a - ^<wrap>the & character
- $b - the | character
- $c - the ( character
- $d - current date (depends on system settings)
- $f - the ) character
- $g - the > character
- $h - delete the previous character
- $l - the < character
- $m - full network path of the current drive or empty, if the current drive is not a network drive
- $n - drive letter of the current drive
- $p - current drive and path
- $q - the = character
- $s - space
- $t - current time in HH:MM:SS format
- $w - current working directory (without the path)
- $$ - the $ character
- $+ - the depth of the folders stack
- $##nn - ^<wrap>max prompt width, given in percents relative to the width of the window
- $@@xx - ^<wrap>"Administrator", if Far Manager is running as administrator.
-xx is a placeholder for two characters that will surround the "Administrator" word.
-For example, #$@@{}$s$p$g# will be shown as "{Administrator} C:\>"
+ $a - ^<wrap>znak & (and)
+ $b - znak |
+ $c - znak (
+ $d - bieżąca data (zależnie od ustawień systemowych)
+ $f - znak )
+ $g - znak >
+ $h - usuwa poprzedni znak
+ $l - znak <
+ $m - pełna ścieżka sieciowa bieżącego dysku, lub pusta - jeżeli bieżący dysk nie jest dyskiem sieciowym
+ $n - litera bieżącego dysku
+ $p - bieżący dysk i ścieżka
+ $q - znak =
+ $s - spacja
+ $t - bieżący czas w formacie GG:MM:SS
+ $w - aktualny folder roboczy (bez ścieżki)
+ $$ - znak $
+ $+ - głębokość zagnieżdżenia folderu
+ $##nn - ^<wrap>maksymalna szerokość zachęty, wyrażana jako procentowa wartość szerokości okna
+ $@@xx - ^<wrap>"Administrator", jeżeli Far został uruchomiony jako administrator.
+xx jest symbolem zastępczym dla dwóch znaków otaczających słowo "Administrator".
+Dla przykładu: #$@@{}$s$p$g# zostanie wyświetlone jako #"{Administrator} C:\>"#.
 
- By default the #$p$g# sequence is used - current drive and path ("C:\>").
+ Domyślnie używana jest sekwencja #$p$g# - bieżący dysk i ścieżka oraz znak większości ("C:\>").
 
- Examples:
+ Przykłady:
 
- 1. ^<wrap>A prompt of the following format #[%COMPUTERNAME%]$S$P$G#
-will contain the computer name, current drive and path
-(the %COMPUTERNAME% environment variable must be defined)
+ 1. ^<wrap>Zachęta w formacie #[%COMPUTERNAME%]$S$P$G# będzie zawierała
+nazwę komputera, bieżący dysk i ścieżkę (zmienna %COMPUTERNAME% musi być
+wcześniej zdefiniowana).
 
- 2. ^<wrap>A prompt of the following format #[$T$H$H$H]$S$P$G# will
-display the current time in HH:MM format before the current drive and path
+ 2. ^<wrap>Zachęta w formacie #[$T$H$H$H]$S$P$G# wyświetli bieżący czas
+w formacie GG:MM przed bieżącym dyskiem i ścieżką.
 
- 3. ^<wrap>Code "$+" displays the number of pluses (+) needed according to
-current ~PUSHD~@OSCommands@ directory stack depth, one character per each
-saved path.
+ 3. ^<wrap>Kod "$+" wyświetla liczbę plusów (+) wymaganych do określenia
+aktualnej głębokości stosu folderów polecenia ~PUSHD~@OSCommands@, gdzie każdy
+znak opisuje jedną zapisaną ścieżkę.
 
- Prompt elements can be highlighted with #colors#.
+ Elementy zachęty mogą być wyróżniane za pomocą #kolorów#.
 
  Format:
- #([[T]FFFFFFFF][:[T]BBBBBBBB])#, where:
+ #([[T]FFFFFFFF][:[T]BBBBBBBB])#, gdzie:
 
   #FFFFFFFF#
-  Foreground color in aarrggbb format or index in the console palette.
+  Kolor tekstu w formacie aarrggbb lub indeks w palecie konsoli.
 
   #BBBBBBBB#
-  Background color in aarrggbb format or index in the console palette.
+  Kolor tła w formacie aarrggbb lub indeks w palecie konsoli.
 
   #T#
-  "TrueColor" flag. If absent, value is treated as the console palette index (0-F):
+  Flaga "TrueColor". Jeżeli nieobecna, wartość jest traktowana jako indeks palety konsoli (0-F):
 
   \00 \11 \22 \33 \44 \55 \66 \77 \88 \99 \AA \BB \CC \DD \EE \FF \-
   0123456789ABCDEF
 
- If foreground or background color is omitted, the corresponding default value will be used.
+ Jeżeli nie podano kolorów tekstu lub tła, zostanie użyta odpowiednia wartość domyślna.
 
- Examples:
+ Przykłady:
 
- #(E)#               \0e Bright yellow text on default background    \-
- #(:F)#              \f7 Default text on white background            \-
- #(B:C)#             \cb Bright blue text on bright red background   \-
- #()#                \07 Default text on default background          \-
- #(T00CCCC:TE34234)# \(T00CCCC:TE34234) Robin egg blue text on Vermilion background \-
+ #(E)#               \0e Jasnożółty kolor tekstu na domyślnym tle     \-
+ #(:F)#              \f7 Domyślny kolor tekstu na białym tle          \-
+ #(B:C)#             \cb Jasnoniebieski kolor tekstu na czerwonym tle \-
+ #()#                \07 Domyślny kolor tekstu na domyślnym tle       \-
+ #(T00CCCC:TE34234)# \(T00CCCC:TE34234) Tekst: Robin egg blue, tło: Vermilion        \-
 
- The specified color will be active till the end of the prompt or the next color entry.
+ Wybrany kolor będzie aktywny do końca znaku zachęty lub następnego określenia koloru.
 
- Example:
+ Przykład:
 
- #(a)%username%(f)@@(b)%computername%() $p$g# \0aadmin\0f@@\0bserver\07 C:\\>\-
+ #(a)%username%(f)@@(b)%computername%() $p$g# \0aadmin\0f@@\0bserwer\07 C:\\>\-
 
 
 @Viewer
-$ #Viewer: control keys#
- Navigation keys
+$ #Podgląd: klawisze kontroli#
+ Klawisze nawigacyjne
 
- The behavior of navigation keys depends on the ~view mode~@ViewerMode@.
+ Zachowanie klawiszy nawigacyjnych zależy od ~trybu podglądu~@ViewerMode@.
 
- The following keys work in all modes:
+ Następujące klawisze działają we wszystkich trybach:
 
- #Up#                 ^<wrap>Line up
- #Down#               Line down
- #PgUp#               Screenful up
- #PgDn#               Screenful down
- #Home, Ctrl+Home#    Beginning of the file
- #End, Ctrl+End#      End of the file
+ #Góra#               ^<wrap>Linia wyżej
+ #Dół#                Linia niżej
+ #PgUp#               Jeden ekran wyżej
+ #PgDn#               Jeden ekran niżej
+ #Home, Ctrl+Home#    Początek pliku
+ #End, Ctrl+End#      Koniec pliku
 
- The following additional keys work in #text mode without line wrap#:
+ Następujące dodatkowe klawisze działają w #trybie tekstowym bez łamania linii#:
 
- #Left#               ^<wrap>One column left
- #Right#              One column right
- #Ctrl+Left#          20 columns left
- #Ctrl+Right#         20 columns right
- #Ctrl+Shift+Left#    Show the leftmost column
- #Ctrl+Shift+Right#   Show the rightmost column of all lines currently visible on the screen
+ #Lewo#               ^<wrap>Jedna kolumna w lewo
+ #Prawo#              Jedna kolumna w prawo
+ #Ctrl+Lewo#          20 kolumn w lewo
+ #Ctrl+Prawo#         20 kolumn w prawo
+ #Ctrl+Shift+Lewo#    Pokazuje pierwszą kolumnę z lewej
+ #Ctrl+Shift+Prawo#   Pokazuje ostatnią kolumnę z prawej ze wszystkich linii widocznych na ekranie
 
- In the #hex# and #dump# ~view modes~@ViewerMode@, #Ctrl+Left# and
-#Ctrl+Right# keys shift the content within the window one byte at a time
-in the corresponding direction.
+ W ~trybach podglądu~@ViewerMode@ #hex# (szesnastkowo) i #źródło#, skróty #Ctrl+Lewo#
+oraz #Ctrl+Prawo# przesuwają zawartość okna o jeden bajt w odpowiednim
+kierunku.
 
- In the #hex# ~view mode~@ViewerMode@, #Alt+Left# and #Alt+Right# key
-combinations decrease or increase the number of bytes displayed on each
-row by one byte, respectively. #Ctrl+Alt+Left# and #Ctrl+Alt+Right# key
-combinations adjust the number of displayed bytes by 16 at a time.
+ W trybie #hex# ~podglądu~@ViewerMode@, skróty #Alt+Lewo# i #Alt+Prawo#
+odpowiednio zmniejszają lub zwiększają liczbę bajtów widocznych o jeden.
+Skróty #Ctrl+Alt+Lewo# i #Ctrl+Alt+Prawo# zmieniają liczbę wyświetlanych
+bajtów o 16.
 
- Viewer commands
+ Polecenia podglądu
 
- #F1#                 ^<wrap>Help
- #F2#                 Toggle line wrap/unwrap in #text# mode, or change ~view mode~@ViewerMode@
- #Shift+F2#           Toggle wrap type (characters or words) in #text# ~view mode~@ViewerMode@
- #F4#                 Toggle ~view mode~@ViewerMode@ to #hex# and back
- #Shift+F4#           Select ~view mode~@ViewerMode@: #text#, #hex#, or #dump#
- #F6#                 Switch to ~editor~@Editor@
- #F7#                 ~Search~@ViewerSearch@
- #Shift+F7, Space#    Continue search
- #Alt+F7#             Continue search in reverse direction
- #F8#                 Switch between OEM and ANSI code pages
- #Shift+F8#           Select code page using the ~Code pages~@CodePagesMenu@ menu
- #Alt+F8#             ~Change current position~@ViewerGotoPos@
- #Alt+F9#             Maximize or restore the size of the Far console window;
-see also ~Interface.AltF9~@Interface.AltF9@
- #Alt+Shift+F9#       Open ~Viewer settings~@ViewerSettings@ dialog
- #Numpad5,F3,F10,Esc# Quit viewer
- #Ctrl+F10#           Jump to the current file on the active file panel
- #F11#                Open ~Plugin commands~@Plugins@ menu
- #Alt+F11#            Display ~file view and edit history~@HistoryViews@
- #Gray +#             View the next file on the active file panel
- #Gray -#             View the previous file on the active file panel
- #Ctrl+O#             Show user screen
- #Ctrl+Alt+Shift#     Temporarily show user screen
-(while the key combination is held down)
- #Ctrl+B#             Toggle functional key bar at the bottom of the screen
- #Ctrl+Shift+B#       Toggle status line
- #Ctrl+S#             Toggle the scrollbar
- #Alt+BS, Ctrl+Z#     Undo position change
- #RightCtrl+0…9#      Set bookmark 0…9 at the current position
- #Ctrl+Shift+0…9#     Set bookmark 0…9 at the current position
- #LeftCtrl+0…9#       Go to bookmark 0…9
- #Ctrl+Ins, Ctrl+C#   Copy the selected text to the clipboard.
-The text can be selected manually or as the result of a ~search~@ViewerSearch@.
- #Ctrl+U#             Unselect the text
- #Shift+Mouse click#  Select text manually. The first mouse click indicates the
-beginning of the selected area; the second click indicates the end.
-Use navigation keys after the first click to bring the end position into
-the view. The end of the selected area may be set before or after the
-beginning in the text.
+ #F1#                 ^<wrap>Pomoc
+ #F2#                 Przełącza zawijanie wierszy w trybie #tekstowym# lub zmienia ~tryb podglądu~@ViewerMode@
+ #Shift+F2#           Przełącza typ zawijania (znaków lub słów) w ~podglądzie~@ViewerMode@ #tekstowym#
+ #F4#                 Przełącza ~tryb podglądu~@ViewerMode@ na #hex# i z powrotem
+ #Shift+F4#           Wybór ~trybu podglądu~@ViewerMode@: #tekstowy#, #hex# (szesnastkowy) lub #źródło#
+ #F6#                 Przełącza na ~edytor~@Editor@
+ #F7#                 ~Wyszukiwanie~@ViewerSearch@
+ #Shift+F7, Spacja#   Kontynuacja szukania
+ #Alt+F7#             Kontynuacja szukania w odwrotnym kierunku
+ #F8#                 Przełączenie pomiędzy stronami kodowymi OEM i ANSI
+ #Shift+F8#           Przełączenie strony kodowej za pomocą menu ~Strony kodowe~@CodePagesMenu@
+ #Alt+F8#             ~Zmienia bieżącą pozycję~@ViewerGotoPos@
+ #Alt+F9#             Maksymalizuje lub przywraca wielkość okna Far;
+zobacz także ~Interface.AltF9~@Interface.AltF9@
+ #Alt+Shift+F9#       Otwiera okno ~Ustawień podglądu~@ViewerSettings@
+ #Numpad5,F3,F10,Esc# Zamyka podgląd
+ #Ctrl+F10#           Przechodzi do bieżącego pliku w aktywnym panelu plików
+ #F11#                Otwiera menu ~Wtyczek~@Plugins@
+ #Alt+F11#            Wyświetla ~Historię podglądu i edycji plików~@HistoryViews@
+ #Szary +#            Włącza podgląd następnego pliku w aktywnym panelu plików
+ #Szary -#            Włącza podgląd poprzedniego pliku w aktywnym panelu plików
+ #Ctrl+O#             Pokazuje ekran użytkownika
+ #Ctrl+Alt+Shift#     Tymczasowo pokazuje ekran użytkownika
+(dopóki ta kombinacja klawiszy jest naciśnięta)
+ #Ctrl+B#             Przełącza wyświetlanie paska skrótów w dolnej linii ekranu
+ #Ctrl+Shift+B#       Przełącza górną linię statusu
+ #Ctrl+S#             Przełącza pasek przewijania
+ #Alt+BS, Ctrl+Z#     Cofa ostatnią zmianę pozycji
+ #PrawyCtrl+0…9#      Ustawia zakładkę nr 0…9 na bieżącej pozycji
+ #Ctrl+Shift+0…9#     Ustawia zakładkę nr 0…9 na bieżącej pozycji
+ #LeftCtrl+0…9#       Przechodzi do zakładki 0…9
+ #Ctrl+Ins, Ctrl+C#   Kopiuje zaznaczony tekst do schowka.
+Tekst może być zaznaczony ręcznie lub jako rezultat ~wyszukiwania~@ViewerSearch@.
+ #Ctrl+U#             Odznacza tekst
+ #Shift+Klik. myszy#  Ręczne zaznaczenie tekstu. Pierwsze kliknięcie oznacza
+początek zaznaczonego tekstu; drugie oznacza jego koniec.
+Użyj klawiszy nawigacyjnych po pierwszym kliknięciu, aby przesunąć pozycję
+końcową na ekran. Koniec zaznaczonego obszaru może być przed lub za tekstem
+początkowym.
 
- See also the list of ~macro keys~@KeyMacroViewerList@ available in the viewer.
+ Zobacz także listę ~klawiszy makro~@KeyMacroViewerList@ dostępnych w podglądzie.
 
- Notes:
+ Uwagi:
 
- 1. ^<wrap>Start typing the search pattern to open the
-~search~@ViewerSearch@ dialog.
+ 1. ^<wrap>Rozpoczęcie pisania otwiera okno ~wyszukiwania~@ViewerSearch@.
 
- 2. ^<wrap>The viewer opens files with the permission to be deleted.
-If another process attempts to delete the file while it is open in the
-viewer, the file will be deleted after the viewer is closed. Any
-operation on a file while its deletion is pending will fail. This is
-a feature of the Windows operating system.
+ 2. ^<wrap>Przeglądarka otwiera pliki z uprawnieniem do usunięcia.
+Jeżeli inny proces próbuje usunąć plik otwarty do poglądu, zostanie
+on usunięty po zamknięciu podglądu. Każda operacja na pliku oczekującym
+na usunięcie zakończy się niepowodzeniem. Jest to cecha systemu operacyjnego
+Windows.
 
- 3. ^<wrap>The maximum number of columns displayed in the #text#
-~view mode~@ViewerMode@ can be configured in the
-~Viewer settings~@ViewerSettings@ dialog. The range is between 100 to 100,000,
-the default is 10,000. Lines longer than the maximum will be split into
-several screen rows even if word wrap mode is turned off.
+ 3. ^<wrap>Maksymalna liczba kolumn wyświetlanych w ~podglądzie~@ViewerMode@ #tekstowym#
+można skonfigurować w oknie ~ustawieniach podglądu~@ViewerSettings@. Zakres
+zawiera się między 100 a 100.000, domyślnie ustawione jest 10.000. Linie
+dłuższe niż ustawiony zakres zostaną podzielone kilka wierszy, nawet jeżeli
+opcja zawijania wierszy jest wyłączona.
 
- 4. ^<wrap>Far starts ~searching~@ViewerSearch@ (#F7#) from the
-beginning of the currently visible area.
+ 4. ^<wrap>Far rozpoczyna ~wyszukiwanie~@ViewerSearch@ (#F7#) od początku
+aktualnie widocznego obszaru.
 
- 5. ^<wrap>To auto-scroll a file which is being appended by another
-process (conf. Linux “tail”), go to the end of the file (press the #End# key).
+ 5. ^<wrap>Aby automatycznie przewijać plik, który jest dołączany przez inny
+proces (podobnie jak polecenie Linux "tail"), należy przejść na koniec pliku
+(naciśnięcie klawisza #End#).
 
 
 @ViewerMode
-$ #Viewer: view modes#
- The viewer can render the content of the file in three modes:
-#text#, #hex#, and #dump#. Current mode is indicated with a character
-on the first (status) line of the window, to the left of the current
-code page number:
- - #t#: text,
- - #h#: hex,
- - #d#: dump.
+$ #Podgląd: tryby widoku#
+ Podgląd plików może działać w trzech trybach:
+#tekstowy#, #hex# (szesnastkowy) oraz #źródło# (ang. dump). Wybrany tryb
+jest wskazywany za pomocą znaku w górnej linii statusu, na lewo od informacji
+o bieżącej stronie kodowej:
+ - #t#: tekstowy,
+ - #h#: hex (szesnastkowy),
+ - #d#: źródło (ang. dump).
 
- When a file is opened, if #Save view mode# option in the
-~Viewer settings~@ViewerSettings@ dialog is on and the file exists
-in ~File view and edit history~@HistoryViews@, the last used view mode
-is selected. Otherwise, if #Detect dump view mode# option in the
-~Viewer settings~@ViewerSettings@ dialog is on and Far considers the
-file binary, the #dump# mode is selected. Otherwise, the #text# mode is selected.
+ Po otwarciu pliku, jeżeli opcja #Zapisz tryb podglądu# w oknie ~Ustawień podglądu~@ViewerSettings@
+jest włączona i plik istnieje w ~Historii podglądu i edycji plików~@HistoryViews@,
+to wybierany jest ostatnio używany tryb podglądu. W innym przypadku, jeżeli
+opcja #Wykryj sposób podglądu# w oknie ~Ustawień podglądu~@ViewerSettings@
+jest włączona, a Far wykryje plik binarny to wybierany jest tryb #źródło# (ang. dump).
+W innych przypadkach wybierany jest tryb #tekstowy#.
 
- The view mode can be changed manually with the following keys:
+ Tryb podglądu można zmieniać ręcznie za pomocą następujących klawiszy:
 
  #Shift+F4#
- Opens the #View mode# menu. If #text# or #dump#
-mode is selected, it becomes the #base# mode; selecting #hex# mode
-switches the current mode but does not change the base mode.
+ Otwiera menu #Tryb widoku#. Jeżeli wybrany jest tryb #tekstowy# lub #źródło#,
+to staje się on trybem #podstawowym#; wybranie trybu #hex# przełączy
+bieżący tryb ale nie zmieni trybu podstawowego.
 
  #F4#
- Switches #text# or #dump# mode to #hex#, and
-#hex# mode to the base (#text# or #dump#) mode most recently selected
-in the #View mode# menu.
+ Przełącza tryb #tekstowy# lub #źródło# na tryb #hex#, a tryb #hex#
+na tryb podstawowy (#tekstowy# lub #źródłowy#) ostatnio wybrany w menu
+#Tryb widoku#.
 
  #F2#
- In the #text# mode toggles line wrap/unwrap,
-switches #dump# mode to #text#, and switches #hex# mode to the opposite
-of the base mode (#dump# or #text#) most recently selected in the
-#View mode# menu. Note: #F4# and #F2# switch #hex# mode to different
-modes.
+ W trybie #tekstowym# przełącza zawijanie/rozwijanie linii,
+przełącza tryb #źródło# na #tekstowy#, i przełącza tryb #hex# na przeciwny
+do trybu podstawowego (#źródło# lub #tekst#) ostatnio wybranego w menu
+#Tryb widoku#. Uwaga: klawisze #F4# i #F2# przełączają tryb #hex# na inne tryby.
 
- #Text# mode
+ Tryb #tekstowy#
 
- In the #text# mode, viewer renders file content interpreting byte
-sequences as character strings using the encoding defined by the current
-code page. (Note that some encodings can use more than one byte
-to represent a character.) Byte sequences invalid in the current
-encoding and characters for which there are no glyphs in the console
-window font are displayed as question marks, or empty rectangles,
-or small question marks in a rectangle, or blanks. The representation
-depends on the console window font.
+ W trybie #tekstowym#, przeglądarka renderuje zawartość pliku bajt po bajcie
+jako ciągi znaków przy użyciu kodowania ustawionego jako bieżąca strona kodowa.
+(Warto zauważyć, że niektóre kodowania mogą używać więcej niż jednego bajtu
+do przedstawienia znaku.) Nieprawidłowe sekwencje bajtów w bieżącym kodowaniu
+i znaki, które nie mają odpowiedników w czcionce ekranowej będą wyświetlane
+jako znaki zapytania lub puste prostokąty lub małe znaki zapytania w prostokącie
+lub jako puste pola. Pokazywany znak zależy od czcionki okna konsoli.
 
- Text lines are broken at any conventional line delimiter, U+000A
-U+000D (Dos/Windows format), U+000A (Unix format), or U+000D (Mac
-format).
+ Wiersze tekstu są łamane wg dowolnego separatora linii, U+000A
+U+000D (format Dos/Windows), U+000A (format Unix), lub U+000D (format
+Mac).
 
- Long text lines which do not fit into the window can be either
-truncated or wrapped over multiple screen rows. The #F2# key switches
-between #wrap# and #truncate# modes. In #wrap# mode, #Shift+F2# key
-combination controls whether the lines can be broken inside a word.
+ Długie linie tekstu, które nie mieszą się w oknie także mogą być obcięte
+lub zawinięte na wiele wierszy ekranu. Klawisz #F2# przełącza pomiędzy
+trybami #zawijaj# i #obetnij#. W trybie #Zawijaj#, kombinacja klawiszy
+#Shift+F2# kontroluje czy wiersze mogą być dzielone wewnątrz słowa.
 
- In #truncate# mode, the text can be scrolled horizontally within the
-window. The #Right# key scrolls the text one column to the left; the
-#Left# key scrolls one column to the right (think of moving the window
-over the file content). The #Ctrl+Right# and #Ctrl+Left# key
-combinations scroll 20 columns at a time. If #Show scrolling arrows#
-in the ~Viewer settings~@ViewerSettings@ dialog is on, the truncated
-lines are indicated with the #«# and #»# characters at the corresponding
-edge of the window. The characters are displayed in a different color.
+ W trybie #obcinania#, tekst może być przewijany poziomo w obrębie okna.
+Klawisz kursora #w prawo# przewija tekst o jedną kolumnę w lewo; klawisz
+#w lewo# przewija o kolumnę w prawo (obejmując także przenoszenie okna
+nad zawartością pliku). Klawisze #Ctrl+Prawo# i #Ctrl+Lewo# przesuwają okno
+od razu o 20 kolumn. Jeżeli opcja #Pokaż strzałki przewijania# w ~Ustawieniach
+podglądu~@ViewerSettings@ jest włączona, obcięte linie oznaczone są znakami
+#«# i #»# w odpowiednich krawędziach okna. Dla wyróżnienia znaki te
+są wyświetlane w innym kolorze.
 
- The maximum length of text lines is limited to the #Maximum line width#
-defined in the ~Viewer settings~@ViewerSettings@ dialog. Longer lines
-are split into several screen rows even in #truncate# mode.
+ Maksymalna długość linii tekstu jest ograniczona w definicji
+#Maksymalna szerokość linii# w ~Ustawieniach podglądu~@ViewerSettings@.
+Dłuższe linie są dzielone na kilka wierszy, nawet w trybie #obcinania#.
 
- #Dump# mode
+ Tryb #źródło# (ang. dump)
 
- In the #dump# mode, viewer renders file content character by character
-without regard of line breaks or control codes which are treated
-as ordinary characters. The characters are displayed on screen rows from
-left to right. After reaching the end of the row, the next character
-is displayed in the leftmost position of the next row.
+ W trybie #źródła#, przeglądarka renderuje zawartość pliku znak po znaku
+bez uwzględniania znaków końca wiersza lub kodów sterujących, które traktowane
+są jak zwykłe znaki. Znaki są wyświetlane na ekranie rzędami od lewej
+do prawej. Po osiągnięciu końca wiersza, następny znak jest wyświetlany
+na skrajnej lewej pozycji następnego wiersza.
 
- NOTE: Strictly speaking, text is rendered by code units, not by
-characters. The size of a code unit depends on the encoding defined
-by the current code page; it is one byte for single-byte encodings
-(e.g. all ANSI code pages) and UTF-8, and two bytes for UTF-16 and
-UTF-16BE encodings. For example:
+ UWAGA: Ściśle mówiąc, tekst jest renderowany przez jednostki kodu,
+a nie przez znaki. Wielkość jednostki kodu zależy od zdefiniowanego
+kodowania w bieżącej stronie kodowej; jest to jeden bajt w przypadku
+kodowania jednobajtowego (np. wszystkie strony kodowe ANSI) i UTF-8
+oraz dwa bajty dla kodowania UTF-16 i UTF-16B. Na przykład:
 
- Code page 1252 (ANSI - Latin I): each byte is displayed in its
-own screen position.
+ Strona kodowa 1250 (ANSI - Europa Środkowa): każdy jak jest wyświetlany w jego
+własnej pozycji ekranu.
 
- Code page 65001 (UTF-8): the character is displayed in the
-position corresponding to the leading byte of the UTF-8 sequence, and
-the positions of continuation bytes are filled with the #›# characters
-(code point U+203A).
+ Strona kodowa 65001 (UTF-8): znak jest wyświetlany na pozycji odpowiadającej
+wiodącej bajtowi sekwencji UTF-8, a pozycje kolejnych bajtów są wypełniane
+znakiem #›# (kod znaku U+203A).
 
- Code page 1200 (UTF-16): each screen position represents two
-consecutive bytes starting at an even offset in the file.
+ Strona kodowa 1200 (UTF-16): każda pozycja na ekranie odpowiada dwóm
+kolejnym bajtom rozpoczynając od równego przesunięcia w pliku.
 
- In the #dump# mode, there is no notion of a text line. Instead
-of horizontal scrolling (cf. #text# #truncate# mode), the text
-is shifted one character at a time. The #Ctrl+Right# key combination
-shifts all characters to the left; the first character on a row becomes
-the last on the previous row. The #Ctrl+Left# key combination shifts all
-characters to the right moving the last character of a row to the first
-positions of the next row. The text “flows” from row to row. The #Right#
-and #Left# keys are ignored.
+ W trybie #źródłowym# nie ma pojęcia linii tekstu. Zamiast przewijania
+w poziomie (tak jak w trybie #tekst# i #obcinanie#), tekst jest przesuwany
+o jeden znak. Klawisze #Ctrl+Prawo# przesuwają wszystkie znaki w lewo;
+pierwszy znak w rzędzie staje się ostatnim w poprzednim rzędzie.
+Klawisze #Ctrl+Lewo# przesuwają wszystkie znaki w prawo, przenosząc ostatni
+znak rzędu do pierwszej pozycji następnego rzędu. Tekst "przepływa" z wiersza
+do wiersza. Klawisze #Prawo# i #Lewo# są ignorowane.
 
- #Hex# mode (hexadecimal codes)
+ Tryb #hex# (kody szesnastkowe)
 
- In the #hex# mode, viewer renders file content 16 bytes per screen
-row, with the hexadecimal offset of the first byte of each row at the
-left, followed by the hexadecimal representation of the bytes, followed
-by the character representation.
+ W trybie #hex#, przeglądarka renderuje zawartość pliku w formacie
+16 bajtów na wiersz ekranu, z szesnastkowym przesunięciem pierwszego bajtu
+w każdym rzędzie w lewo, po którym następuje szesnastkowa reprezentacja
+każdego bajtu, a następnie reprezentację znaków.
 
- The rendition depends on the encoding defined by the current code
-page. For single-byte encodings (e.g. all ANSI code pages), the bytes
-on each row are represented by 16 double-digit hex values followed by 16
-characters. For UTF-8 encoding, the bytes are represented the same way,
-while the characters are displayed at the positions of the leading bytes
-of the UTF-8 sequences with the positions of continuation bytes being
-filled with the #›# characters (code point U+203A). For UTF-16(BE)
-encodings the hex values are followed by eight characters. For example:
+ Odwzorowanie zależy od kodowania zdefiniowanego przez bieżącą stronę kodową.
+Dla kodowań jednobajtowych (np. wszystkie strony kodowe ANSI), bajty w każdym
+wierszu są reprezentowane przez 16 dwucyfrowych wartości szesnastkowych
+po których następuje 16 znaków. Dla kodowania UTF-8, bajty są reprezentowane
+w ten sam sposób, gdy znaki są wyświetlanie w pozycjach bajtów wiodących
+sekwencji UTF-8, a bajty kontynuacji są wypełniane znakiem #›#
+(kod znaku U+203A). Dla kodowania UTF-16(BE) kodowanie wartości szesnastkowych
+przedstawia 8 znaków. Na przykład:
 
- Code page 1252 (ANSI - Latin I)
+ Strona kodowa 1250 (ANSI - Europa Środkowa)
 
 @-
- \1b0000000000: 54 68 65 20 71 75 69 63 │ 6B 20 62 72 6F 77 6E 20  The quick brown \-
- \1b0000000010: 66 6F 78 20 6A 75 6D 70 │ 73 20 6F 76 65 72 20 74  fox jumps over t\-
- \1b0000000020: 68 65 20 6C 61 7A 79 20 │ 64 6F 67 27 73 20 62 61  he lazy dog's ba\-
- \1b0000000030: 63 6B 2E 0D 0A          │                          ck.♪◙           \-
+ \1b0000000000: 44 6F 9C E6 20 62 B3 61 │ 7A 65 F1 73 74 77 2C 20  Dość błazeństw, \-
+ \1b0000000010: BF 72 B9 20 6D F3 6A 20 │ 70 EA 6B 20 6C 75 9F 6E  żrą mój pęk luźn\-
+ \1b0000000020: 79 63 68 20 66 69 67 0D │ 0A                       ych fig         \-
 @+
+Za: [L. Jakubowicz; "Wiadomości Literackie" (nr 1, 1936, str. 7)]
 
- Code page 65001 (UTF-8)
+ Strona kodowa 65001 (UTF-8)
 
 @-
  \1b0000000035: D0 92 20 D1 87 D0 B0 D1 │ 89 D0 B0 D1 85 20 D1 8E  В› ч›а›щ›а›х› ю›\-
@@ -2955,7 +2951,7 @@ encodings the hex values are followed by eight characters. For example:
  \1b0000000055: D0 BB 20 D1 86 D0 B8 D1 │ 82 D1 80 D1 83 D1 81 2C  л› ц›и›т›р›у›с›,\-
 @+
 
- Code page 1200 (UTF-16)
+ Strona kodowa 1200 (UTF-16)
 
 @-
  \1b00000000A2: 3D 04 3E 04 20 00 44 04 │ 30 04 3B 04 4C 04 48 04  но фальш\-
@@ -2964,63 +2960,64 @@ encodings the hex values are followed by eight characters. For example:
  \1b00000000D2: 34 04 30 04 2E 00 0D 00 │ 0A 00                    да.♪◙   \-
 @+
 
- The #Ctrl+Right# key combination shifts all bytes to the left; the
-first byte on a row becomes the last on the previous row. The
-#Ctrl+Left# key combination shifts all bytes to the right moving the
-last byte of a row to the first positions of the next row. Unlike
-in #dump# mode, the content is shifted by a byte, not by a character.
+ Kombinacja klawiszy #Ctrl+Prawo# przesuwa wszystkie bajty w lewo; pierwszy
+bajt w wierszu staje się ostatnim w poprzednim wierszu. Kombinacja #Ctrl+Lewo#
+przesuwa wszystkie bajty w praco, przesuwając ostatni bajt w rzędzie do pierwszej
+pozycji następnie wiersza. Inaczej niż w trybie #źródłowym# zawartość jest
+przesuwana o bajt, a nie o znak.
 
- The #Alt+Right# key combination increases the number of bytes displayed
-on each row by one byte. The #Ctrl+Alt+Right# key combination increases
-the number of bytes by 16 at a time. The #Alt+Left# key combination
-decreases the number of bytes displayed on each row by one byte. The
-#Ctrl+Alt+Left# key combination decreases the number of bytes by 16 at
-a time.
+ Kombinacja klawiszy #Alt+Prawo# zwiększa liczbę wyświetlanych bajtów w każdym
+rzędzie o jeden bajt. Kombinacja #Ctrl+Alt+Prawo# zwiększa liczbę bajtów
+o 16 jednocześnie. Kombinacja #Alt+Lewo# zmniejsza liczbę wyświetlanych bajtów
+w każdej linii o jeden bajt. Kombinacja #Ctrl+Alt+Lewo# zmniejsza liczbę bajtów
+o 16 jednocześnie.
 
- The #Right# and #Left# keys are ignored.
+ Klawisze #Prawy# i #Lewy# są ignorowane.
 
 
 @ViewerGotoPos
-$ #Viewer: go to specified position#
- This dialog allows to change the position in the internal viewer.
+$ #Podgląd: idź do wybranej pozycji#
+ To okno dialogowe umożliwia zmianę pozycji w wewnętrznej przeglądarce.
 
- You can enter an absolute or relative value or percentage, in decimal or hexadecimal.
- For relative add #+# or #-# before the value.
- For percentage add #%# after the value.
- For decimal either add #m# after the value or uncheck the #Hex value#.
- For hexadecimal either add #0x# or #$# before the value, #h# after the value, or check the #Hex value#.
+ Można wprowadzić wartość bezwzględną lub procentową w formacie dziesiętnym
+lub szesnastkowym.
+ Dla wartości względnych należy wpisać #+# lub #-# przed wartością.
+ Dla wartości procentowych należy dodać znak #%# po wartości.
+ Dla wartości dziesiętnych należy dodać znak #m# po wartości, lub odznaczyć pole #Szesnastkowo#.
+ Dla wartości szesnastkowych należy dodać znaki #0x# lub #$# przed wartością, znak #h# po wartości
+lub zaznaczyć pole #Szesnastkowo#.
 
- The value will be interpreted as an offset from the beginning of the file.
-If the current view mode is #unwrapped text# it is possible to enter an additional value
-which will be interpreted as a first visible column.
-Values must be delimited by space or one of the following characters: #,.;:#.
-If a value is omitted the corresponding parameter will not be changed.
+ Wartość zostanie zinterpretowana jako przesunięcie od początku pliku.
+Jeżeli bieżący tryb podglądu jest #tekstem nie zawijanym# istnieje możliwość
+podania dodatkowej wartości, która zostanie zinterpretowana jako pierwsza widoczna kolumna.
+Wartości należy oddzielić spacją lub jednym z następujących znaków: #,.;:#.
+Jeżeli wartość zostanie pominięta, to odpowiadający jej parametr nie zostanie zmieniony.
 
 
 @ViewerSearch
-$ #Viewer: search#
- For searching in the ~viewer~@Viewer@, the following modes and options are
-available:
+$ #Podgląd: wyszukiwanie#
+ Do wyszukiwania w ~Podglądzie~@Viewer@ dostępne są następujące tryby i opcje:
 
- #Search for text#
- Search for any text entered in the #Search for# edit line.
+ #Szukaj tekstu#
+ Szukaj dowolnego tekstu wprowadzonego w linii edycji #Znajdź#.
 
- #Search for hex#
- Search for a string corresponding to hexadecimal codes entered in the #Search for# string.
+ #Szukaj wartości szesnastkowych#
+ Szukaj ciągu odpowiadającemu kodom szesnastkowym wprowadzonym w polu #Znajdź#.
 
- #Case sensitive#
- The case of the characters entered will be taken into account
-while searching (so, for example, #Text# will not be found when searching for #text#).
+ #Uwzględnij wielkość znaków#
+ Uwzględniona zostanie wielkość wprowadzonych znaków w polu szukania
+(więc np, #Tekst# nie zostanie odnaleziony jeżeli szukamy łańcucha #tekst#).
 
- #Whole words#
- The given text will be found only if it occurs in the text as a whole word.
+ #Tylko całe słowa#
+ Wprowadzony tekst zostanie odnaleziony tylko wtedy, gdy wystąpi w tekście
+jako całe słowo.
 
- #Reverse search#
- Reverse the search direction - search from the end of file towards the beginning.
+ #Szukaj w odwrotnym kierunku#
+ Odwraca kierunek szukania - szuka od końca pliku do początku.
 
- #Regular expressions#
- Enable the use of ~regular expressions~@RegExp@ in the search string.
-The multiline search is not supported.
+ #Wyrażenie regularne#
+ Włącza użycie ~Wyrażeń regularnych~@RegExp@ w szukanym tekście.
+Wyszukiwanie wielowierszowe nie jest obsługiwane.
 
 
 @Editor
@@ -3715,7 +3712,7 @@ that a file belongs to a group, no further groups are checked.
 @HighlightEdit
 $ #Files highlighting and sort groups: editing#
  The #Files highlighting# dialog in the ~Options menu~@OptMenu@ allows to
-define file highlighting groups. Each group definition ~includes~@Filter@:
+specify file highlighting groups. Each group definition ~includes~@Filter@:
 
  - one or more ~file masks~@FileMasks@;
 
@@ -3770,7 +3767,7 @@ and external ~viewer~@Viewer@.
                          moving the cursor.
 
  #Search dialog#           Always returns focus to the search text field in
- #auto-focus#              the ~Viewer~@Viewer@ search dialog.
+ #auto-focus#              the Viewer ~Search~@ViewerSearch@ dialog.
 
  #Tab size#                Number of spaces per single tab position.
 
@@ -4144,7 +4141,7 @@ files will be listed on a single stripe.
  N[M[D],O,R[F],N] - file name, where:
                     M - ^<wrap>show selection marks where:
                         D - dynamic selection marks;
-                    O - ^<wrap>show names without paths (intended mainly for plugins);
+                    O - ^<wrap>show names without paths (intended mostly for ~plugins~@Plugins@);
                     R - ^<wrap>right align names that do not fit in column, where:
                         F - right align all names;
                     N - ^<wrap>do not show extensions in name column;
@@ -5187,7 +5184,7 @@ command playback is finished.
 
  2. ^<wrap>Some key combinations (including #Enter#, #Esc#, #F1# and #Ctrl+F5#,
 #MsWheelUp#, #MsWheelDown# and other mouse keys combined with #Ctrl#, #Shift#, #Alt#) cannot be entered
-directly because they have special functions in the dialog. To assign a macro
+directly because they have special functions in the dialog. To ~assign a macro~@KeyMacroAssign@
 to one of those key combinations, select it from the drop-down list.
 
 
@@ -5933,25 +5930,6 @@ of the parameter. If the parameter is set to #-1#, random values will
 be used.
 
  Default value: 0.
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
-@System.FlagPosixSemantics
-$ #far:config System.FlagPosixSemantics#
- This Boolean parameter specifies whether inserting files into
-~view and edit history~@HistoryViews@ is case sensitive.
-
- If a file being added already exists in the history, it is not inserted
-again; instead, the existing history entry is moved to the most recent
-position.
-
- False - ^<wrap>Case insensitive comparison is used to search the
-history for duplicates.
- True  - Case sensitive comparison is used to search the history for
-duplicates.
-
- Default value: True (the search is case sensitive).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 

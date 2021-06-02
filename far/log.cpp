@@ -143,29 +143,6 @@ namespace
 		return F_DARKGRAY;
 	}
 
-	static std::pair<string, string> get_time()
-	{
-		SYSTEMTIME SystemTime{};
-		GetSystemTime(&SystemTime);
-
-		return
-		{
-			format(
-				FSTR(L"{:04}/{:02}/{:02}"sv),
-				SystemTime.wYear,
-				SystemTime.wMonth,
-				SystemTime.wDay
-			),
-			format(
-				FSTR(L"{:02}:{:02}:{:02}.{:03}"sv),
-				SystemTime.wHour,
-				SystemTime.wMinute,
-				SystemTime.wSecond,
-				SystemTime.wMilliseconds
-			)
-		};
-	}
-
 	static string get_location(std::string_view const Function, std::string_view const File, int const Line)
 	{
 		return format(FSTR(L"{}, {}({})"sv), encoding::utf8::get_chars(Function), encoding::utf8::get_chars(File), Line);
@@ -192,7 +169,7 @@ namespace
 				m_Data += L"\nLog stack:\n"sv;
 
 				const auto FramesToSkip = 4; // log -> engine.log -> submit -> this ctor
-				tracer::get_symbols({}, os::debug::current_stack(FramesToSkip, TraceDepth), [&](string_view const TraceLine)
+				tracer.get_symbols({}, os::debug::current_stack(FramesToSkip, TraceDepth), [&](string_view const TraceLine)
 				{
 					append(m_Data, TraceLine, L'\n');
 				});
@@ -412,9 +389,6 @@ namespace
 	private:
 		static string make_filename()
 		{
-			SYSTEMTIME SystemTime{};
-			GetSystemTime(&SystemTime);
-
 			auto [Date, Time] = get_time();
 			std::replace(ALL_RANGE(Date), L'/', L'.');
 			std::replace(ALL_RANGE(Time), L':', L'.');
@@ -538,7 +512,7 @@ namespace
 
 		void in(message Message)
 		{
-			// The receiver will block new messages once the limit is reached.
+			// The receiver takes all available messages in one go so this shouldn't happen.
 			// However, should it fail to do so, this will prevent us from eating all the RAM:
 			if (m_Messages.size() > QueueBufferSize * 2)
 			{
@@ -567,19 +541,12 @@ namespace
 						if (os::handle::wait_any({ m_MessageEvent.native_handle(), m_FinishEvent.native_handle() }) != 0)
 							return;
 
-						std::optional<decltype(m_Messages.scoped_lock())> Lock;
-
-						while (m_Messages.try_pop(Message))
+						for (auto Messages = m_Messages.pop_all(); !Messages.empty(); Messages.pop())
 						{
 							if (m_IsDiscardable && m_FinishEvent.is_signaled())
 								return;
 
-							out(std::move(Message));
-
-							if (!Lock && m_Messages.size() > QueueBufferSize)
-							{
-								Lock.emplace(m_Messages.scoped_lock());
-							}
+							out(std::move(Messages.front()));
 						}
 					}
 				},
@@ -726,12 +693,10 @@ namespace logging
 			if (m_Status != engine_status::complete || !m_QueuedMessagesCount)
 				return;
 
-			message Message;
-
-			SCOPED_ACTION(auto)(m_QueuedMessages.scoped_lock());
-			while (m_QueuedMessages.try_pop(Message))
+			for (auto Messages = m_QueuedMessages.pop_all(); !Messages.empty(); Messages.pop())
 			{
-				if (m_Level >= Message.m_Level)
+				const auto& Message = Messages.front();
+				if (Message.m_Level <= m_Level)
 					submit(Message);
 			}
 

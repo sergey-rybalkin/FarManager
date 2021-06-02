@@ -201,7 +201,7 @@ void CommandLine::DisplayObject()
 
 	GotoXY(m_Where.right + 1, m_Where.top);
 	SetColor(COL_COMMANDLINEPREFIX);
-	Text(L'\x2191'); // up arrow
+	Text(L'↑');
 }
 
 void CommandLine::DrawFakeCommand(string_view const FakeCommand)
@@ -329,7 +329,7 @@ bool CommandLine::ProcessKey(const Manager::Key& Key)
 
 		case KEY_F2:
 		{
-			UserMenu(false);
+			user_menu(false);
 			return true;
 		}
 		case KEY_ALTF8:
@@ -411,9 +411,9 @@ bool CommandLine::ProcessKey(const Manager::Key& Key)
 			case HRT_SHIFTETNER:
 			case HRT_CTRLSHIFTENTER:
 				{
-
-					if (SelectType == HRT_SHIFTETNER)
-						Global->CtrlObject->FolderHistory->SetAddMode(false,2,true);
+					auto Suppressor = Global->CtrlObject->FolderHistory->suppressor();
+					if (SelectType != HRT_SHIFTETNER)
+						Suppressor.reset();
 
 					// пусть плагин сам прыгает... ;-)
 					auto Panel = Global->CtrlObject->Cp()->ActivePanel();
@@ -436,7 +436,6 @@ bool CommandLine::ProcessKey(const Manager::Key& Key)
 						Panel = Global->CtrlObject->Cp()->ActivePanel();
 					}
 					Panel->Redraw();
-					Global->CtrlObject->FolderHistory->SetAddMode(true,2,true);
 				}
 				break;
 
@@ -975,10 +974,9 @@ void CommandLine::ShowViewEditHistory()
 	case HRT_ENTER:
 	case HRT_SHIFTETNER:
 		{
-			if (SelectType == HRT_ENTER)
-				Global->CtrlObject->ViewHistory->AddToHistory(strStr,Type);
-
-			Global->CtrlObject->ViewHistory->SetAddMode(false,Global->Opt->FlagPosixSemantics?1:2,true);
+			auto Suppressor = Global->CtrlObject->ViewHistory->suppressor();
+			if (SelectType != HRT_SHIFTETNER)
+				Suppressor.reset();
 
 			switch (Type)
 			{
@@ -1012,8 +1010,6 @@ void CommandLine::ShowViewEditHistory()
 					break;
 				}
 			}
-
-			Global->CtrlObject->ViewHistory->SetAddMode(true,Global->Opt->FlagPosixSemantics?1:2,true);
 		}
 		break;
 
@@ -1146,8 +1142,6 @@ void CommandLine::ExecString(execute_info& Info)
 				Global->CtrlObject->Cp()->GetKeybar().Show();
 			}
 		}
-		if (Global->Opt->Clock)
-			ShowTime();
 
 		if (Info.WaitMode != execute_info::wait_mode::no_wait)
 		{

@@ -41,6 +41,9 @@
     <ClCompile Include="cddrv.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="char_wiidth.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="clipboard.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -422,9 +425,6 @@
     <ClCompile Include="sqlite.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="sqlite_unicode.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="sqlitedb.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -491,6 +491,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="cddrv.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="char_width.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="clipboard.hpp">
@@ -1053,9 +1056,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="sqlite.hpp">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="sqlite_unicode.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="sqlitedb.hpp">

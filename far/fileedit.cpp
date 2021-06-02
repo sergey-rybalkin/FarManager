@@ -80,6 +80,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "file_io.hpp"
 #include "log.hpp"
+#include "elevation.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -729,6 +730,9 @@ void FileEditor::Init(
 	if (GetExitCode() == XC_LOADING_INTERRUPTED || GetExitCode() == XC_OPEN_ERROR)
 		return;
 
+	if (!m_Flags.Check(FFILEEDIT_DISABLEHISTORY) && strFileName != msg(lng::MNewFileName))
+		Global->CtrlObject->ViewHistory->AddToHistory(strFullFileName, m_editor->m_Flags.Check(Editor::FEDITOR_LOCKMODE)? HR_EDITOR_RO : HR_EDITOR);
+
 	InitKeyBar();
 	// Note: bottom - bottom
 	m_windowKeyBar->SetPosition({ m_Where.left, m_Where.bottom, m_Where.right, m_Where.bottom });
@@ -893,6 +897,8 @@ long long FileEditor::VMProcess(int OpCode, void* vParam, long long iParam)
 
 bool FileEditor::ProcessKey(const Manager::Key& Key)
 {
+	elevation::instance().ResetApprove();
+
 	return ReProcessKey(Key, false);
 }
 
@@ -1164,6 +1170,9 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 								//if(!Global->Opt->Confirm.Esc && UserBreak && GetExitCode()==XC_LOADING_INTERRUPTED && WindowManager)
 								//  WindowManager->RefreshWindow();
 							}
+
+							if (!m_Flags.Check(FFILEEDIT_DISABLEHISTORY))
+								Global->CtrlObject->ViewHistory->AddToHistory(strFullFileName, m_editor->m_Flags.Check(Editor::FEDITOR_LOCKMODE)? HR_EDITOR_RO : HR_EDITOR);
 
 							// перерисовывать надо как минимум когда изменилась кодировка или имя файла
 							ShowConsoleTitle();
@@ -2062,6 +2071,8 @@ int FileEditor::SaveFile(const string& Name,int Ask, bool bSaveAs, error_state_e
 
 bool FileEditor::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 {
+	elevation::instance().ResetApprove();
+
 	F4KeyOnly = false;
 	if (!m_windowKeyBar->ProcessMouse(MouseEvent))
 	{
@@ -2103,9 +2114,6 @@ void FileEditor::SetScreenPosition()
 
 void FileEditor::OnDestroy()
 {
-	if (Global->CtrlObject && !m_Flags.Check(FFILEEDIT_DISABLEHISTORY) && !equal_icase(strFileName, msg(lng::MNewFileName)))
-		Global->CtrlObject->ViewHistory->AddToHistory(strFullFileName, m_editor->m_Flags.Check(Editor::FEDITOR_LOCKMODE) ? HR_EDITOR_RO : HR_EDITOR);
-
 	//AY: флаг оповещающий закрытие редактора.
 	m_bClosing = true;
 
@@ -2319,7 +2327,7 @@ void FileEditor::ShowStatus() const
 		CharCode);
 
 	// Explicitly signed types - it's too easy to screw it up on small console sizes otherwise
-	const int ClockSize = Global->Opt->ViewerEditorClock && m_Flags.Check(FFILEEDIT_FULLSCREEN)? static_cast<int>(Global->CurrentTime.size()) : 0;
+	const int ClockSize = Global->Opt->Clock && m_Flags.Check(FFILEEDIT_FULLSCREEN)? static_cast<int>(Global->CurrentTime.size()) : 0;
 	const int AvailableSpace = std::max(0, ObjWidth() - ClockSize - (ClockSize? 1 : 0));
 	inplace::cut_right(StatusLine, AvailableSpace);
 	const int NameWidth = std::max(0, AvailableSpace - static_cast<int>(StatusLine.size()));
@@ -2328,10 +2336,7 @@ void FileEditor::ShowStatus() const
 	Text(StatusLine);
 
 	if (ClockSize)
-	{
 		Text(L'│'); // Separator before the clock
-		ShowTime();
-	}
 }
 
 /* $ 13.02.2001

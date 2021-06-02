@@ -84,12 +84,7 @@ static const wchar_t EDMASK_ALPHA  = L'A'; // позволяет вводить 
 static const wchar_t EDMASK_HEX    = L'H'; // позволяет вводить в строку ввода шестнадцатиричные символы.
 
 Edit::Edit(window_ptr Owner):
-	SimpleScreenObject(std::move(Owner)),
-	m_CurPos(0),
-	m_SelStart(-1),
-	m_SelEnd(0),
-	LeftPos(0),
-	m_Eol(eol::none)
+	SimpleScreenObject(std::move(Owner))
 {
 	m_Flags.Set(FEDITLINE_EDITBEYONDEND);
 	const auto& EdOpt = Global->Opt->EdOpt;
@@ -101,14 +96,6 @@ Edit::Edit(window_ptr Owner):
 
 void Edit::DisplayObject()
 {
-	if (m_Flags.Check(FEDITLINE_DROPDOWNBOX))
-	{
-		m_Flags.Clear(FEDITLINE_CLEARFLAG);  // при дроп-даун нам не нужно никакого unchanged text
-		m_SelStart=0;
-		m_SelEnd = m_Str.size(); // а также считаем что все выделено -
-		//    надо же отличаться от обычных Edit
-	}
-
 	//   Вычисление нового положения курсора в строке с учётом Mask.
 	const auto Value = GetPrevCurPos() > m_CurPos? -1 : 1;
 	m_CurPos=GetNextCursorPos(m_CurPos,Value);
@@ -237,8 +224,8 @@ void Edit::FastShow(const ShowInfo* Info)
 	}
 
 	GotoXY(m_Where.left, m_Where.top);
-	int TabSelStart=(m_SelStart==-1) ? -1:RealPosToTab(m_SelStart);
-	int TabSelEnd=(m_SelEnd<0) ? -1:RealPosToTab(m_SelEnd);
+	int TabSelStart = m_SelStart == -1? -1 : RealPosToVisual(m_SelStart);
+	int TabSelEnd = m_SelEnd < 0? -1 : RealPosToVisual(m_SelEnd);
 
 	/* $ 17.08.2000 KM
 	   Если есть маска, сделаем подготовку строки, то есть
@@ -254,7 +241,7 @@ void Edit::FastShow(const ShowInfo* Info)
 	OutStrTmp.reserve(EditLength);
 
 	SetLineCursorPos(TabCurPos);
-	const auto RealLeftPos = TabPosToReal(LeftPos);
+	const auto RealLeftPos = VisualPosToReal(LeftPos);
 
 	if (m_Str.size() > RealLeftPos)
 	{
@@ -274,14 +261,14 @@ void Edit::FastShow(const ShowInfo* Info)
 			{
 				if (*i==L' ') // *p==L'\xA0' ==> NO-BREAK SPACE
 				{
-					*i=L'\xB7';
+					*i = L'·';
 				}
 			}
 
 			if (*i == L'\t')
 			{
 				const size_t S = GetTabSize() - ((FocusedLeftPos + OutStr.size()) % GetTabSize());
-				OutStr.push_back((((m_Flags.Check(FEDITLINE_SHOWWHITESPACE) && m_Flags.Check(FEDITLINE_EDITORMODE)) || i >= TrailingSpaces) && (!OutStr.empty() || S==GetTabSize()))?L'\x2192':L' ');
+				OutStr.push_back((((m_Flags.Check(FEDITLINE_SHOWWHITESPACE) && m_Flags.Check(FEDITLINE_EDITORMODE)) || i >= TrailingSpaces) && (!OutStr.empty() || S==GetTabSize()))? L'→' : L' ');
 				const auto PaddedSize = std::min(OutStr.size() + S - 1, EditLength);
 				OutStr.resize(PaddedSize, L' ');
 			}
@@ -301,31 +288,33 @@ void Edit::FastShow(const ShowInfo* Info)
 
 		if (m_Flags.Check(FEDITLINE_SHOWLINEBREAK) && m_Flags.Check(FEDITLINE_EDITORMODE) && (m_Str.size() >= RealLeftPos) && (OutStr.size() < EditLength))
 		{
+			const auto Cr = L'♪', Lf = L'◙';
+
 			if (m_Eol == eol::mac)
 			{
-				OutStr.push_back(L'\x266A');
+				OutStr.push_back(Cr);
 			}
 			else if (m_Eol == eol::unix)
 			{
-				OutStr.push_back(L'\x25D9');
+				OutStr.push_back(Lf);
 			}
 			else if (m_Eol == eol::win)
 			{
-				OutStr.push_back(L'\x266A');
+				OutStr.push_back(Cr);
 				if(OutStr.size() < EditLength)
 				{
-					OutStr.push_back(L'\x25D9');
+					OutStr.push_back(Lf);
 				}
 			}
 			else if (m_Eol == eol::bad_win)
 			{
-				OutStr.push_back(L'\x266A');
+				OutStr.push_back(Cr);
 				if(OutStr.size() < EditLength)
 				{
-					OutStr.push_back(L'\x266A');
+					OutStr.push_back(Cr);
 					if(OutStr.size() < EditLength)
 					{
-						OutStr.push_back(L'\x25D9');
+						OutStr.push_back(Lf);
 					}
 				}
 			}
@@ -333,73 +322,55 @@ void Edit::FastShow(const ShowInfo* Info)
 
 		if (m_Flags.Check(FEDITLINE_SHOWWHITESPACE) && m_Flags.Check(FEDITLINE_EDITORMODE) && (m_Str.size() >= RealLeftPos) && (OutStr.size() < EditLength) && GetEditor()->IsLastLine(this))
 		{
-			OutStr.push_back(L'\x25a1');
+			OutStr.push_back(L'□');
 		}
 	}
 
+	// Basic color
 	SetColor(GetNormalColor());
 
-	if (TabSelStart==-1)
+	Text(fit_to_left(OutStr, EditLength));
+
+	if (m_Flags.Check(FEDITLINE_DROPDOWNBOX))
 	{
-		if (m_Flags.Check(FEDITLINE_CLEARFLAG))
-		{
-			SetColor(GetUnchangedColor());
-
-			if (!Mask.empty())
-				inplace::trim_right(OutStr);
-
-			Text(OutStr);
-			SetColor(GetNormalColor());
-			const auto BlankLength = EditLength - OutStr.size();
-
-			if (BlankLength > 0)
-			{
-				Text(string(BlankLength, L' '));
-			}
-		}
-		else
-		{
-			Text(fit_to_left(OutStr, EditLength));
-		}
+		// Combobox has neither highlight nor selection
+		Global->ScrBuf->ApplyColor(m_Where, m_Flags.Check(FEDITLINE_CLEARFLAG)? GetUnchangedColor() : GetSelectedColor());
 	}
 	else
 	{
-		TabSelStart = std::max(TabSelStart - LeftPos, 0);
-
-		TabSelEnd = TabSelEnd == -1?
-			static_cast<int>(EditLength) :
-			std::max(TabSelEnd - LeftPos, 0);
-
-		OutStr.append(EditLength - OutStr.size(), L' ');
-
-		Text(cut_right(OutStr, TabSelStart));
-		SetColor(GetSelectedColor());
-
-		if (!m_Flags.Check(FEDITLINE_DROPDOWNBOX))
+		if (m_Flags.Check(FEDITLINE_EDITORMODE))
 		{
-			if (TabSelStart < static_cast<int>(EditLength))
+			// Editor highlight
+			ApplyColor(XPos, FocusedLeftPos);
+		}
+
+		if (TabSelStart == -1)
+		{
+			if (m_Flags.Check(FEDITLINE_CLEARFLAG))
 			{
-				Text(cut_right(string_view(OutStr).substr(TabSelStart), TabSelEnd - TabSelStart));
-
-				if (TabSelEnd < static_cast<int>(EditLength))
-				{
-					//SetColor(Flags.Check(FEDITLINE_CLEARFLAG)? SelColor : Color);
-					SetColor(GetNormalColor());
-					Text(string_view(OutStr).substr(TabSelEnd));
-				}
+				Global->ScrBuf->ApplyColor(m_Where, GetUnchangedColor());
 			}
-
 		}
 		else
 		{
-			Text(cut_right(OutStr, m_Where.width()));
+			// Selection, on top of everything else
+			TabSelStart = std::max(TabSelStart - LeftPos, 0);
+
+			TabSelEnd = TabSelEnd == -1 ?
+				static_cast<int>(EditLength) :
+				std::max(TabSelEnd - LeftPos, 0);
+
+			Global->ScrBuf->ApplyColor(
+				{
+					std::min(m_Where.left + TabSelStart, static_cast<int>(m_Where.right)),
+					m_Where.top,
+					std::min(m_Where.left + TabSelEnd - 1, static_cast<int>(m_Where.right)),
+					m_Where.top
+				},
+				GetSelectedColor()
+			);
 		}
 	}
-
-	/* $ 26.07.2000 tran
-	   при дроп-даун цвета нам не нужны */
-	if (!m_Flags.Check(FEDITLINE_DROPDOWNBOX))
-		ApplyColor(GetSelectedColor(), XPos, FocusedLeftPos);
 }
 
 bool Edit::RecurseProcessKey(int Key)
@@ -652,6 +623,7 @@ bool Edit::ProcessKey(const Manager::Key& Key)
 	}
 
 	if (
+		!m_Flags.Check(FEDITLINE_READONLY | FEDITLINE_DROPDOWNBOX) &&
 		m_Flags.Check(FEDITLINE_CLEARFLAG) &&
 		(
 			(LocalKey <= 0xFFFF && LocalKey!=KEY_BS) ||
@@ -1764,7 +1736,7 @@ void Edit::InsertTab()
 		return;
 
 	const auto Pos = m_CurPos;
-	const auto S = static_cast<int>(GetTabSize() - (RealPosToTab(Pos) % GetTabSize()));
+	const auto S = static_cast<int>(GetTabSize() - (RealPosToVisual(Pos) % GetTabSize()));
 
 	if (m_SelStart!=-1)
 	{
@@ -1825,7 +1797,7 @@ bool Edit::ReplaceTabs()
 
 int Edit::GetTabCurPos() const
 {
-	return RealPosToTab(m_CurPos);
+	return RealPosToVisual(m_CurPos);
 }
 
 void Edit::SetTabCurPos(int NewPos)
@@ -1839,15 +1811,15 @@ void Edit::SetTabCurPos(int NewPos)
 			NewPos=Pos;
 	}
 
-	m_CurPos=TabPosToReal(NewPos);
+	m_CurPos = VisualPosToReal(NewPos);
 }
 
-int Edit::RealPosToTab(int Pos) const
+int Edit::RealPosToVisual(int Pos) const
 {
-	return RealPosToTab(0, 0, Pos);
+	return RealPosToVisual(0, 0, Pos);
 }
 
-static size_t real_pos_to_tab(string_view const Str, size_t const TabSize, size_t Pos, size_t const PrevLength, size_t const PrevPos, int* CorrectPos)
+static size_t real_pos_to_visual_tab(string_view const Str, size_t const TabSize, size_t Pos, size_t const PrevLength, size_t const PrevPos, int* CorrectPos)
 {
 	auto TabPos = PrevLength;
 
@@ -1888,18 +1860,22 @@ static size_t real_pos_to_tab(string_view const Str, size_t const TabSize, size_
 	return TabPos;
 }
 
-int Edit::RealPosToTab(int PrevLength, int PrevPos, int Pos, int* CorrectPos) const
+int Edit::RealPosToVisual(int PrevLength, int PrevPos, int Pos, int* CorrectPos) const
 {
+	const auto StringPart = string_view(m_Str).substr(0, Pos);
+	const auto WidthCorrection = static_cast<int>(string_length_to_visual(StringPart)) - static_cast<int>(StringPart.size());
+
 	if (CorrectPos)
 		*CorrectPos = 0;
 
-	if (GetTabExpandMode() == EXPAND_ALLTABS || PrevPos >= m_Str.size())
-		return PrevLength + Pos - PrevPos;
+	const auto Result = GetTabExpandMode() == EXPAND_ALLTABS || PrevPos >= m_Str.size()?
+		PrevLength + Pos - PrevPos :
+		static_cast<int>(real_pos_to_visual_tab(m_Str, GetTabSize(), Pos, PrevLength, PrevPos, CorrectPos));
 
-	return static_cast<int>(real_pos_to_tab(m_Str, GetTabSize(), Pos, PrevLength, PrevPos, CorrectPos));
+	return Result + WidthCorrection;
 }
 
-static size_t tab_pos_to_real(string_view const Str, size_t const TabSize, size_t const Pos)
+static size_t visual_tab_pos_to_real(string_view const Str, size_t const TabSize, size_t const Pos)
 {
 	size_t Index{};
 	const auto Size = Str.size();
@@ -1929,12 +1905,16 @@ static size_t tab_pos_to_real(string_view const Str, size_t const TabSize, size_
 	return Index;
 }
 
-int Edit::TabPosToReal(int Pos) const
+int Edit::VisualPosToReal(int Pos) const
 {
-	if (GetTabExpandMode() == EXPAND_ALLTABS)
-		return Pos;
+	const auto RealPos = visual_pos_to_string_pos(m_Str, Pos);
+	const auto WidthCorrection = static_cast<int>(Pos) - static_cast<int>(RealPos);
 
-	return static_cast<int>(tab_pos_to_real(m_Str, GetTabSize(), Pos));
+	const auto Result = GetTabExpandMode() == EXPAND_ALLTABS?
+		Pos :
+		static_cast<int>(visual_tab_pos_to_real(m_Str, GetTabSize(), Pos));
+
+	return Result - WidthCorrection;
 }
 
 void Edit::Select(int Start,int End)
@@ -2010,7 +1990,7 @@ void Edit::AdjustPersistentMark()
 	if (m_Flags.Check(FEDITLINE_PARENT_SINGLELINE))
 		persistent = m_Flags.Check(FEDITLINE_PERSISTENTBLOCKS); // dlgedit
 	else if (!m_Flags.Check(FEDITLINE_PARENT_MULTILINE))
-		persistent = Global->Opt->CmdLine.EditBlock;				// cmdline
+		persistent = Global->Opt->CmdLine.EditBlock; // cmdline
 	else
 		persistent = false;
 
@@ -2100,7 +2080,7 @@ bool Edit::GetColor(ColorItem& col, size_t Item) const
 	return true;
 }
 
-void Edit::ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos)
+void Edit::ApplyColor(int XPos, int FocusedLeftPos)
 {
 	// Для оптимизации сохраняем вычисленные позиции между итерациями цикла
 	int Pos = INT_MIN, TabPos = INT_MIN, TabEditorPos = INT_MIN;
@@ -2128,13 +2108,13 @@ void Edit::ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos)
 		// то производим вычисление с начала строки
 		else if (Pos == INT_MIN || CurItem.StartPos < Pos)
 		{
-			RealStart = RealPosToTab(CurItem.StartPos);
+			RealStart = RealPosToVisual(CurItem.StartPos);
 			Start = RealStart-FocusedLeftPos;
 		}
 		// Для оптимизации делаем вычисление относительно предыдущей позиции
 		else
 		{
-			RealStart = RealPosToTab(TabPos, Pos, CurItem.StartPos);
+			RealStart = RealPosToVisual(TabPos, Pos, CurItem.StartPos);
 			Start = RealStart-FocusedLeftPos;
 		}
 
@@ -2165,7 +2145,7 @@ void Edit::ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos)
 			// иначе ничего не вычисляем и берём старые значения
 			if (CorrectPos && EndPos < m_Str.size() && m_Str[EndPos] == L'\t')
 			{
-				RealEnd = RealPosToTab(TabPos, Pos, ++EndPos);
+				RealEnd = RealPosToVisual(TabPos, Pos, ++EndPos);
 				End = RealEnd-FocusedLeftPos;
 				TabMarkCurrent = (CurItem.Flags & ECF_TABMARKCURRENT) && XPos>=Start && XPos<End;
 			}
@@ -2181,7 +2161,7 @@ void Edit::ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos)
 		else if (EndPos < Pos)
 		{
 			// TODO: возможно так же нужна коррекция с учетом табов (на предмет Mantis#0001718)
-			RealEnd = RealPosToTab(0, 0, EndPos, &CorrectPos);
+			RealEnd = RealPosToVisual(0, 0, EndPos, &CorrectPos);
 			EndPos += CorrectPos;
 			End = RealEnd-FocusedLeftPos;
 		}
@@ -2192,10 +2172,10 @@ void Edit::ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos)
 			// Mantis#0001718: Отсутствие ECF_TABMARKFIRST не всегда корректно отрабатывает
 			// Коррекция с учетом последнего таба
 			if (CorrectPos && EndPos < m_Str.size() && m_Str[EndPos] == L'\t')
-				RealEnd = RealPosToTab(TabPos, Pos, ++EndPos);
+				RealEnd = RealPosToVisual(TabPos, Pos, ++EndPos);
 			else
 			{
-				RealEnd = RealPosToTab(TabPos, Pos, EndPos, &CorrectPos);
+				RealEnd = RealPosToVisual(TabPos, Pos, EndPos, &CorrectPos);
 				EndPos += CorrectPos;
 			}
 			End = RealEnd-FocusedLeftPos;
@@ -2230,13 +2210,7 @@ void Edit::ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos)
 		// Раскрашиваем элемент, если есть что раскрашивать
 		if (End >= Start)
 		{
-			Global->ScrBuf->ApplyColor(
-			    { m_Where.left + Start, m_Where.top, m_Where.left + End, m_Where.top },
-			    CurItem.GetColor(),
-			    // Не раскрашиваем выделение
-			    SelColor,
-			    true
-			);
+			Global->ScrBuf->ApplyColor({ m_Where.left + Start, m_Where.top, m_Where.left + End, m_Where.top }, CurItem.GetColor());
 		}
 	}
 }
@@ -2336,8 +2310,13 @@ void Edit::SetDialogParent(DWORD Sets)
 void Edit::FixLeftPos(int TabCurPos)
 {
 	if (TabCurPos<0) TabCurPos=GetTabCurPos(); //оптимизация, чтобы два раза не дёргать
+
 	if (TabCurPos-LeftPos>ObjWidth()-1)
+	{
+		// BUGBUG slow
 		LeftPos=TabCurPos-ObjWidth()+1;
+		LeftPos = RealPosToVisual(VisualPosToReal(LeftPos));
+	}
 
 	if (TabCurPos<LeftPos)
 		LeftPos=TabCurPos;
@@ -2422,8 +2401,8 @@ TEST_CASE("tab_pos")
 
 	static const struct
 	{
-		size_t Str, TabSize, TabPos, RealPos;
-		bool TestRealToTab;
+		size_t Str, TabSize, VisualPos, RealPos;
+		bool TestRealToVisual;
 	}
 	Tests[]
 	{
@@ -2477,10 +2456,10 @@ TEST_CASE("tab_pos")
 
 	for (const auto& i: Tests)
 	{
-		REQUIRE(i.RealPos == tab_pos_to_real(Strs[i.Str], i.TabSize, i.TabPos));
+		REQUIRE(i.RealPos == visual_tab_pos_to_real(Strs[i.Str], i.TabSize, i.VisualPos));
 
-		if (i.TestRealToTab)
-			REQUIRE(i.TabPos == real_pos_to_tab(Strs[i.Str], i.TabSize, i.RealPos, 0, 0, {}));
+		if (i.TestRealToVisual)
+			REQUIRE(i.VisualPos == real_pos_to_visual_tab(Strs[i.Str], i.TabSize, i.RealPos, 0, 0, {}));
 	}
 }
 #endif

@@ -477,7 +477,7 @@ static void UpdateErrorMode()
 }
 
 [[noreturn]]
-static int handle_exception(function_ref<bool()> const Handler)
+static void handle_exception(function_ref<bool()> const Handler)
 {
 	if (Handler())
 	{
@@ -498,7 +498,7 @@ static void log_hook_wow64_status()
 		Error == ERROR_SUCCESS? logging::level::debug : logging::level::warning,
 		L"hook_wow64: {} {}"sv,
 		Msg,
-		os::format_system_error(Error, os::GetErrorString(false, Error))
+		os::format_error(Error)
 	);
 
 	if (Error == ERROR_INVALID_DATA)
@@ -519,9 +519,6 @@ static int mainImpl(span<const wchar_t* const> const Args)
 {
 	setlocale(LC_ALL, "");
 
-	// Must be static - dependent static objects exist
-	static SCOPED_ACTION(os::com::initialize);
-
 	SCOPED_ACTION(global);
 
 	std::optional<elevation::suppress> NoElevationDuringBoot(std::in_place);
@@ -536,7 +533,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	log_hook_wow64_status();
 #endif
 
-	if (!console.IsFullscreenSupported())
+	if(!console.IsFullscreenSupported() && imports.SetConsoleKeyShortcuts)
 	{
 		const BYTE ReserveAltEnter = 0x8;
 		imports.SetConsoleKeyShortcuts(TRUE, ReserveAltEnter, nullptr, 0);
@@ -799,8 +796,10 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	SCOPE_EXIT
 	{
+		// close() can throw, but we need to clear it anyway
+		SCOPE_EXIT { Global->CtrlObject = {}; };
+
 		CtrlObj.close();
-		Global->CtrlObject = {};
 	};
 
 	NoElevationDuringBoot.reset();
@@ -835,7 +834,7 @@ static void configure_exception_handling(int Argc, const wchar_t* const Argv[])
 }
 
 [[noreturn]]
-static int handle_exception_final(function_ref<bool()> const Handler)
+static void handle_exception_final(function_ref<bool()> const Handler)
 {
 	if (Handler())
 	{
@@ -864,6 +863,8 @@ static int wmain_seh()
 
 	SCOPED_ACTION(unhandled_exception_filter);
 	SCOPED_ACTION(seh_terminate_handler);
+	SCOPED_ACTION(purecall_handler);
+	SCOPED_ACTION(invalid_parameter_handler);
 	SCOPED_ACTION(new_handler);
 
 	const auto CurrentFunctionName = CURRENT_FUNCTION_NAME;

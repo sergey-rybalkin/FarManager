@@ -74,13 +74,12 @@ public:
 	bool GlobalSearchCase{};
 	bool GlobalSearchWholeWords{}; // значение "Whole words" для поиска
 	bool GlobalSearchReverse{};
-	std::atomic_ulong SuppressClock{};
-	std::atomic_ulong SuppressIndicators{};
+	std::atomic_size_t SuppressClock{};
+	std::atomic_size_t SuppressIndicators{};
 	bool CloseFAR{}, CloseFARMenu{}, AllowCancelExit{true};
 	bool DisablePluginsOutput{};
 	int IsProcessAssignMacroKey{};
 	size_t PluginPanelsCount{};
-	bool ProcessException{};
 
 	class far_clock
 	{
@@ -89,11 +88,11 @@ public:
 		far_clock();
 		const string& get() const;
 		size_t size() const;
-		void update();
+		void update(bool Force = false);
 
 	private:
 		string m_CurrentTime;
-
+		unsigned long long m_LastValue{};
 	};
 
 	far_clock CurrentTime;

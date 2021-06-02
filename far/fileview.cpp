@@ -186,6 +186,11 @@ void FileViewer::Init(
 		return;
 	}
 
+	if (!m_DisableHistory && m_Name != L"-"sv)
+	{
+		Global->CtrlObject->ViewHistory->AddToHistory(m_View->GetFileName(), HR_VIEWER);
+	}
+
 	if (ViewStartPos != -1)
 		m_View->SetFilePos(ViewStartPos);
 
@@ -492,11 +497,6 @@ FileViewer::~FileViewer()
 void FileViewer::OnDestroy()
 {
 	m_bClosing = true;
-
-	if (!m_DisableHistory && (Global->CtrlObject->Cp()->ActivePanel() || m_Name != L"-"sv))
-	{
-		Global->CtrlObject->ViewHistory->AddToHistory(m_View->GetFileName(), HR_VIEWER);
-	}
 	m_View->OnDestroy();
 }
 
@@ -552,7 +552,7 @@ void FileViewer::ShowStatus() const
 	);
 
 	// Explicitly signed types - it's too easy to screw it up on small console sizes otherwise
-	const int ClockSize = Global->Opt->ViewerEditorClock && IsFullScreen()? static_cast<int>(Global->CurrentTime.size()) : 0;
+	const int ClockSize = Global->Opt->Clock && IsFullScreen()? static_cast<int>(Global->CurrentTime.size()) : 0;
 	const int AvailableSpace = std::max(0, ObjWidth() - ClockSize - (ClockSize? 1 : 0));
 	inplace::cut_right(StatusLine, AvailableSpace);
 	const int NameWidth = std::max(0, AvailableSpace - static_cast<int>(StatusLine.size()));
@@ -561,10 +561,7 @@ void FileViewer::ShowStatus() const
 	Text(StatusLine);
 
 	if (ClockSize)
-	{
 		Text(L'│'); // Separator before the clock
-		ShowTime();
-	}
 }
 
 void FileViewer::OnChangeFocus(bool focus)

@@ -86,6 +86,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "console.hpp"
 #include "scrbuf.hpp"
 #include "log.hpp"
+#include "char_width.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -327,7 +328,6 @@ void Options::InterfaceSettings()
 	DialogBuilder Builder(lng::MConfigInterfaceTitle, L"InterfSettings"sv);
 
 	Builder.AddCheckbox(lng::MConfigClock, Clock);
-	Builder.AddCheckbox(lng::MConfigViewerEditorClock, ViewerEditorClock);
 	Builder.AddCheckbox(lng::MConfigMouse, Mouse);
 	Builder.AddCheckbox(lng::MConfigKeyBar, ShowKeyBar);
 	Builder.AddCheckbox(lng::MConfigMenuBar, ShowMenuBar);
@@ -342,6 +342,7 @@ void Options::InterfaceSettings()
 	Builder.AddCheckbox(lng::MConfigDeleteTotal, DelOpt.ShowTotal);
 	Builder.AddCheckbox(lng::MConfigPgUpChangeDisk, PgUpChangeDisk);
 	Builder.AddCheckbox(lng::MConfigUseVirtualTerminalForRendering, VirtualTerminalRendering);
+	Builder.AddCheckbox(lng::MConfigFullWidthAwareRendering, FullWidthAwareRendering);
 	Builder.AddCheckbox(lng::MConfigClearType, ClearType);
 	Builder.StartColumns();
 	const auto SetIconCheck = Builder.AddCheckbox(lng::MConfigSetConsoleIcon, SetIcon);
@@ -1726,6 +1727,11 @@ Options::Options():
 		console.EnableVirtualTerminal(Value);
 	}));
 
+	FullWidthAwareRendering.SetCallback(option::notifier([](long long const Value)
+	{
+		char_width::enable(static_cast<int>(Value));
+	}));
+
 	// По умолчанию - брать плагины из основного каталога
 	LoadPlug.MainPluginDir = true;
 	LoadPlug.PluginsPersonal = true;
@@ -1740,14 +1746,7 @@ Options::~Options() = default;
 
 void Options::InitConfigsData()
 {
-	static constexpr auto DefaultBoxSymbols =
-		L"\x2591" L"\x2592" L"\x2593" L"\x2502" L"\x2524" L"\x2561" L"\x2562" L"\x2556"
-		L"\x2555" L"\x2563" L"\x2551" L"\x2557" L"\x255D" L"\x255C" L"\x255B" L"\x2510"
-		L"\x2514" L"\x2534" L"\x252C" L"\x251C" L"\x2500" L"\x253C" L"\x255E" L"\x255F"
-		L"\x255A" L"\x2554" L"\x2569" L"\x2566" L"\x2560" L"\x2550" L"\x256C" L"\x2567"
-		L"\x2568" L"\x2564" L"\x2565" L"\x2559" L"\x2558" L"\x2552" L"\x2553" L"\x256B"
-		L"\x256A" L"\x2518" L"\x250C" L"\x2588" L"\x2584" L"\x258C" L"\x2590" L"\x2580"
-		L" "sv;
+	static constexpr auto DefaultBoxSymbols = L"░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀ "sv;
 
 	static_assert(DefaultBoxSymbols.size() == BS_COUNT);
 
@@ -1784,6 +1783,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyDescriptions,           L"SetHidden"sv,                     Diz.SetHidden, true},
 		{FSSF_PRIVATE,           NKeyDescriptions,           L"StartPos"sv,                      Diz.StartPos, 0},
 		{FSSF_PRIVATE,           NKeyDescriptions,           L"UpdateMode"sv,                    Diz.UpdateMode, DIZ_UPDATE_IF_DISPLAYED},
+		{FSSF_PRIVATE,           NKeyDescriptions,           L"ValidateConversion"sv,            Diz.ValidateConversion, true},
 		{FSSF_PRIVATE,           NKeyDialog,                 L"AutoComplete"sv,                  Dialogs.AutoComplete, true},
 		{FSSF_PRIVATE,           NKeyDialog,                 L"CBoxMaxHeight"sv,                 Dialogs.CBoxMaxHeight, 8},
 		{FSSF_DIALOG,            NKeyDialog,                 L"EditBlock"sv,                     Dialogs.EditBlock, false},
@@ -1848,6 +1848,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyInterface,              L"CursorSize4"sv,                   CursorSize[3], 99},
 		{FSSF_PRIVATE,           NKeyInterface,              L"EditorTitleFormat"sv,             strEditorTitleFormat, L"%Lng %File"sv},
 		{FSSF_PRIVATE,           NKeyInterface,              L"FormatNumberSeparators"sv,        FormatNumberSeparators, L""sv},
+		{FSSF_PRIVATE,           NKeyInterface,              L"FullWidthAwareRendering"sv,       FullWidthAwareRendering, 0},
 		{FSSF_PRIVATE,           NKeyInterface,              L"Mouse"sv,                         Mouse, true},
 		{FSSF_PRIVATE,           NKeyInterface,              L"SetIcon"sv,                       SetIcon, false},
 		{FSSF_PRIVATE,           NKeyInterface,              L"IconIndex"sv,                     IconIndex, 0},
@@ -1954,7 +1955,6 @@ void Options::InitConfigsData()
 		{FSSF_SCREEN,            NKeyScreen,                 L"KeyBar"sv,                        ShowKeyBar, true},
 		{FSSF_PRIVATE,           NKeyScreen,                 L"ScreenSaver"sv,                   ScreenSaver, false},
 		{FSSF_PRIVATE,           NKeyScreen,                 L"ScreenSaverTime"sv,               ScreenSaverTime, 5},
-		{FSSF_PRIVATE,           NKeyScreen,                 L"ViewerEditorClock"sv,             ViewerEditorClock, true},
 		{FSSF_PRIVATE,           NKeySystem,                 L"AllCtrlAltShiftRule"sv,           AllCtrlAltShiftRule, 0x0000FFFF},
 		{FSSF_PRIVATE,           NKeySystem,                 L"AutoSaveSetup"sv,                 AutoSaveSetup, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"AutoUpdateRemoteDrive"sv,         AutoUpdateRemoteDrive, true},
@@ -1977,7 +1977,6 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeySystem,                 L"FindCodePage"sv,                  FindCodePage, CP_DEFAULT},
 		{FSSF_PRIVATE,           NKeySystem,                 L"FindFolders"sv,                   FindOpt.FindFolders, true},
 		{FSSF_PRIVATE,           NKeySystem,                 L"FindSymLinks"sv,                  FindOpt.FindSymLinks, true},
-		{FSSF_PRIVATE,           NKeySystem,                 L"FlagPosixSemantics"sv,            FlagPosixSemantics, true},
 		{FSSF_PRIVATE,           NKeySystem,                 L"FolderInfo"sv,                    InfoPanel.strFolderInfoFiles, L"DirInfo,File_Id.diz,Descript.ion,ReadMe.*,Read.Me"sv},
 		{FSSF_PRIVATE,           NKeySystem,                 L"MsWheelDelta"sv,                  MsWheelDelta, 1},
 		{FSSF_PRIVATE,           NKeySystem,                 L"MsWheelDeltaEdit"sv,              MsWheelDeltaEdit, 1},
@@ -2060,7 +2059,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyViewer,                 L"UseExternalViewer"sv,             ViOpt.UseExternalViewer, false},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"Visible0x00"sv,                   ViOpt.Visible0x00, false},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"Wrap"sv,                          ViOpt.ViewerWrap, false},
-		{FSSF_PRIVATE,           NKeyViewer,                 L"ZeroChar"sv,                      ViOpt.ZeroChar, L'\xB7'}, // middle dot
+		{FSSF_PRIVATE,           NKeyViewer,                 L"ZeroChar"sv,                      ViOpt.ZeroChar, L'·'},
 		{FSSF_PRIVATE,           NKeyVMenu,                  L"LBtnClick"sv,                     VMenu.LBtnClick, VMENUCLICK_CANCEL},
 		{FSSF_PRIVATE,           NKeyVMenu,                  L"MBtnClick"sv,                     VMenu.MBtnClick, VMENUCLICK_APPLY},
 		{FSSF_PRIVATE,           NKeyVMenu,                  L"RBtnClick"sv,                     VMenu.RBtnClick, VMENUCLICK_CANCEL},
@@ -3243,9 +3242,7 @@ void Options::ShellOptions(bool LastCommand, const MOUSE_EVENT_RECORD *MouseEven
 				Global->CtrlObject->Cp()->ActivePanel()->CompareDir();
 				break;
 			case MENU_COMMANDS_EDITUSERMENU: // Edit user menu
-				{
-					UserMenu(true);
-				}
+				user_menu(true);
 				break;
 			case MENU_COMMANDS_FILEASSOCIATIONS: // File associations
 				EditFileTypes();

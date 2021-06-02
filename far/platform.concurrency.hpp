@@ -242,6 +242,15 @@ namespace os::concurrency
 		}
 
 		[[nodiscard]]
+		auto pop_all()
+		{
+			SCOPED_ACTION(guard_t)(m_QueueCS);
+			std::queue<T> All;
+			m_Queue.swap(All);
+			return All;
+		}
+
+		[[nodiscard]]
 		auto size() const
 		{
 			SCOPED_ACTION(guard_t)(m_QueueCS);
@@ -255,7 +264,7 @@ namespace os::concurrency
 		}
 
 		[[nodiscard]]
-		auto scoped_lock() { return make_raii_wrapper(this, &synced_queue::lock, &synced_queue::unlock); }
+		auto scoped_lock() { return make_raii_wrapper<&synced_queue::lock, &synced_queue::unlock>(this); }
 
 	private:
 		// Q: Why not just use CTAD?

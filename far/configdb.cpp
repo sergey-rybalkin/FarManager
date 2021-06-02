@@ -78,7 +78,7 @@ public:
 	{
 		const file_ptr XmlFile(_wfsopen(NTPath(File).c_str(), L"rb", _SH_DENYWR));
 		if (!XmlFile)
-			throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error opening file \"{}\": {}"sv), File, _wcserror(errno)));
+			throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error opening file \"{}\": {}"sv), File, os::format_errno(errno)));
 
 		if (const auto LoadResult = m_Document.LoadFile(XmlFile.get()); LoadResult != tinyxml::XML_SUCCESS)
 			throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error loading document from \"{}\": {}"sv), File, encoding::utf8::get_chars(m_Document.ErrorIDToName(LoadResult))));
@@ -138,7 +138,7 @@ public:
 	{
 		const file_ptr XmlFile(_wfsopen(NTPath(File).c_str(), L"w", _SH_DENYWR));
 		if (!XmlFile)
-			throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error opening file \"{}\": {}"sv), File, _wcserror(errno)));
+			throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error opening file \"{}\": {}"sv), File, os::format_errno(errno)));
 
 		if (const auto SaveResult = m_Document.SaveFile(XmlFile.get()); SaveResult != tinyxml::XML_SUCCESS)
 			throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error saving document to \"{}\": {}"sv), File, encoding::utf8::get_chars(m_Document.ErrorIDToName(SaveResult))));
@@ -532,14 +532,15 @@ private:
 	static void Initialise(const db_initialiser& Db)
 	{
 		Db.EnableForeignKeysConstraints();
-		Db.CreateNumericCollation();
+
+		Db.add_numeric_collation();
 
 		static const std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS table_keys(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, FOREIGN KEY(parent_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, UNIQUE (parent_id,name));"sv,
 			"CREATE TABLE IF NOT EXISTS table_values(key_id INTEGER NOT NULL, name TEXT NOT NULL, value BLOB, FOREIGN KEY(key_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (key_id, name), CHECK (key_id <> 0));"sv,
 			//root key (needs to be before the transaction start)
-			"INSERT OR IGNORE INTO table_keys VALUES (0,0,\"\",\"Root - do not edit\");"sv,
+			"INSERT OR IGNORE INTO table_keys VALUES (0,0,'','Root - do not edit');"sv,
 		};
 
 		Db.Exec(Schema);
@@ -837,13 +838,18 @@ private:
 	};
 };
 
-static const std::pair<FARCOLORFLAGS, string_view> ColorFlagNames[] =
+static const std::pair<FARCOLORFLAGS, string_view> ColorFlagNames[]
 {
-	{FCF_FG_4BIT,      L"fg4bit"sv    },
-	{FCF_BG_4BIT,      L"bg4bit"sv    },
-	{FCF_FG_BOLD,      L"bold"sv      },
-	{FCF_FG_ITALIC,    L"italic"sv    },
-	{FCF_FG_UNDERLINE, L"underline"sv },
+	{ FCF_FG_4BIT,         L"fg4bit"sv       },
+	{ FCF_BG_4BIT,         L"bg4bit"sv       },
+	{ FCF_FG_BOLD,         L"bold"sv         },
+	{ FCF_FG_ITALIC,       L"italic"sv       },
+	{ FCF_FG_UNDERLINE,    L"underline"sv    },
+	{ FCF_FG_UNDERLINE2,   L"underline2"sv   },
+	{ FCF_FG_OVERLINE,     L"overline"sv     },
+	{ FCF_FG_STRIKEOUT,    L"strikeout"sv   },
+	{ FCF_FG_FAINT,        L"faint"sv        },
+	{ FCF_FG_BLINK,        L"blink"sv        },
 };
 
 class HighlightHierarchicalConfigDb: public HierarchicalConfigDb
@@ -1203,7 +1209,7 @@ private:
 			return;
 
 		SCOPED_ACTION(auto)(ScopedTransaction());
-		Exec({ "DELETE FROM filetypes;"sv }); //delete all before importing
+		Exec("DELETE FROM filetypes;"sv); // delete all before importing
 		unsigned long long id = 0;
 		for (const auto& e: xml_enum(base, "filetype"))
 		{
@@ -1269,7 +1275,7 @@ public:
 	void DiscardCache() override
 	{
 		SCOPED_ACTION(auto)(ScopedTransaction());
-		Exec({ "DELETE FROM cachename;"sv });
+		Exec("DELETE FROM cachename;"sv);
 	}
 
 private:
@@ -1772,9 +1778,10 @@ private:
 		unsigned long long DeleteId;
 		unsigned int TypeHistory;
 		string HistoryName;
-		string strName;
 		int Type;
 		bool Lock;
+		string strName;
+		os::chrono::time_point Time;
 		string strUuid;
 		string strFile;
 		string strData;
@@ -1784,7 +1791,7 @@ private:
 
 	void WaitAllAsync() const
 	{
-		(void)os::handle::wait_all({ AsyncDeleteAddDone.native_handle(), AsyncCommitDone.native_handle() });
+		os::handle::wait_all({ AsyncDeleteAddDone.native_handle(), AsyncCommitDone.native_handle() });
 	}
 
 	void WaitCommitAsync() const
@@ -1804,18 +1811,17 @@ private:
 			bool bAddDelete=false, bCommit=false;
 
 			{
-				SCOPED_ACTION(auto)(WorkQueue.scoped_lock());
-
-				decltype(WorkQueue)::value_type item;
-				while (WorkQueue.try_pop(item))
+				for (auto Messages = WorkQueue.pop_all(); !Messages.empty(); Messages.pop())
 				{
 					SCOPE_EXIT{ SQLiteDb::EndTransaction(); };
+
+					auto& item = Messages.front();
 					if (item) //DeleteAndAddAsync
 					{
 						SQLiteDb::BeginTransaction();
 						if (item->DeleteId)
 							DeleteInternal(item->DeleteId);
-						AddInternal(item->TypeHistory, item->HistoryName, item->strName, item->Type, item->Lock, item->strUuid, item->strFile, item->strData);
+						AddInternal(item->TypeHistory, item->HistoryName, item->Type, item->Lock, item->strName, item->Time, item->strUuid, item->strFile, item->strData);
 						bAddDelete = true;
 					}
 					else // EndTransaction
@@ -1831,9 +1837,9 @@ private:
 		}
 	}
 
-	void AddInternal(unsigned int const TypeHistory, string_view const HistoryName, string_view const Name, int const Type, bool const Lock, string_view const Uuid, string_view const File, string_view const Data) const
+	void AddInternal(unsigned int const TypeHistory, string_view const HistoryName, int const Type, bool const Lock, string_view const Name, os::chrono::time_point const Time, string_view const Uuid, string_view const File, string_view const Data) const
 	{
-		ExecuteStatement(stmtAdd, TypeHistory, HistoryName, Type, Lock, Name, os::chrono::nt_clock::to_hectonanoseconds(os::chrono::nt_clock::now()), Uuid, File, Data);
+		ExecuteStatement(stmtAdd, TypeHistory, HistoryName, Type, Lock, Name, os::chrono::nt_clock::to_hectonanoseconds(Time), Uuid, File, Data);
 	}
 
 	void DeleteInternal(unsigned long long id) const
@@ -1841,7 +1847,7 @@ private:
 		ExecuteStatement(stmtDel, id);
 	}
 
-	unsigned long long GetPrevImpl(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name, function_ref<unsigned long long()> const Fallback) const
+	unsigned long long GetPrevImpl(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name, os::chrono::time_point& Time, function_ref<unsigned long long()> const Fallback) const
 	{
 		WaitAllAsync();
 		Name.clear();
@@ -1853,6 +1859,7 @@ private:
 				return 0;
 
 			Name = GetNewestStmt->GetColText(1);
+			Time = os::chrono::nt_clock::from_hectonanoseconds(GetNewestStmt->GetColInt64(2));
 			return GetNewestStmt->GetColInt64(0);
 		}
 
@@ -1861,6 +1868,8 @@ private:
 			return Fallback();
 
 		Name = GetPrevStmt->GetColText(1);
+		Time = os::chrono::nt_clock::from_hectonanoseconds(GetPrevStmt->GetColInt64(2));
+
 		return GetPrevStmt->GetColInt64(0);
 	}
 
@@ -1874,10 +1883,16 @@ private:
 		AsyncWork.set();
 	}
 
+	#define EDITORPOSITION_HISTORY_NAME "editorposition_history"
+	#define VIEWERPOSITION_HISTORY_NAME "viewerposition_history"
+	#define EDITORPOSITION_HISTORY_SCHEMA "(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, time INTEGER NOT NULL, line INTEGER NOT NULL, linepos INTEGER NOT NULL, screenline INTEGER NOT NULL, leftpos INTEGER NOT NULL, codepage INTEGER NOT NULL);"
+	#define VIEWERPOSITION_HISTORY_SCHEMA "(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, time INTEGER NOT NULL, filepos INTEGER NOT NULL, leftpos INTEGER NOT NULL, hex INTEGER NOT NULL, codepage INTEGER NOT NULL);"
+
 	static void Initialise(const db_initialiser& Db)
 	{
 		Db.SetWALJournalingMode();
-		Db.EnableForeignKeysConstraints();
+
+		Db.add_nocase_collation();
 
 		static const std::string_view Schema[]
 		{
@@ -1888,15 +1903,20 @@ private:
 			"CREATE INDEX IF NOT EXISTS history_idx3 ON history (kind, key, lock DESC, time DESC);"sv,
 			"CREATE INDEX IF NOT EXISTS history_idx4 ON history (kind, key, time DESC);"sv,
 			//view,edit file positions and bookmarks history
-			"CREATE TABLE IF NOT EXISTS editorposition_history(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, time INTEGER NOT NULL, line INTEGER NOT NULL, linepos INTEGER NOT NULL, screenline INTEGER NOT NULL, leftpos INTEGER NOT NULL, codepage INTEGER NOT NULL);"sv,
+			"CREATE TABLE IF NOT EXISTS " EDITORPOSITION_HISTORY_NAME EDITORPOSITION_HISTORY_SCHEMA ""sv,
 			"CREATE TABLE IF NOT EXISTS editorbookmarks_history(pid INTEGER NOT NULL, num INTEGER NOT NULL, line INTEGER NOT NULL, linepos INTEGER NOT NULL, screenline INTEGER NOT NULL, leftpos INTEGER NOT NULL, FOREIGN KEY(pid) REFERENCES editorposition_history(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (pid, num));"sv,
 			"CREATE INDEX IF NOT EXISTS editorposition_history_idx1 ON editorposition_history (time DESC);"sv,
-			"CREATE TABLE IF NOT EXISTS viewerposition_history(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE, time INTEGER NOT NULL, filepos INTEGER NOT NULL, leftpos INTEGER NOT NULL, hex INTEGER NOT NULL, codepage INTEGER NOT NULL);"sv,
+			"CREATE TABLE IF NOT EXISTS " VIEWERPOSITION_HISTORY_NAME VIEWERPOSITION_HISTORY_SCHEMA ""sv,
 			"CREATE TABLE IF NOT EXISTS viewerbookmarks_history(pid INTEGER NOT NULL, num INTEGER NOT NULL, filepos INTEGER NOT NULL, leftpos INTEGER NOT NULL, FOREIGN KEY(pid) REFERENCES viewerposition_history(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (pid, num));"sv,
 			"CREATE INDEX IF NOT EXISTS viewerposition_history_idx1 ON viewerposition_history (time DESC);"sv,
 		};
 
 		Db.Exec(Schema);
+
+		reindex(Db);
+
+		// Must be after reindex
+		Db.EnableForeignKeysConstraints();
 
 		static const stmt_init<statement_id> Statements[]
 		{
@@ -1907,28 +1927,75 @@ private:
 			{ stmtEnumLargeHistories,    "SELECT key FROM (SELECT key, num FROM (SELECT key, count(id) as num FROM history WHERE kind=?1 GROUP BY key)) WHERE num > ?2;"sv },
 			{ stmtAdd,                   "INSERT INTO history VALUES (NULL,?1,?2,?3,?4,?5,?6,?7,?8,?9);"sv },
 			{ stmtGetName,               "SELECT name FROM history WHERE id=?1;"sv },
-			{ stmtGetNameAndType,        "SELECT name, type, guid, file, data FROM history WHERE id=?1;"sv },
-			{ stmtGetNewestName,         "SELECT name FROM history WHERE kind=?1 AND key=?2 ORDER BY lock DESC, time DESC LIMIT 1;"sv },
+			{ stmtGet,                   "SELECT name, type, time, guid, file, data FROM history WHERE id=?1;"sv },
 			{ stmtCount,                 "SELECT count(id) FROM history WHERE kind=?1 AND key=?2;"sv },
 			{ stmtDelUnlocked,           "DELETE FROM history WHERE kind=?1 AND key=?2 AND lock=0;"sv },
 			{ stmtGetLock,               "SELECT lock FROM history WHERE id=?1;"sv },
 			{ stmtSetLock,               "UPDATE history SET lock=?1 WHERE id=?2"sv },
-			{ stmtGetNext,               "SELECT a.id, a.name FROM history AS a, history AS b WHERE b.id=?1 AND a.kind=?2 AND a.key=?3 AND a.time>b.time ORDER BY a.time LIMIT 1;"sv },
-			{ stmtGetPrev,               "SELECT a.id, a.name FROM history AS a, history AS b WHERE b.id=?1 AND a.kind=?2 AND a.key=?3 AND a.time<b.time ORDER BY a.time DESC LIMIT 1;"sv },
-			{ stmtGetNewest,             "SELECT id, name FROM history WHERE kind=?1 AND key=?2 ORDER BY time DESC LIMIT 1;"sv },
+			{ stmtGetNext,               "SELECT a.id, a.name, a.time FROM history AS a, history AS b WHERE b.id=?1 AND a.kind=?2 AND a.key=?3 AND a.time>b.time ORDER BY a.time LIMIT 1;"sv },
+			{ stmtGetPrev,               "SELECT a.id, a.name, a.time FROM history AS a, history AS b WHERE b.id=?1 AND a.kind=?2 AND a.key=?3 AND a.time<b.time ORDER BY a.time DESC LIMIT 1;"sv },
+			{ stmtGetNewest,             "SELECT id, name, time FROM history WHERE kind=?1 AND key=?2 ORDER BY time DESC LIMIT 1;"sv },
 			{ stmtSetEditorPos,          "REPLACE INTO editorposition_history VALUES (NULL,?1,?2,?3,?4,?5,?6,?7);"sv },
 			{ stmtSetEditorBookmark,     "REPLACE INTO editorbookmarks_history VALUES (?1,?2,?3,?4,?5,?6);"sv },
-			{ stmtGetEditorPos,          "SELECT id, line, linepos, screenline, leftpos, codepage FROM editorposition_history WHERE name=?1 COLLATE NOCASE;"sv },
+			{ stmtGetEditorPos,          "SELECT id, line, linepos, screenline, leftpos, codepage FROM editorposition_history WHERE name=?1;"sv },
 			{ stmtGetEditorBookmark,     "SELECT line, linepos, screenline, leftpos FROM editorbookmarks_history WHERE pid=?1 AND num=?2;"sv },
 			{ stmtSetViewerPos,          "REPLACE INTO viewerposition_history VALUES (NULL,?1,?2,?3,?4,?5,?6);"sv },
 			{ stmtSetViewerBookmark,     "REPLACE INTO viewerbookmarks_history VALUES (?1,?2,?3,?4);"sv },
-			{ stmtGetViewerPos,          "SELECT id, filepos, leftpos, hex, codepage FROM viewerposition_history WHERE name=?1 COLLATE NOCASE;"sv },
+			{ stmtGetViewerPos,          "SELECT id, filepos, leftpos, hex, codepage FROM viewerposition_history WHERE name=?1;"sv },
 			{ stmtGetViewerBookmark,     "SELECT filepos, leftpos FROM viewerbookmarks_history WHERE pid=?1 AND num=?2;"sv },
 			{ stmtDeleteOldEditor,       "DELETE FROM editorposition_history WHERE time<?1 AND id NOT IN (SELECT id FROM editorposition_history ORDER BY time DESC LIMIT ?2);"sv },
 			{ stmtDeleteOldViewer,       "DELETE FROM viewerposition_history WHERE time<?1 AND id NOT IN (SELECT id FROM viewerposition_history ORDER BY time DESC LIMIT ?2);"sv },
 		};
 
 		Db.PrepareStatements(Statements);
+	}
+
+	static void reindex(db_initialiser const& Db)
+	{
+		static const std::pair<std::string_view, std::string_view> ReindexTables[]
+		{
+			{ EDITORPOSITION_HISTORY_NAME ""sv, EDITORPOSITION_HISTORY_SCHEMA ""sv },
+			{ VIEWERPOSITION_HISTORY_NAME ""sv, VIEWERPOSITION_HISTORY_SCHEMA ""sv },
+		};
+
+		for (const auto& [Name, Schema]: ReindexTables)
+		{
+			const auto reindex = [&, Name = Name]{ Db.Exec(format(FSTR("REINDEX {}"sv), Name)); };
+
+			try
+			{
+				reindex();
+			}
+			catch (far_sqlite_exception const& e)
+			{
+				if (!e.is_constaint_unique())
+					throw;
+
+				recreate_position_history(Db, Name, Schema);
+				reindex();
+			}
+		}
+	}
+
+	static void recreate_position_history(const db_initialiser& Db, std::string_view const Table, std::string_view const Schema)
+	{
+		LOGNOTICE(L"Recreating {}"sv, encoding::utf8::get_chars(Table));
+
+		SCOPED_ACTION(auto)(Db.ScopedTransaction());
+
+		// The order is important - https://sqlite.org/lang_altertable.html
+
+		// 1. Create new table
+		Db.Exec(format(FSTR("CREATE TABLE {}_new{}"sv), Table, Schema));
+
+		// 2. Copy data. "WHERE 1=1" is a dirty hack to prevent xfer optimization.
+		Db.Exec(format(FSTR("INSERT OR IGNORE INTO {0}_new SELECT * FROM {0} WHERE 1=1"sv), Table));
+
+		// 3. Drop old table
+		Db.Exec(format(FSTR("DROP TABLE {}"sv), Table));
+
+		// 4. Rename new into old
+		Db.Exec(format(FSTR("ALTER TABLE {0}_new RENAME TO {0}"sv), Table));
 	}
 
 	void Delete(unsigned long long id) override
@@ -1970,15 +2037,16 @@ private:
 		(void)EnumStmt(Reverse);
 	}
 
-	void DeleteAndAddAsync(unsigned long long const DeleteId, unsigned int const TypeHistory, string_view const HistoryName, string_view const Name, int const Type, bool const Lock, string_view const Uuid, string_view const File, string_view const Data) override
+	void DeleteAndAddAsync(unsigned long long const DeleteId, unsigned int const TypeHistory, string_view const HistoryName, string_view const Name, int const Type, bool const Lock, os::chrono::time_point const Time, string_view const Uuid, string_view const File, string_view const Data) override
 	{
 		auto item = std::make_unique<AsyncWorkItem>();
 		item->DeleteId=DeleteId;
 		item->TypeHistory=TypeHistory;
 		item->HistoryName = HistoryName;
-		item->strName = Name;
 		item->Type=Type;
 		item->Lock=Lock;
+		item->strName = Name;
+		item->Time = Time;
 		item->strUuid = Uuid;
 		item->strFile = File;
 		item->strData = Data;
@@ -2024,22 +2092,11 @@ private:
 		(void)EnumLargeHistoriesStmt();
 	}
 
-	bool GetNewest(const unsigned int TypeHistory, const string_view HistoryName, string& Name) override
-	{
-		WaitAllAsync();
-		const auto Stmt = AutoStatement(stmtGetNewestName);
-		if (!Stmt->Bind(TypeHistory, HistoryName).Step())
-			return false;
-
-		Name = Stmt->GetColText(0);
-		return true;
-	}
-
-	bool Get(unsigned long long id, string* const Name = {}, history_record_type* const Type = {}, string* const Uuid = {}, string* const File = {}, string* const Data = {}) override
+	bool Get(unsigned long long id, string* const Name = {}, history_record_type* const Type = {}, os::chrono::time_point* const Time = {}, string* const Uuid = {}, string* const File = {}, string* const Data = {}) override
 	{
 		WaitAllAsync();
 
-		const auto StmtId = (Type || Uuid || File || Data)? stmtGetNameAndType : stmtGetName;
+		const auto StmtId = (Type || Time || Uuid || File || Data)? stmtGet : stmtGetName;
 
 		const auto Stmt = AutoStatement(StmtId);
 		if (!Stmt->Bind(id).Step())
@@ -2051,14 +2108,17 @@ private:
 		if (Type)
 			*Type = static_cast<history_record_type>(Stmt->GetColInt(1));
 
+		if (Time)
+			*Time = os::chrono::nt_clock::from_hectonanoseconds(Stmt->GetColInt64(2));
+
 		if (Uuid)
-			*Uuid = Stmt->GetColText(2);
+			*Uuid = Stmt->GetColText(3);
 
 		if (File)
-			*File = Stmt->GetColText(3);
+			*File = Stmt->GetColText(4);
 
 		if (Data)
-			*Data = Stmt->GetColText(4);
+			*Data = Stmt->GetColText(5);
 
 		return true;
 	}
@@ -2089,7 +2149,7 @@ private:
 		ExecuteStatement(stmtDelUnlocked, TypeHistory, HistoryName);
 	}
 
-	unsigned long long GetNext(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name) override
+	unsigned long long GetNext(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name, os::chrono::time_point& Time) override
 	{
 		WaitAllAsync();
 		Name.clear();
@@ -2102,23 +2162,24 @@ private:
 			return 0;
 
 		Name = Stmt->GetColText(1);
+		Time = os::chrono::nt_clock::from_hectonanoseconds(Stmt->GetColInt64(2));
 		return Stmt->GetColInt64(0);
 	}
 
-	unsigned long long GetPrev(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name) override
+	unsigned long long GetPrev(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name, os::chrono::time_point& Time) override
 	{
-		return GetPrevImpl(TypeHistory, HistoryName, id, Name, [&]() { return Get(id, &Name)? id : 0; });
+		return GetPrevImpl(TypeHistory, HistoryName, id, Name, Time, [&]{ return Get(id, &Name)? id : 0; });
 	}
 
-	unsigned long long CyclicGetPrev(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name) override
+	unsigned long long CyclicGetPrev(const unsigned int TypeHistory, const string_view HistoryName, const unsigned long long id, string& Name, os::chrono::time_point& Time) override
 	{
-		return GetPrevImpl(TypeHistory, HistoryName, id, Name, [&]() { return 0; });
+		return GetPrevImpl(TypeHistory, HistoryName, id, Name, Time, []{ return 0; });
 	}
 
-	unsigned long long SetEditorPos(const string_view Name, const int Line, const int LinePos, const int ScreenLine, const int LeftPos, const uintptr_t CodePage) override
+	unsigned long long SetEditorPos(const string_view Name, os::chrono::time_point const Time, const int Line, const int LinePos, const int ScreenLine, const int LeftPos, const uintptr_t CodePage) override
 	{
 		WaitCommitAsync();
-		ExecuteStatement(stmtSetEditorPos, Name, os::chrono::nt_clock::to_hectonanoseconds(os::chrono::nt_clock::now()), Line, LinePos, ScreenLine, LeftPos, CodePage);
+		ExecuteStatement(stmtSetEditorPos, Name, os::chrono::nt_clock::to_hectonanoseconds(Time), Line, LinePos, ScreenLine, LeftPos, CodePage);
 		return LastInsertRowID();
 	}
 
@@ -2157,10 +2218,10 @@ private:
 		return true;
 	}
 
-	unsigned long long SetViewerPos(const string_view Name, const long long FilePos, const long long LeftPos, const int Hex_Wrap, uintptr_t const CodePage) override
+	unsigned long long SetViewerPos(const string_view Name, os::chrono::time_point const Time, const long long FilePos, const long long LeftPos, const int Hex_Wrap, uintptr_t const CodePage) override
 	{
 		WaitCommitAsync();
-		ExecuteStatement(stmtSetViewerPos, Name, os::chrono::nt_clock::to_hectonanoseconds(os::chrono::nt_clock::now()), FilePos, LeftPos, Hex_Wrap, CodePage);
+		ExecuteStatement(stmtSetViewerPos, Name, os::chrono::nt_clock::to_hectonanoseconds(Time), FilePos, LeftPos, Hex_Wrap, CodePage);
 		return LastInsertRowID();
 	}
 
@@ -2214,8 +2275,7 @@ private:
 		stmtEnumLargeHistories,
 		stmtAdd,
 		stmtGetName,
-		stmtGetNameAndType,
-		stmtGetNewestName,
+		stmtGet,
 		stmtCount,
 		stmtDelUnlocked,
 		stmtGetLock,

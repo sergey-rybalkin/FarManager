@@ -164,8 +164,8 @@ public:
 	void SetPasswordMode(bool Mode) {m_Flags.Change(FEDITLINE_PASSWORDMODE,Mode);}
 	void SetOvertypeMode(bool Mode) {m_Flags.Change(FEDITLINE_OVERTYPE, Mode);}
 	bool GetOvertypeMode() const {return m_Flags.Check(FEDITLINE_OVERTYPE);}
-	int RealPosToTab(int Pos) const;
-	int TabPosToReal(int Pos) const;
+	int RealPosToVisual(int Pos) const;
+	int VisualPosToReal(int Pos) const;
 	void Select(int Start,int End);
 	void RemoveSelection();
 	void AddSelect(int Start,int End);
@@ -191,7 +191,7 @@ protected:
 	virtual void RefreshStrByMask(int InitMode=FALSE) {}
 
 	[[nodiscard]]
-	auto CallbackSuppressor() { return make_raii_wrapper(this, &Edit::SuppressCallback, &Edit::RevertCallback); }
+	auto CallbackSuppressor() { return make_raii_wrapper<&Edit::SuppressCallback, &Edit::RevertCallback>(this); }
 
 	void DeleteBlock();
 
@@ -221,12 +221,12 @@ private:
 
 	bool InsertKey(wchar_t Key);
 	bool RecurseProcessKey(int Key);
-	void ApplyColor(const FarColor& SelColor, int XPos, int FocusedLeftPos);
+	void ApplyColor(int XPos, int FocusedLeftPos);
 	int GetNextCursorPos(int Position,int Where) const;
 	static bool CharInMask(wchar_t Char, wchar_t Mask);
 	bool ProcessCtrlQ();
 	bool ProcessInsPath(unsigned int Key,int PrevSelStart=-1,int PrevSelEnd=0);
-	int RealPosToTab(int PrevLength, int PrevPos, int Pos, int* CorrectPos = {}) const;
+	int RealPosToVisual(int PrevLength, int PrevPos, int Pos, int* CorrectPos = {}) const;
 	void FixLeftPos(int TabCurPos=-1);
 	void SetRightCoord(int Value) { SetPosition({ m_Where.left, m_Where.top, Value, m_Where.bottom }); }
 	Editor* GetEditor() const;
@@ -243,7 +243,7 @@ protected:
 	edit_string m_Str;
 
 	// KEEP ALIGNED!
-	int m_CurPos;
+	int m_CurPos{};
 private:
 	friend class DlgEdit;
 	friend class Editor;
@@ -251,10 +251,10 @@ private:
 
 	// KEEP ALIGNED!
 	std::multiset<ColorItem> ColorList;
-	int m_SelStart;
-	int m_SelEnd;
-	int LeftPos;
-	eol m_Eol;
+	int m_SelStart{-1};
+	int m_SelEnd{};
+	int LeftPos{};
+	eol m_Eol{eol::none};
 };
 
 #endif // EDIT_HPP_5A787FA0_4FFF_4A61_811F_F8BAEDEF241B

@@ -861,13 +861,13 @@ plugin only when necessary, so unused plugins do not require additional memory.
 But if you are sure that some plugins are useless for you, you can remove them
 to save disk space.
 
- Plugins can be called either from ~Change drive menu~@DriveDlg@ or from
-#Plugin commands# menu, activated by #F11# or by corresponding item of
-~Commands menu~@CmdMenu@. #F4# in ~"Plugin commands"~@PluginCommands@ menu allows to assign hot
-keys to menu items (this makes easier to call them from ~keyboard macros~@KeyMacro@).
+ Plugins can be called either from ~Change drive menu~@DriveDlg@, or from
+~Plugin commands~@PluginCommands@ menu activated by #F11#, or by corresponding item of
+~Commands menu~@CmdMenu@. #F4# in "Plugin commands" menu allows to assign hot
+keys to menu items (this makes it easier to call them from ~keyboard macros~@KeyMacro@).
 This menu is accessible from file panels, dialogs and (only by #F11#) from the
 internal viewer and editor. Only specially designed plugins will be shown when
-calling the menu from dialogs, the viewer or the editor.
+the menu is invoked from dialogs, the viewer, or the editor.
 
  You can set plugin parameters using ~Plugin configuration~@PluginsConfig@
 command from ~Options menu~@OptMenu@.
@@ -1225,7 +1225,6 @@ Supported types: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW and DVD-RAM.
  The output format depends on the domain structure, group policies and DNS settings.
 
  #User name format#
-
  Can be one of:
 
  - #Logon Name#
@@ -1276,7 +1275,7 @@ as well.
 size, number of files and subfolders in the folder, current disk cluster size,
 real files size, including files slack (sum of the unused cluster parts).
 
- When viewing reparse points, the path to the source folder is also displayed.
+ When viewing ~reparse points~@HardSymLink@, the path to the source folder is also displayed.
 
  For folders, the total size value may not match the actual value:
  - ^<wrap>If the folder or its subfolders contain symbolic links and the option
@@ -1375,7 +1374,7 @@ last write, creation and access time, attributes. Fullscreen mode.
 
 @FilesMenu
 $ #Menus: files menu#
- #View#               ~View files~@Viewer@, count folder sizes.
+ #View#               ~View~@Viewer@ files, count folder sizes.
 
  #Edit#               ~Edit~@Editor@ files.
 
@@ -1493,7 +1492,7 @@ $ #Menus: options menu#
  #Languages#             Select main and help language.
                        Use "Save setup" to save selected languages.
 
- #Plugins#               Configure ~plugins~@Plugins@.
+ #Plugins#               Shows ~"Plugins configuration"~@PluginsConfig@ dialog.
  #configuration#
 
  #Plugin manager#        Shows ~Plugin manager settings~@PluginsManagerSettings@ dialog.
@@ -1518,9 +1517,8 @@ $ #Menus: options menu#
 
  #File descriptions#     ~File descriptions~@FileDiz@ list names and update mode.
 
- #Folder description#    Specify names (~wildcards~@FileMasks@ are allowed) of
- #files#                 files displayed in the ~Info panel~@InfoPanel@ as folder
-                       descriptions.
+ #Folder description#    Shows ~Folder description files~@FolderDiz@ dialog.
+ #files#
 
  #Viewer settings#       External and internal ~Viewer~@ViewerSettings@ setting.
 
@@ -2485,11 +2483,8 @@ If turned off, to change the folder from the tree panel, you need to press #Ente
 
 @InterfSettings
 $ #Settings dialog: interface#
- #Clock in panels#
+ #Clock#
  Show clock at the right top corner of the screen.
-
- #Clock in viewer and editor#
- Show clock in viewer and editor.
 
  #Mouse#
  Use the mouse.
@@ -2527,6 +2522,15 @@ to calculate the total files count.
  Pressing #Ctrl+PgUp# in the root directory shows the drive selection menu.
  If Network plugin is installed, for network folders (and network drives, if switch
 is in the third state) a list of server shared resources  will be shown.
+
+ #Use Virtual Terminal for rendering#
+ Render the output using ANSI escape sequences.
+ This allows using 24-bit colors and may (or may not) work better (or worse) with some Unicode characters.
+ Requires Windows 10 and above.
+
+ #Fullwidth-aware rendering#
+ Take into account the fact that East Asian characters require two screen cells instead of one.
+ The support is rudimentary and experimental. It may work or not, depending on your OS, locale, terminal, font and other settings.
 
  #ClearType friendly redraw#
  Redraw the window in such a way that ClearType related artifacts do not appear.
@@ -3715,7 +3719,7 @@ that a file belongs to a group, no further groups are checked.
 @HighlightEdit
 $ #Files highlighting and sort groups: editing#
  The #Files highlighting# dialog in the ~Options menu~@OptMenu@ allows to
-define file highlighting groups. Each group definition ~includes~@Filter@:
+specify file highlighting groups. Each group definition ~includes~@Filter@:
 
  - one or more ~file masks~@FileMasks@;
 
@@ -3770,7 +3774,7 @@ and external ~viewer~@Viewer@.
                          moving the cursor.
 
  #Search dialog#           Always returns focus to the search text field in
- #auto-focus#              the ~Viewer~@Viewer@ search dialog.
+ #auto-focus#              the Viewer ~Search~@ViewerSearch@ dialog.
 
  #Tab size#                Number of spaces per single tab position.
 
@@ -4144,7 +4148,7 @@ files will be listed on a single stripe.
  N[M[D],O,R[F],N] - file name, where:
                     M - ^<wrap>show selection marks where:
                         D - dynamic selection marks;
-                    O - ^<wrap>show names without paths (intended mainly for plugins);
+                    O - ^<wrap>show names without paths (intended mostly for ~plugins~@Plugins@);
                     R - ^<wrap>right align names that do not fit in column, where:
                         F - right align all names;
                     N - ^<wrap>do not show extensions in name column;
@@ -5187,7 +5191,7 @@ command playback is finished.
 
  2. ^<wrap>Some key combinations (including #Enter#, #Esc#, #F1# and #Ctrl+F5#,
 #MsWheelUp#, #MsWheelDown# and other mouse keys combined with #Ctrl#, #Shift#, #Alt#) cannot be entered
-directly because they have special functions in the dialog. To assign a macro
+directly because they have special functions in the dialog. To ~assign a macro~@KeyMacroAssign@
 to one of those key combinations, select it from the drop-down list.
 
 
@@ -5933,25 +5937,6 @@ of the parameter. If the parameter is set to #-1#, random values will
 be used.
 
  Default value: 0.
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
-@System.FlagPosixSemantics
-$ #far:config System.FlagPosixSemantics#
- This Boolean parameter specifies whether inserting files into
-~view and edit history~@HistoryViews@ is case sensitive.
-
- If a file being added already exists in the history, it is not inserted
-again; instead, the existing history entry is moved to the most recent
-position.
-
- False - ^<wrap>Case insensitive comparison is used to search the
-history for duplicates.
- True  - Case sensitive comparison is used to search the history for
-duplicates.
-
- Default value: True (the search is case sensitive).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 

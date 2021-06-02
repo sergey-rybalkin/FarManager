@@ -182,7 +182,7 @@ namespace os
 			}
 
 			[[nodiscard]]
-			static bool is_signaled(HANDLE const Handle, std::chrono::milliseconds const Timeout)
+			static bool is_signaled(HANDLE const Handle, std::chrono::milliseconds const Timeout = 0ms)
 			{
 				return handle_implementation::wait(Handle, Timeout);
 			}
@@ -200,15 +200,14 @@ namespace os
 			}
 
 			[[nodiscard]]
-			static auto wait_all(span<HANDLE const> const Handles, std::chrono::milliseconds const Timeout)
+			static bool wait_all(span<HANDLE const> const Handles, std::chrono::milliseconds const Timeout)
 			{
-				return handle_implementation::wait(Handles, true, Timeout);
+				return handle_implementation::wait(Handles, true, Timeout).has_value();
 			}
 
-			[[nodiscard]]
-			static auto wait_all(span<HANDLE const> const Handles)
+			static void wait_all(span<HANDLE const> const Handles)
 			{
-				return *handle_implementation::wait(Handles, true);
+				(void)handle_implementation::wait(Handles, true);
 			}
 		};
 
@@ -230,12 +229,19 @@ namespace os
 	void unset_error_mode(unsigned Mask);
 
 	[[nodiscard]]
-	NTSTATUS GetLastNtStatus();
+	NTSTATUS get_last_nt_status();
+
+	void set_last_nt_status(NTSTATUS Status);
+	void set_last_error_from_ntstatus(NTSTATUS Status);
 
 	[[nodiscard]]
-	string GetErrorString(bool Nt, DWORD Code);
+	string format_errno(int ErrorCode);
 
-	string format_system_error(unsigned int ErrorCode, string_view ErrorMessage);
+	[[nodiscard]]
+	string format_error(DWORD ErrorCode);
+
+	[[nodiscard]]
+	string format_ntstatus(NTSTATUS Status);
 
 	class last_error_guard
 	{

@@ -92,11 +92,9 @@ private:
 
 	size_t m_CurrentBarSize;
 	int m_CurrentPercent{};
-	string m_CurrentBar;
 
 	size_t m_TotalBarSize;
 	int m_TotalPercent{};
-	string m_TotalBar;
 
 	bool m_Move;
 	bool m_Total;
@@ -112,10 +110,6 @@ private:
 	string m_Speed;
 	string m_FilesCopied;
 	std::chrono::steady_clock::duration m_CalcTime{};
-
-	// BUGBUG
-public:
-	time_check m_SecurityTimeCheck;
 
 private:
 	struct

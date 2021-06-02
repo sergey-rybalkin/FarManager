@@ -87,7 +87,7 @@ $^#Copyright © 1996-2000 Eugene Roshal#
  ~Команди операційної системи~@OSCommands@
  ~Посилання на папки~@FolderShortcuts@
  ~Групи сортування~@SortGroups@
- ~Фільтр файлової панелі~@FilterMenu@
+ ~Фільтр файлової панелі~@FiltersMenu@
  ~Перемикання між екранами~@ScrSwitch@
  ~Список задач~@TaskList@
  ~Список пристроїв~@HotPlugList@
@@ -119,6 +119,9 @@ $ #Як користуватися допомогою#
  У змісті довідкової системи є посилання (вони функціонують приблизно так
 же, як і гіперпосилання, знайомі кожному користувачеві Інтернету), які вказують
 на розділи з більш докладною інформацією.
+Also, the main page has the "~Help Index~@Index@", which lists all the
+topics available in the help file and in some cases helps to find the needed
+information faster.
 
  Для переміщення між посиланнями ви можете використовувати #Tab# чи #Shift+Tab#.
 Натиснення Enter викличе сторінку, що відповідає вибраному посиланню. Такий же
@@ -319,8 +322,8 @@ $ #Команди керування панелями#
  Поміняти панелі місцями                                     #Ctrl+U#
  Перечитати вміст панелі                                     #Ctrl+R#
  Прибрати/показати інформаційну панель                       #Ctrl+L#
- Прибрати/показати панель швидкого перегляду                 #Ctrl+Q#
- Прибрати/показати дерево папок                              #Ctrl+T#
+ Прибрати/показати ~панель швидкого перегляду~@QViewPanel@                 #Ctrl+Q#
+ Прибрати/показати ~дерево папок~@TreePanel@                              #Ctrl+T#
  Прибрати/показати обидві панелі                             #Ctrl+O#
  Тимчасово прибрати обидві панелі                    #Ctrl+Alt+Shift#
  (працює до тих пір, поки утримуємо ці клавіші)
@@ -387,7 +390,7 @@ $ #Команди керування панелями#
  Сортувати файли активної панелі за часом доступу           #Ctrl+F9#
  Сортувати файли активної панелі за описами                #Ctrl+F10#
  Сортувати файли активної панелі за власниками             #Ctrl+F11#
- Вивести меню режимів сортування                           #Ctrl+F12#
+ Вивести меню ~режимів сортування~@PanelCmdSort@                           #Ctrl+F12#
  Використати сортування за групами                        #Shift+F11#
  Показувати позначені файли першими                       #Shift+F12#
 
@@ -590,7 +593,7 @@ $ #Керування файлами та сервісні команди#
 
  ~Видалення~@DeleteFile@                                  #Shift+Del, Shift+F8, F8#
 
- Знищення файлів і папок                                    #Alt+Del#
+ ~Знищення~@DeleteFile@                                                   #Alt+Del#
 
  Показати горизонтальне ~меню~@Menus@                                     #F9#
 
@@ -644,7 +647,7 @@ Alt+F9 перемикає екран з 25 ліній на 50 і навпаки.
  Витягнути файли з архіву                                  #Shift+F2#
  Виконати команди керування архiвом                        #Shift+F3#
 
- Редагувати новий файл                                     #Shift+F4#
+ Редагувати ~новий файл~@FileOpenCreate@                                     #Shift+F4#
  При створенні нового файла використовується кодова сторінка, якa
 було виставлене у останньому відкритому редакторі. Якщо редактор
 відкривається уперше у поточній сесії Far, використовується
@@ -871,7 +874,7 @@ user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
 видалити їх, щоб зберегти місце на диску.
 
  Модулі можуть бути викликані або з ~Меню вибору диска~@DriveDlg@, або з меню
-#Команди зовнішніх модулів#, що активізується за допомогою #F11# або
+~Команди зовнішніх модулів~@PluginCommands@, що активізується за допомогою #F11# або
 відповідного пункту ~Меню команд~@CmdMenu@. #F4# в меню "Команди зовнішніх
 модулів" дозволяє призначити гарячі клавіші для пунктів цього меню,
 що спрощує їх подальший виклик з допомогою ~клавіатурних макрокоманд~@KeyMacro@.
@@ -881,7 +884,7 @@ user profile folder (#%APPDATA%\\Far Manager\\Profile# by default).
 створені для роботи в цьому режимі.
 
  Ви можете встановити параметри модулів, використовуючи команду
-#Параметри зовнішніх модулів# з ~Меню параметрів~@OptMenu@.
+~Параметри зовнішніх модулів~@PluginsConfig@ з ~Меню параметрів~@OptMenu@.
 
  Операції обробки файлів типу копіювання, перенесення, видалення,
 редагування або ~Пошуку файла~@FindFile@ можуть працювати з модулями,
@@ -960,7 +963,8 @@ entered, then Far sets the hotkey automatically.
 $ #Параметри зовнішніх модулів#
  Ви можете сконфігурувати параметри ~модулів, що пiдключаються~@Plugins@,
 використовуючи команду #"Параметри зовнішніх модулів"#
-із ~"Меню параметрів"~@OptMenu@.
+із ~Меню параметрів~@OptMenu@ or by pressing
+#Alt+Shift+F9# in the ~Change drive menu~@DriveDlg@ or plugins menu.
 
  Ви можете отримати інформацію про конкретний модуль, натиснувши
 #Shift+F1# - контекстно-залежна допомога по конфігурації модуля. Якщо
@@ -1250,7 +1254,6 @@ Supported types: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW and DVD-RAM.
  The output format depends on the domain structure, group policies and DNS settings.
 
  #User name format#
-
  Can be one of:
 
  - #Logon Name#
@@ -1301,7 +1304,7 @@ displayed in the panel. Для відомих Windows типів файлів т
 папок, розмір кластера поточного диска, реальний розмір файлів,
 включаючи недовикористані фрагменти кластерів.
 
- Для символічних зв'язків також відображається шлях до вихідних папок.
+ Для ~символічних зв'язків~@HardSymLink@ також відображається шлях до вихідних папок.
 
  For folders, the total size value may not match the actual value:
  - ^<wrap>If the folder or its subfolders contain symbolic links and the option
@@ -1432,14 +1435,14 @@ a temporary name.
 
  #Опис файлів#          Додати ~описи~@FileDiz@ до вибраних файлів.
 
- #Позначити групу#      Позначити задану маскою групу файлів.
+ #Позначити групу#      ~Позначити~@SelectFiles@ задану маскою групу файлів.
 
- #Зняти позначення#     Зняти позначення з відповідної заданій
+ #Зняти позначення#     ~Зняти позначення~@SelectFiles@ з відповідної заданій
                         масці групи файлів.
 
- #Інверсія позначення#  Інвертувати поточне позначення файлів.
+ #Інверсія позначення#  ~Інвертувати~@SelectFiles@ поточне позначення файлів.
 
- #Відновити позначення# Відновити попереднє позначення після обробки
+ #Відновити позначення# ~Відновити~@SelectFiles@ попереднє позначення після обробки
                       файлів або операції позначення групи.
 
  Деякі команди з цього меню також описані у темі
@@ -1498,7 +1501,7 @@ $ #Меню команд#
 
  #Фільтр панелі#      Дозволяє керувати вмістом панелі файлів.
  #файлів#             Додаткова інформація про цю команду
-                    міститься у темі ~Фільтр панелі файлів~@FilterMenu@.
+                    міститься у темі ~Фільтр панелі файлів~@FiltersMenu@.
 
  #Команди#            Показує список доступних
  #зовнішніх модулів#  ~модулів, що підключаються~@Plugins@.
@@ -1528,7 +1531,7 @@ $ #Меню параметрів#
                          Використайте команду "Зберегти параметри",
                          щоб зберегти вибрані мови.
 
- #Параметри#               Конфігурація параметрів ~зовнішніх модулів~@Plugins@,
+ #Параметри#               Конфігурація параметрів ~зовнішніх модулів~@PluginsConfig@,
  #зовнішніх модулів#       що підключаються.
 
  #Plugin manager#        Shows ~Plugin manager settings~@PluginsManagerSettings@ dialog.
@@ -1554,8 +1557,8 @@ $ #Меню параметрів#
 
  #Описи файлів#            Режими оновлення й імена ~описів файлів~@FileDiz@.
 
- #Файли опису#             Імена або ~маски файлів~@FileMasks@, що відображаються
- #папок#                   у ~панелі інформації~@InfoPanel@ як опис папки.
+ #Файли опису#             ~Конфігурація файлів опису папок~@FolderDiz@.
+ #папок#
 
  #Конфігурація програми#   ~Конфігурація зовн. програми перегляду~@ViewerSettings@.
  #перегляду#
@@ -2011,11 +2014,10 @@ $ #Історія команд#
 з командного рядка, можна використовувати клавіші #Ctrl+E# або #Ctrl+X#
 вiдповiдно.
 
- Для вибору команди, крім клавіш керування курсором і Enter,
-можна використовувати підсвічені літери.
-
  Для збереження історії команд після виходу, використовуйте
 відповідну опцію з ~діалогу системних параметрів~@SystemSettings@.
+
+ Locked items will not be deleted when clearing the history.
 
  See also: common ~menu~@MenuCmd@ keyboard commands.
 
@@ -2543,11 +2545,8 @@ $ #Tree settings#
 
 @InterfSettings
 $ #Конфігурація інтерфейсу#
- #Годинник у панелях#
+ #Годинник#
  Показувати годинник у верхньому правому кутку екрана.
-
- #Годинник при редагуванні й перегляді#
- Показувати годинник при редагуванні й перегляді файлів.
 
  #Миша#
  Використовувати мишу.
@@ -2584,6 +2583,15 @@ to calculate the total files count.
  Комбінація клавіш Ctrl+PgUp у кореневій папці викличе меню вибору дисків.
  If Network plugin is installed, for network folders (and network drives, if switch
 is in the third state) a list of server shared resources  will be shown.
+
+ #Use Virtual Terminal for rendering#
+ Render the output using ANSI escape sequences.
+ This allows using 24-bit colors and may (or may not) work better (or worse) with some Unicode characters.
+ Requires Windows 10 and above.
+
+ #Fullwidth-aware rendering#
+ Take into account the fact that East Asian characters require two screen cells instead of one.
+ The support is rudimentary and experimental. It may work or not, depending on your OS, locale, terminal, font and other settings.
 
  #ClearType friendly redraw#
  Redraw the window in such a way that ClearType related artifacts do not appear.
@@ -2856,7 +2864,7 @@ beginning in the text.
 
  Примітки:
 
- 1. ^<wrap>Для виклику діалогу пошуку ви також можете просто почати
+ 1. ^<wrap>Для виклику діалогу ~пошуку~@ViewerSearch@ ви також можете просто почати
 вводити призначений для пошуку текст.
 
  2. ^<wrap>Файл відкривається у програмі перегляду із дозволом на
@@ -3159,15 +3167,15 @@ behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
  #F2#                      Зберегти файл
  #Shift+F2#                ~Зберегти файл як…~@FileSaveAs@
  #Shift+F4#                Edit ~new file~@FileOpenCreate@
- #F6#                      Перемкнутися у програму перегляду
- #F7#                      Пошук
- #Ctrl+F7#                 Заміна
+ #F6#                      Перемкнутися у ~програму перегляду~@Viewer@
+ #F7#                      ~Пошук~@EditorSearch@
+ #Ctrl+F7#                 ~Заміна~@EditorSearch@
  #Shift+F7#                Продовжити пошук/заміну
  #Alt+F7#                  Continue search/replace in "reverse" mode
  #F8#                      Toggle OEM/ANSI code page
  #Shift+F8#                Select code page
  #Alt+F8#                  ~Перейти~@EditorGotoPos@ до вказаного рядка й позиції
- #Alt+F9#                  Зміна розмірів вікна Far Manager
+ #Alt+F9#                  Зміна розмірів вікна Far Manager; дивись також ~Interface.AltF9~@Interface.AltF9@
  #Alt+Shift+F9#            Виклик діалогу ~конфігурації редактора~@EditorSettings@
  #F10, F4, Esc#            Вихід
  #Shift+F10#               Збереження і вихід
@@ -3742,7 +3750,7 @@ $ #Розфарбування файлів#
 ~Конфігурація панелей~@PanelSettings@.
 
  ~Змінити~@HighlightEdit@ параметри будь-якої групи розфарбування можна
-з меню "~Параметри~@OptMenu@" (пункт "Розфарбування файлів").
+з ~Меню параметрів~@OptMenu@" (пункт "Розфарбування файлів").
 
 
 @HighlightList
@@ -3773,8 +3781,8 @@ $ #Список груп розфарбування файлів#
 
 @HighlightEdit
 $ #Редагування розфарбування файлів#
- Діалог #Редагування розфарбування файлів# дозволяє змінити параметри
-групи розфарбування файлів. Кожне визначення групи включає:
+ Діалог #Редагування розфарбування файлів# в ~Меню параметрів~@OptMenu@ дозволяє змінити параметри
+групи розфарбування файлів. Кожне визначення групи ~включає~@Filter@:
 
  - одну або декілька ~масок файлів~@FileMasks@;
 
@@ -3830,7 +3838,7 @@ $ #Конфігурація програми перегляду#
                          moving the cursor.
 
  #Search dialog#           Always returns focus to the search text field in
- #auto-focus#              the ~Viewer~@Viewer@ search dialog.
+ #auto-focus#              the Viewer ~Search~@ViewerSearch@ dialog.
 
  #Розмір табуляції#        Кількість пробілів при показі символа
                          табуляції.
@@ -4458,8 +4466,6 @@ combination.
 позначення з усіх файлiв. #†#
 
  #Ctrl+<Gray *># інвертує поточне позначення, включаючи папки.
-Якщо параметр #Позначати папки# у діалозі ~Конфігурація панелей~@PanelSettings@
-увімкнений, це працює аналогічно #Gray *#.
 
  #Alt+<Gray *># inverts the current selection on files only,
 folders are deselected.
@@ -5138,8 +5144,8 @@ in different areas of execution.
 
 
 @KeyMacroAssign
-$ #Клавіатурні макрокоманди#
- Клавіатурні макрокоманди можуть бути використані для перепризначення
+$ #Клавіатурні макрокоманди: гарячі клавіши#
+ ~Клавіатурні макрокоманди~@KeyMacro@ можуть бути використані для перепризначення
 стандартних клавіш чи комбінацій клавіш Far або для створення нових
 клавіатурних команд.
  Додатково до стандартних комбінацій клавіш Far можна призначати
@@ -5287,7 +5293,7 @@ Far Manager відключає перемальовування екрана. У
 
  2. ^<wrap>Some key combinations (including #Enter#, #Esc#, #F1# and #Ctrl+F5#,
 #MsWheelUp#, #MsWheelDown# and other mouse keys combined with #Ctrl#, #Shift#, #Alt#) cannot be entered
-directly because they have special functions in the dialog. To assign a macro
+directly because they have special functions in the dialog. To ~assign a macro~@KeyMacroAssign@
 to one of those key combinations, select it from the drop-down list.
 
 
@@ -6033,25 +6039,6 @@ of the parameter. If the parameter is set to #-1#, random values will
 be used.
 
  Default value: 0.
-
- This parameter can be changed via ~far:config~@FarConfig@ only.
-
-
-@System.FlagPosixSemantics
-$ #far:config System.FlagPosixSemantics#
- This Boolean parameter specifies whether inserting files into
-~view and edit history~@HistoryViews@ is case sensitive.
-
- If a file being added already exists in the history, it is not inserted
-again; instead, the existing history entry is moved to the most recent
-position.
-
- False - ^<wrap>Case insensitive comparison is used to search the
-history for duplicates.
- True  - Case sensitive comparison is used to search the history for
-duplicates.
-
- Default value: True (the search is case sensitive).
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 

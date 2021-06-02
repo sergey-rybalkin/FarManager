@@ -63,8 +63,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //----------------------------------------------------------------------------
 
 FolderTree::FolderTree(private_tag, int ModalMode, int IsStandalone, bool IsFullScreen):
-	m_Tree(nullptr),
-	m_FindEdit(nullptr),
 	m_ModalMode(ModalMode),
 	m_IsFullScreen(IsFullScreen),
 	m_IsStandalone(IsStandalone)
@@ -276,13 +274,13 @@ bool FolderTree::ProcessKey(const Manager::Key& Key)
 		}
 
 		/*
-		      else
-		      {
-		        if((Key&(~KEY_CTRLMASK)) == KEY_ADD)
-		          Key='+';
-		        else if((Key&(~KEY_CTRLMASK)) == KEY_SUBTRACT)
-		          Key='-';
-		      }
+		else
+		{
+			if((Key&(~KEY_CTRLMASK)) == KEY_ADD)
+				Key = '+';
+			else if((Key&(~KEY_CTRLMASK)) == KEY_SUBTRACT)
+				Key = '-';
+		}
 		*/
 		if (m_FindEdit->ProcessKey(Key))
 		{

@@ -85,9 +85,6 @@ string ConvertDurationToHMS(os::chrono::duration Duration);
 
 string MkStrFTime(string_view Format = {});
 
-bool utc_to_local(os::chrono::time_point UtcTime, SYSTEMTIME& LocalTime);
-bool local_to_utc(const SYSTEMTIME& LocalTime, os::chrono::time_point& UtcTime);
-
 class time_check: noncopyable
 {
 	using clock_type = std::chrono::steady_clock;
@@ -106,5 +103,6 @@ private:
 	const clock_type::duration m_Interval;
 };
 
+std::pair<string, string> get_time();
 
 #endif // DATETIME_HPP_58256A07_E483_4DB7_9DAC_DFA9D90D8A32

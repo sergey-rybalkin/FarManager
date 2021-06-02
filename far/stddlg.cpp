@@ -509,14 +509,28 @@ static os::com::ptr<IFileIsInUse> CreateIFileIsInUse(const string& File)
 
 static size_t enumerate_rm_processes(const string& Filename, DWORD& Reasons, function_ref<bool(string&&)> const Handler)
 {
+	if (!imports.RmStartSession)
+		return 0;
+
 	DWORD Session;
 	wchar_t SessionKey[CCH_RM_SESSION_KEY + 1] = {};
 	if (imports.RmStartSession(&Session, 0, SessionKey) != ERROR_SUCCESS)
 		return 0;
 
-	SCOPE_EXIT{ imports.RmEndSession(Session); };
+	SCOPE_EXIT
+	{
+		if (imports.RmEndSession)
+			imports.RmEndSession(Session);
+	};
+
+	if (!imports.RmRegisterResources)
+		return 0;
+
 	auto FilenamePtr = Filename.c_str();
 	if (imports.RmRegisterResources(Session, 1, &FilenamePtr, 0, nullptr, 0, nullptr) != ERROR_SUCCESS)
+		return 0;
+
+	if (!imports.RmGetList)
 		return 0;
 
 	DWORD RmGetListResult;
@@ -566,7 +580,10 @@ static size_t enumerate_rm_processes(const string& Filename, DWORD& Reasons, fun
 operation OperationFailed(const error_state_ex& ErrorState, string_view const Object, lng Title, string Description, bool AllowSkip, bool AllowSkipAll)
 {
 	std::vector<string> Msg;
+
+	std::optional<os::com::initialize> ComInitialiser;
 	os::com::ptr<IFileIsInUse> FileIsInUse;
+
 	auto Reason = lng::MObjectLockedReasonOpened;
 	bool SwitchBtn = false, CloseBtn = false;
 	const auto Error = ErrorState.Win32Error;
@@ -576,6 +593,8 @@ operation OperationFailed(const error_state_ex& ErrorState, string_view const Ob
 		Error == ERROR_DRIVE_LOCKED)
 	{
 		const auto FullName = ConvertNameToFull(Object);
+
+		ComInitialiser.emplace();
 		FileIsInUse = CreateIFileIsInUse(FullName);
 		if (FileIsInUse)
 		{

@@ -511,6 +511,9 @@ namespace os::fs
 
 	static find_handle FindFirstFileName(const string_view FileName, const DWORD Flags, string& LinkName)
 	{
+		if (!imports.FindFirstFileNameW)
+			return {};
+
 		NTPath NtFileName(FileName);
 		find_handle Handle;
 		// BUGBUG check result
@@ -528,6 +531,9 @@ namespace os::fs
 
 	static bool FindNextFileName(const find_handle& hFindStream, string& LinkName)
 	{
+		if (!imports.FindNextFileNameW)
+			return false;
+
 		return os::detail::ApiDynamicStringReceiver(LinkName, [&](span<wchar_t> Buffer)
 		{
 			auto BufferSize = static_cast<DWORD>(Buffer.size());
@@ -840,7 +846,7 @@ namespace os::fs
 
 		IO_STATUS_BLOCK IoStatusBlock;
 		const auto Status = imports.NtSetInformationFile(m_Handle.native_handle(), &IoStatusBlock, &fbi, sizeof fbi, FileBasicInformation);
-		SetLastError(imports.RtlNtStatusToDosError(Status));
+		set_last_error_from_ntstatus(Status);
 
 		return Status == STATUS_SUCCESS;
 	}
@@ -876,6 +882,9 @@ namespace os::fs
 
 	bool file::GetStorageDependencyInformation(GET_STORAGE_DEPENDENCY_FLAG Flags, ULONG StorageDependencyInfoSize, PSTORAGE_DEPENDENCY_INFO StorageDependencyInfo, PULONG SizeUsed) const
 	{
+		if (!imports.GetStorageDependencyInformation)
+			return false;
+
 		const auto Result = imports.GetStorageDependencyInformation(m_Handle.native_handle(), Flags, StorageDependencyInfoSize, StorageDependencyInfo, SizeUsed);
 		SetLastError(Result);
 		return Result == ERROR_SUCCESS;
@@ -897,7 +906,8 @@ namespace os::fs
 		di->NextEntryOffset = 0xffffffffUL;
 
 		const auto Result = imports.NtQueryDirectoryFile(m_Handle.native_handle(), nullptr, nullptr, nullptr, &IoStatusBlock, FileInformation, static_cast<ULONG>(Length), FileInformationClass, ReturnSingleEntry, pNameString, RestartScan);
-		SetLastError(imports.RtlNtStatusToDosError(Result));
+		set_last_error_from_ntstatus(Result);
+
 		if (Status)
 		{
 			*Status = Result;
@@ -910,7 +920,8 @@ namespace os::fs
 	{
 		IO_STATUS_BLOCK IoStatusBlock;
 		const auto Result = imports.NtQueryInformationFile(m_Handle.native_handle(), &IoStatusBlock, FileInformation, static_cast<ULONG>(Length), FileInformationClass);
-		SetLastError(imports.RtlNtStatusToDosError(Result));
+		set_last_error_from_ntstatus(Result);
+
 		if (Status)
 		{
 			*Status = Result;
@@ -960,12 +971,7 @@ namespace os::fs
 		ObjName.Buffer = UNSAFE_CSTR(TargetPath);
 		OBJECT_ATTRIBUTES ObjAttrs;
 
-		WARNING_PUSH()
-		WARNING_DISABLE_CLANG("-Wextra-semi-stmt")
-
-		InitializeObjectAttributes(&ObjAttrs, &ObjName, 0, nullptr, nullptr);
-
-		WARNING_POP()
+		InitializeObjectAttributes(&ObjAttrs, &ObjName, 0, nullptr, nullptr)
 
 		HANDLE hSymLink;
 		if (imports.NtOpenSymbolicLinkObject(&hSymLink, GENERIC_READ, &ObjAttrs) != STATUS_SUCCESS)
@@ -1728,12 +1734,21 @@ namespace os::fs
 			return false;
 		};
 
+		const auto Existed = exists(NtNewDirectory);
+
 		if (TemplateDirectory.empty())
 			return Create({});
 
-		return Create(NTPath(TemplateDirectory)) ||
-			// CreateDirectoryEx may fail on some FS, try to create anyway.
-			Create({});
+		if (Create(NTPath(TemplateDirectory)))
+			return true;
+
+		// CreateDirectoryEx not only can fail on some buggy FS (e.g. Samba),
+		// but can also leave rubbish (see gh-368). Shame on them.
+		// Try to restore the status quo and fall back to the simple method:
+		if (!Existed && exists(NtNewDirectory))
+			(void)remove_directory(NtNewDirectory);
+
+		return Create({});
 	}
 
 	bool remove_directory(const string_view DirName)
@@ -1779,7 +1794,7 @@ namespace os::fs
 
 		const auto LastError = GetLastError();
 
-		if (STATUS_STOPPED_ON_SYMLINK == GetLastNtStatus() && ERROR_STOPPED_ON_SYMLINK != LastError)
+		if (STATUS_STOPPED_ON_SYMLINK == get_last_nt_status() && ERROR_STOPPED_ON_SYMLINK != LastError)
 		{
 			SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
 			return nullptr;
@@ -1833,13 +1848,13 @@ namespace os::fs
 		if (low::copy_file(strFrom.c_str(), strTo.c_str(), ProgressRoutine, Data, Cancel, CopyFlags))
 			return true;
 
-		if (STATUS_STOPPED_ON_SYMLINK == GetLastNtStatus() && ERROR_STOPPED_ON_SYMLINK != GetLastError())
+		if (STATUS_STOPPED_ON_SYMLINK == get_last_nt_status() && ERROR_STOPPED_ON_SYMLINK != GetLastError())
 		{
 			SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
 			return false;
 		}
 
-		if (STATUS_FILE_IS_A_DIRECTORY == GetLastNtStatus())
+		if (STATUS_FILE_IS_A_DIRECTORY == get_last_nt_status())
 		{
 			SetLastError(ERROR_FILE_EXISTS);
 			return false;
@@ -1864,7 +1879,7 @@ namespace os::fs
 		if (low::move_file(strFrom.c_str(), strTo.c_str(), Flags))
 			return true;
 
-		if (STATUS_STOPPED_ON_SYMLINK == GetLastNtStatus() && ERROR_STOPPED_ON_SYMLINK != GetLastError())
+		if (STATUS_STOPPED_ON_SYMLINK == get_last_nt_status() && ERROR_STOPPED_ON_SYMLINK != GetLastError())
 		{
 			SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
 			return false;
@@ -1983,6 +1998,9 @@ namespace os::fs
 
 	bool GetVolumePathNamesForVolumeName(const string& VolumeName, string& VolumePathNames)
 	{
+		if (!imports.GetVolumePathNamesForVolumeNameW)
+			return false;
+
 		return os::detail::ApiDynamicStringReceiver(VolumePathNames, [&](span<wchar_t> Buffer)
 		{
 			DWORD ReturnLength = 0;

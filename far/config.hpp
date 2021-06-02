@@ -109,7 +109,6 @@ enum ExcludeCmdHistoryType
 	EXCLUDECMDHISTORY_NOTFARASS    = 1_bit, // не помещать в историю команды выполнения ассоциаций файлов
 	EXCLUDECMDHISTORY_NOTPANEL     = 2_bit, // не помещать в историю команды выполнения с панели
 	EXCLUDECMDHISTORY_NOTCMDLINE   = 3_bit, // не помещать в историю команды выполнения с ком.строки
-	//EXCLUDECMDHISTORY_NOTAPPLYCMD   = 4_bit, // не помещать в историю команды выполнения из "Apply Command"
 };
 
 enum QUOTEDNAMETYPE
@@ -529,6 +528,7 @@ public:
 		IntOption StartPos;
 		BoolOption AnsiByDefault;
 		BoolOption SaveInUTF;
+		BoolOption ValidateConversion;
 	};
 
 	struct CodeXLAT
@@ -626,7 +626,7 @@ public:
 	struct DialogsOptions
 	{
 		BoolOption EditBlock;            // Постоянные блоки в строках ввода
-		BoolOption EditHistory;          // Добавлять в историю?
+		Bool3Option EditHistory;          // Добавлять в историю?
 		BoolOption AutoComplete;         // Разрешено автодополнение?
 		BoolOption EULBsClear;           // = 1 - BS в диалогах для UnChanged строки удаляет такую строку также, как и Del
 		IntOption MouseButton;          // Отключение восприятие правой/левой кнопки мыши как команд закрытия окна диалога
@@ -834,8 +834,7 @@ public:
 
 	BoolOption UseRegisteredTypes;
 
-	BoolOption ViewerEditorClock;
-	BoolOption SaveViewHistory;
+	Bool3Option SaveViewHistory;
 	IntOption ViewHistoryCount;
 	IntOption ViewHistoryLifetime;
 
@@ -852,10 +851,10 @@ public:
 	IntOption ChangeDriveMode;
 	BoolOption ChangeDriveDisconnectMode;
 
-	BoolOption SaveHistory;
+	Bool3Option SaveHistory;
 	IntOption HistoryCount;
 	IntOption HistoryLifetime;
-	BoolOption SaveFoldersHistory;
+	Bool3Option SaveFoldersHistory;
 	IntOption FoldersHistoryCount;
 	IntOption FoldersHistoryLifetime;
 	IntOption DialogsHistoryCount;
@@ -947,7 +946,6 @@ public:
 
 	// запоминать логические диски и не опрашивать каждый раз. Для предотвращения "просыпания" "зеленых" винтов.
 	BoolOption RememberLogicalDrives;
-	BoolOption FlagPosixSemantics;
 
 	IntOption MsWheelDelta; // задает смещение для прокрутки
 	IntOption MsWheelDeltaView;
@@ -977,6 +975,7 @@ public:
 
 	BoolOption VirtualTerminalRendering;
 	Bool3Option ClearType;
+	Bool3Option FullWidthAwareRendering;
 
 	Bool3Option PgUpChangeDisk;
 	BoolOption ShowDotsInRoot;

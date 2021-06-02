@@ -99,7 +99,7 @@ if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
       <PrecompiledHeaderFile>headers.hpp</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <WarningLevel>EnableAllWarnings</WarningLevel>
-      <DisableSpecificWarnings>5045</DisableSpecificWarnings>
+      <ExternalWarningLevel>Level4</ExternalWarningLevel>
       <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
       <StringPooling>true</StringPooling>
       <FunctionLevelLinking>true</FunctionLevelLinking>
@@ -196,6 +196,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     </CustomBuild>
     <ClCompile Include="cache.cpp" />
     <ClCompile Include="cddrv.cpp" />
+    <ClCompile Include="char_width.cpp" />
     <ClCompile Include="clipboard.cpp" />
     <ClCompile Include="cmdline.cpp" />
     <ClCompile Include="codepage_selection.cpp" />
@@ -330,10 +331,6 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <ForcedIncludeFiles>disabled_warnings.hpp</ForcedIncludeFiles>
     </ClCompile>
-    <ClCompile Include="sqlite_unicode.c">
-      <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <ForcedIncludeFiles>disabled_warnings.hpp</ForcedIncludeFiles>
-    </ClCompile>
     <ClCompile Include="sqlitedb.cpp" />
     <ClCompile Include="stddlg.cpp" />
     <ClCompile Include="string_sort.cpp" />
@@ -362,6 +359,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="bitflags.hpp" />
     <ClInclude Include="cache.hpp" />
     <ClInclude Include="cddrv.hpp" />
+    <ClInclude Include="char_width.hpp" />
     <ClInclude Include="clipboard.hpp" />
     <ClInclude Include="cmdline.hpp" />
     <ClInclude Include="codepage_selection.hpp" />
@@ -546,7 +544,6 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="setcolor.hpp" />
     <ClInclude Include="shortcuts.hpp" />
     <ClInclude Include="sqlite.hpp" />
-    <ClInclude Include="sqlite_unicode.hpp" />
     <ClInclude Include="sqlitedb.hpp" />
     <ClInclude Include="stddlg.hpp" />
     <ClInclude Include="string_sort.hpp" />
