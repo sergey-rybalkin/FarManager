@@ -786,10 +786,17 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 					Buffer.back().Char = encoding::replace_char;
 					// Stash the actual codepoint. The drawing code will restore it from here:
 					Buffer.back().Attributes.Reserved[0] = Codepoint;
+
+					// As of 10 Jun 2021, neither Conhost nor Terminal can render these properly.
+					// Expect the broken UI
+
+					// Uncomment for testing:
+					// Buffer.back().Attributes.Reserved[0] = 0;
 				}
 				else
 				{
 					// Classic grid mode, nothing we can do :(
+					// Expect the broken UI
 					Buffer.push_back({ Char[1], CurColor });
 				}
 			}
@@ -1735,12 +1742,12 @@ TEST_CASE("wide_chars")
 	{
 		position_parser_state State[2];
 
-		for (const auto [StringPos, VisualShift]: i.StringToVisual)
+		for (const auto& [StringPos, VisualShift]: i.StringToVisual)
 		{
 			REQUIRE(string_pos_to_visual_pos(i.Str, StringPos, 1, &State[0]) == StringPos + VisualShift);
 		}
 
-		for (const auto [VisualPos, StringShift] : i.VisualToString)
+		for (const auto& [VisualPos, StringShift] : i.VisualToString)
 		{
 			REQUIRE(visual_pos_to_string_pos(i.Str, VisualPos, 1, &State[1]) == VisualPos + StringShift);
 		}
