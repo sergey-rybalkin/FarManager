@@ -1,4 +1,47 @@
 --------------------------------------------------------------------------------
+drkns 10.06.2021 22:11:22 +0100 - build 5818
+
+1. Hightly experimental changes in editor color processing and text rendering.
+   Things should be simpler, saner and faster now. Hopefully.
+   Expect bugs. Report ASAP.
+
+2. Continue fullwidth-aware rendering.
+
+3. Corrections of text attributes merging.
+
+4. GCC warnings.
+
+--------------------------------------------------------------------------------
+drkns 09.06.2021 22:54:58 +0100 - build 5817
+
+1. Correction of 5630: no need to call the sorting plugin in the "Unsorted" mode.
+
+--------------------------------------------------------------------------------
+drkns 07.06.2021 23:54:29 +0100 - build 5816
+
+1. Forum: sorting on plugin panels is too slow.
+
+--------------------------------------------------------------------------------
+drkns 07.06.2021 22:28:28 +0100 - build 5815
+
+1. Continue fullwidth-aware rendering.
+
+--------------------------------------------------------------------------------
+drkns 06.06.2021 21:01:06 +0100 - build 5814
+
+1. Basic support for UTF-16 surrogates.
+
+--------------------------------------------------------------------------------
+drkns 05.06.2021 23:26:24 +0100 - build 5813
+
+1. Continue fullwidth-aware rendering.
+
+--------------------------------------------------------------------------------
+drkns 03.06.2021 23:29:55 +0100 - build 5812
+
+1. Workarounds for EMenu positioning in Windows Terminal.
+
+--------------------------------------------------------------------------------
 drkns 02.06.2021 18:45:47 +0100 - build 5811
 
 1. Sanitise C1 control characters in output.

@@ -728,14 +728,14 @@ void Text(point Where, const FarColor& Color, string_view const Str)
 	Text(Str);
 }
 
-static void string_to_buffer_simple(string_view const Str, std::vector<FAR_CHAR_INFO>& Buffer)
+static void string_to_buffer_simple(string_view const Str, std::vector<FAR_CHAR_INFO>& Buffer, size_t)
 {
 	std::transform(ALL_CONST_RANGE(Str), std::back_inserter(Buffer), [](wchar_t c) { return FAR_CHAR_INFO{ c, CurColor }; });
 }
 
-static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_CHAR_INFO>& Buffer)
+static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_CHAR_INFO>& Buffer, size_t const MaxSize)
 {
-	for (const auto MaxSize = Str.size(); !Str.empty() && Buffer.size() != MaxSize; )
+	while(!Str.empty() && Buffer.size() != MaxSize)
 	{
 		wchar_t Char[]{ Str[0], 0 };
 
@@ -758,7 +758,7 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 			if (Buffer.size() == MaxSize)
 			{
 				// No space left for the trailing char
-				Buffer.back().Char = L'…';
+				Buffer.back().Char = char_width::is_wide(L'…')? L' ' : L'…';
 				break;
 			}
 
@@ -786,10 +786,18 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 					Buffer.back().Char = encoding::replace_char;
 					// Stash the actual codepoint. The drawing code will restore it from here:
 					Buffer.back().Attributes.Reserved[0] = Codepoint;
+
+					// As of 10 Jun 2021, neither Conhost nor Terminal can render these properly.
+					// Expect the broken UI
+
+					// Uncomment for testing:
+					// Buffer.back().Attributes.Reserved[0] = 0;
 				}
 				else
 				{
 					// Classic grid mode, nothing we can do :(
+					// Expect the broken UI
+					Buffer.push_back({ Char[1], CurColor });
 				}
 			}
 			else
@@ -800,40 +808,71 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 	}
 }
 
-void Text(string_view Str)
+size_t Text(string_view Str, size_t const MaxWidth)
 {
 	if (Str.empty())
-		return;
+		return 0;
 
 	std::vector<FAR_CHAR_INFO> Buffer;
 	Buffer.reserve(Str.size());
 
-	(char_width::is_enabled()?string_to_buffer_full_width_aware : string_to_buffer_simple)(Str, Buffer);
+	(char_width::is_enabled()?string_to_buffer_full_width_aware : string_to_buffer_simple)(Str, Buffer, MaxWidth);
 
 	Global->ScrBuf->Write(CurX, CurY, Buffer);
 	CurX += static_cast<int>(Buffer.size());
+
+	return Buffer.size();
 }
 
-
-void Text(lng MsgId)
+size_t Text(string_view Str)
 {
-	Text(msg(MsgId));
+	return Text(Str, Str.size());
 }
 
-void VText(string_view const Str)
+size_t Text(wchar_t const Char, size_t const MaxWidth)
+{
+	return Text({ &Char, 1 }, MaxWidth);
+}
+
+size_t Text(wchar_t const Char)
+{
+	return Text(Char, 1);
+}
+
+size_t Text(lng const MsgId, size_t const MaxWidth)
+{
+	return Text(msg(MsgId), MaxWidth);
+}
+
+size_t Text(lng const MsgId)
+{
+	const auto& Str = msg(MsgId);
+	return Text(Str, Str.size());
+}
+
+size_t VText(string_view const Str, size_t const MaxWidth)
 {
 	if (Str.empty())
-		return;
+		return 0;
+
+	size_t OccupiedWidth = 0;
 
 	const auto StartCurX = CurX;
 
 	for (const auto i: Str)
 	{
 		GotoXY(CurX, CurY);
-		Text(i);
+		OccupiedWidth = std::max(OccupiedWidth, Text(i, MaxWidth));
 		++CurY;
 		CurX = StartCurX;
 	}
+
+	return OccupiedWidth;
+}
+
+size_t VText(string_view const Str)
+{
+	return VText(Str, 1);
 }
 
 static void HiTextBase(string_view const Str, function_ref<void(string_view, bool)> const TextHandler, function_ref<void(wchar_t)> const HilightHandler)
@@ -926,7 +965,7 @@ static size_t unescape(string_view const Str, function_ref<bool(wchar_t)> const 
 class text_unescape
 {
 public:
-	explicit text_unescape(function_ref<void(string_view)> const PutString, function_ref<bool(wchar_t)> const PutChar, function_ref<void()> const Commit):
+	text_unescape(function_ref<void(string_view)> const PutString, function_ref<bool(wchar_t)> const PutChar, function_ref<void()> const Commit):
 		m_PutString(PutString),
 		m_PutChar(PutChar),
 		m_Commit(Commit)
@@ -948,23 +987,48 @@ private:
 	function_ref<void()> m_Commit;
 };
 
-void HiText(string_view const Str,const FarColor& HiColor, bool const isVertText)
+static size_t HiTextImpl(string_view const Str, const FarColor& HiColor, bool const Vertical, size_t MaxWidth)
 {
-	using text_func = void (*)(string_view);
+	using text_func = size_t(*)(string_view, size_t);
 	const text_func fText = Text, fVText = VText; //BUGBUG
-	const auto TextFunc  = isVertText ? fVText : fText;
+	const auto TextFunc  = Vertical? fVText : fText;
 
 	string Buffer;
-	const auto PutChar = [&](wchar_t const Ch){ Buffer.push_back(Ch); return true; };
-	const auto Commit = [&]{ TextFunc(Buffer); Buffer.clear(); };
+	size_t OccupiedWidth = 0;
 
-	HiTextBase(Str, text_unescape(TextFunc, PutChar, Commit), [&TextFunc, &HiColor](wchar_t c)
+	const auto PutString = [&](string_view const StrPart){ OccupiedWidth += TextFunc(StrPart, MaxWidth - OccupiedWidth); };
+	const auto PutChar = [&](wchar_t const Ch){ Buffer.push_back(Ch); return true; };
+	const auto Commit = [&]{ OccupiedWidth += TextFunc(Buffer, MaxWidth - OccupiedWidth); Buffer.clear(); };
+
+	HiTextBase(Str, text_unescape(PutString, PutChar, Commit), [&](wchar_t c)
 	{
 		const auto SaveColor = CurColor;
 		SetColor(HiColor);
-		TextFunc({ &c, 1 });
+		OccupiedWidth += TextFunc({ &c, 1 }, MaxWidth - OccupiedWidth);
 		SetColor(SaveColor);
 	});
+
+	return OccupiedWidth;
+}
+
+size_t HiText(string_view const Str, const FarColor& Color, size_t const MaxWidth)
+{
+	return HiTextImpl(Str, Color, false, MaxWidth);
+}
+
+size_t HiText(string_view const Str, const FarColor& Color)
+{
+	return HiText(Str, Color, Str.size());
+}
+
+size_t HiVText(string_view const Str, const FarColor& Color, size_t const MaxWidth)
+{
+	return HiTextImpl(Str, Color, true, MaxWidth);
+}
+
+size_t HiVText(string_view const Str, const FarColor& Color)
+{
+	return HiVText(Str, Color, Str.size());
 }
 
 string HiText2Str(string_view const Str, size_t* HotkeyVisualPos)
@@ -1103,39 +1167,128 @@ bool DoWeReallyHaveToScroll(short Rows)
 	return !std::all_of(ALL_CONST_RANGE(BufferBlock.vector()), [](const FAR_CHAR_INFO& i) { return i.Char == L' '; });
 }
 
-size_t string_length_to_visual(string_view Str)
+size_t string_pos_to_visual_pos(string_view Str, size_t const StringPos, size_t const TabSize, position_parser_state* SavedState)
 {
-	if (!char_width::is_enabled())
-		return Str.size();
+	if (!StringPos || Str.empty())
+		return StringPos;
 
-	size_t Result = 0;
+	const auto CharWidthEnabled = char_width::is_enabled();
 
-	while (!Str.empty())
+	position_parser_state State;
+
+	if (SavedState && StringPos > SavedState->StringIndex)
+		State = *SavedState;
+
+	const auto nop_signal = [](size_t, size_t){};
+	const auto signal = State.signal? State.signal : nop_signal;
+
+	const auto End = std::min(Str.size(), StringPos);
+	while (State.StringIndex < End)
 	{
-		const auto Codepoint = encoding::utf16::extract_codepoint(Str);
-		Str.remove_prefix(Codepoint > std::numeric_limits<wchar_t>::max()? 2 : 1);
-		Result += char_width::is_wide(Codepoint)? 2 : 1;
+		size_t
+			CharStringIncrement,
+			CharVisualIncrement;
+
+		if (Str[State.StringIndex] == L'\t')
+		{
+			CharStringIncrement = 1;
+			CharVisualIncrement = TabSize - State.VisualIndex % TabSize;
+		}
+		else if (CharWidthEnabled)
+		{
+			const auto Codepoint = encoding::utf16::extract_codepoint(Str.substr(State.StringIndex));
+			CharStringIncrement = Codepoint > std::numeric_limits<wchar_t>::max()? 2 : 1;
+			CharVisualIncrement = char_width::is_wide(Codepoint)? 2 : 1;
+		}
+		else
+		{
+			CharStringIncrement = 1;
+			CharVisualIncrement = 1;
+		}
+
+		signal(State.StringIndex + CharStringIncrement, State.VisualIndex + CharVisualIncrement);
+
+		State.StringIndex += CharStringIncrement;
+
+		if (State.StringIndex > End)
+			break;
+
+		State.VisualIndex += CharVisualIncrement;
 	}
 
-	return Result;
+	if (SavedState)
+		*SavedState = State;
+
+	return State.VisualIndex + (StringPos > Str.size()? StringPos - Str.size() : 0);
 }
 
-size_t visual_pos_to_string_pos(string_view Str, size_t const Pos)
+size_t visual_pos_to_string_pos(string_view Str, size_t const VisualPos, size_t const TabSize, position_parser_state* SavedState)
 {
-	if (!char_width::is_enabled())
-		return Pos;
+	if (!VisualPos || Str.empty())
+		return VisualPos;
 
-	const auto StrSize = Str.size();
-	size_t Size = 0;
+	const auto CharWidthEnabled = char_width::is_enabled();
 
-	while (!Str.empty() && Size < Pos)
+	position_parser_state State;
+
+	if (SavedState && VisualPos > SavedState->VisualIndex)
+		State = *SavedState;
+
+	const auto nop_signal = [](size_t, size_t){};
+	const auto signal = State.signal? State.signal : nop_signal;
+
+	const auto End = Str.size();
+
+	while (State.VisualIndex < VisualPos && State.StringIndex != End)
 	{
-		const auto Codepoint = encoding::utf16::extract_codepoint(Str);
-		Str.remove_prefix(Codepoint > std::numeric_limits<wchar_t>::max() ? 2 : 1);
-		Size += char_width::is_wide(Codepoint)? 2 : 1;
+		size_t
+			CharVisualIncrement,
+			CharStringIncrement;
+
+		if (Str[State.StringIndex] == L'\t')
+		{
+			CharVisualIncrement = TabSize - State.VisualIndex % TabSize;
+			CharStringIncrement = 1;
+		}
+		else if (CharWidthEnabled)
+		{
+			const auto Codepoint = encoding::utf16::extract_codepoint(Str.substr(State.StringIndex));
+			CharVisualIncrement = char_width::is_wide(Codepoint)? 2 : 1;
+			CharStringIncrement = Codepoint > std::numeric_limits<wchar_t>::max()? 2 : 1;
+		}
+		else
+		{
+			CharVisualIncrement = 1;
+			CharStringIncrement = 1;
+		}
+
+		signal(State.StringIndex + CharStringIncrement, State.VisualIndex + CharVisualIncrement);
+
+		State.VisualIndex += CharVisualIncrement;
+
+		if (State.VisualIndex > VisualPos)
+			break;
+
+		State.StringIndex += CharStringIncrement;
 	}
 
-	return StrSize - Str.size() + (Pos > Size? Pos - Size : 0);
+	if (SavedState)
+		*SavedState = State;
+
+	return State.StringIndex + (State.VisualIndex < VisualPos? VisualPos - State.VisualIndex : 0);
+}
+
+bool is_valid_surrogate_pair(string_view const Str)
+{
+	if (Str.size() < 2)
+		return false;
+
+	return encoding::utf16::is_valid_surrogate_pair(Str[0], Str[1]);
+}
+
+bool is_valid_surrogate_pair(wchar_t First, wchar_t Second)
+{
+	return encoding::utf16::is_valid_surrogate_pair(First, Second);
 }
 
 void GetText(rectangle Where, matrix<FAR_CHAR_INFO>& Dest)
@@ -1148,11 +1301,6 @@ void PutText(rectangle Where, const FAR_CHAR_INFO *Src)
 	const size_t Width = Where.width();
 	for (int Y = Where.top; Y <= Where.bottom; ++Y, Src += Width)
 		Global->ScrBuf->Write(Where.left, Y, { Src, Width });
-}
-
-void BoxText(string_view const Str, bool const IsVert)
-{
-	IsVert? VText(Str) : Text(Str);
 }
 
 /*
@@ -1529,4 +1677,157 @@ TEST_CASE("interf.highlight")
 		REQUIRE(HiFindRealPos(i.Input, i.PosVisual) == i.PosReal);
 	}
 }
+
+TEST_CASE("wide_chars")
+{
+	static const struct
+	{
+		string_view Str;
+		std::initializer_list<std::pair<size_t, int>>
+			StringToVisual,
+			VisualToString;
+	}
+	Tests[]
+	{
+		{
+			{}, // Baseline, half width
+			{ { 0, +0 }, { 1, +0 }, { 2, +0 }, { 3, +0 }, { 4, +0 }, },
+			{ { 0, +0 }, { 1, +0 }, { 2, +0 }, { 3, +0 }, { 4, +0 }, },
+		},
+		{
+			L"1"sv, // ANSI, half width
+			{ { 0, +0 }, { 1, +0 }, { 2, +0 }, { 3, +0 }, { 4, +0 }, },
+			{ { 0, +0 }, { 1, +0 }, { 2, +0 }, { 3, +0 }, { 4, +0 }, },
+		},
+		{
+			L"あ"sv, // Hiragana, full width
+			{ { 0, +0 }, { 1, +1 }, { 2, +1 }, { 3, +1 }, { 4, +1 }, },
+			{ { 0, +0 }, { 1, -1 }, { 2, -1 }, { 3, -1 }, { 4, -1 }, },
+		},
+		{
+			L"ああ"sv, // Hiragana, full width
+			{ { 0, +0 }, { 1, +1 }, { 2, +2 }, { 3, +2 }, { 4, +2 }, },
+			{ { 0, +0 }, { 1, -1 }, { 2, -1 }, { 3, -2 }, { 4, -2 }, },
+		},
+		{
+			L"𐀀"sv, // Surrogate, half width
+			{ { 0, +0 }, { 1, -1 }, { 2, -1 }, { 3, -1 }, { 4, -1 }, },
+			{ { 0, +0 }, { 1, +1 }, { 2, +1 }, { 3, +1 }, { 4, +1 }, },
+		},
+		{
+			L"𐀀𐀀"sv, // Surrogate, half width
+			{ { 0, +0 }, { 1, -1 }, { 2, -1 }, { 3, -2 }, { 4, -2 }, },
+			{ { 0, +0 }, { 1, +1 }, { 2, +2 }, { 3, +2 }, { 4, +2 }, },
+		},
+		{
+			L"𠲖"sv, // Surrogate, full width
+			{ { 0, +0 }, { 1, -1 }, { 2, +0 }, { 3, +0 }, { 4, +0 }, },
+			{ { 0, +0 }, { 1, -1 }, { 2, +0 }, { 3, +0 }, { 4, +0 }, },
+		},
+		{
+			L"𠲖𠲖"sv, // Surrogate, full width
+			{ { 0, +0 }, { 1, -1 }, { 2, +0 }, { 3, -1 }, { 4, +0 }, },
+			{ { 0, +0 }, { 1, -1 }, { 2, +0 }, { 3, -1 }, { 4, +0 }, },
+		},
+		{
+			L"残酷な天使のように少年よ神話になれ"sv,
+			{ {17, +17}, },
+			{ {34, -17} } },
+
+	};
+
+	char_width::enable(1);
+
+	for (const auto& i: Tests)
+	{
+		position_parser_state State[2];
+
+		for (const auto& [StringPos, VisualShift]: i.StringToVisual)
+		{
+			REQUIRE(string_pos_to_visual_pos(i.Str, StringPos, 1, &State[0]) == StringPos + VisualShift);
+		}
+
+		for (const auto& [VisualPos, StringShift] : i.VisualToString)
+		{
+			REQUIRE(visual_pos_to_string_pos(i.Str, VisualPos, 1, &State[1]) == VisualPos + StringShift);
+		}
+	}
+
+	char_width::enable(0);
+}
+
+TEST_CASE("tabs")
+{
+	static string_view const Strs[]
+	{
+		{},
+		L"1\t2"sv,
+		L"\t1\t12\t123\t1234\t"sv,
+		L"\t𐀀\t12\t𐀀天\t日本\t"sv,
+	};
+
+	static const struct
+	{
+		size_t Str, TabSize, VisualPos, RealPos;
+		bool TestRealToVisual;
+	}
+	Tests[]
+	{
+		{ 0, 0,  0,  0, true,  },
+		{ 0, 0,  1,  1, true,  },
+
+		{ 1, 0,  0,  0, true,  },
+
+		{ 1, 1,  0,  0, true,  },
+		{ 1, 1,  1,  1, true,  },
+		{ 1, 1,  2,  2, true,  },
+		{ 1, 1,  3,  3, true,  },
+
+		{ 1, 2,  0,  0, true,  },
+		{ 1, 2,  1,  1, true,  },
+		{ 1, 2,  2,  2, true,  },
+		{ 1, 2,  3,  3, true,  },
+
+		{ 1, 3,  0,  0, true,  },
+		{ 1, 3,  1,  1, true,  },
+		{ 1, 3,  2,  1, false, },
+		{ 1, 3,  3,  2, true,  },
+
+		{ 2, 4,  0,  0, true,  },
+		{ 2, 4,  1,  0, false, },
+		{ 2, 4,  2,  0, false, },
+		{ 2, 4,  3,  0, false, },
+		{ 2, 4,  4,  1, true,  },
+		{ 2, 4,  5,  2, true,  },
+		{ 2, 4,  6,  2, false, },
+		{ 2, 4,  7,  2, false, },
+		{ 2, 4,  8,  3, true,  },
+		{ 2, 4,  9,  4, true,  },
+		{ 2, 4, 10,  5, true,  },
+		{ 2, 4, 11,  5, false, },
+		{ 2, 4, 12,  6, true,  },
+		{ 2, 4, 13,  7, true,  },
+		{ 2, 4, 14,  8, true,  },
+		{ 2, 4, 15,  9, true,  },
+		{ 2, 4, 16, 10, true,  },
+		{ 2, 4, 17, 11, true,  },
+		{ 2, 4, 18, 12, true,  },
+		{ 2, 4, 19, 13, true,  },
+		{ 2, 4, 20, 14, true,  },
+		{ 2, 4, 21, 14, false, },
+		{ 2, 4, 22, 14, false, },
+		{ 2, 4, 23, 14, false, },
+		{ 2, 4, 24, 15, false, },
+		{ 2, 4, 25, 16, true,  },
+	};
+
+	for (const auto& i : Tests)
+	{
+		REQUIRE(i.RealPos == visual_pos_to_string_pos(Strs[i.Str], i.VisualPos, i.TabSize));
+
+		if (i.TestRealToVisual)
+			REQUIRE(i.VisualPos == string_pos_to_visual_pos(Strs[i.Str], i.RealPos, i.TabSize));
+	}
+}
+
 #endif
