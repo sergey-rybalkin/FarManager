@@ -2732,8 +2732,12 @@ int FarMacroApi::waitkeyFunc()
 {
 	auto Params = parseParams(2, mData);
 	const auto Type = static_cast<long>(Params[1].asInteger());
-	const auto Period = static_cast<long>(Params[0].asInteger());
-	auto Key = WaitKey(static_cast<DWORD>(-1), Period);
+
+	std::optional<std::chrono::milliseconds> TimeoutOpt;
+	if (const auto Timeout = static_cast<long>(Params[0].asInteger()))
+		TimeoutOpt = Timeout * 1ms;
+
+	const auto Key = WaitKey(static_cast<DWORD>(-1), TimeoutOpt);
 
 	if (!Type)
 	{
@@ -2746,11 +2750,8 @@ int FarMacroApi::waitkeyFunc()
 		return !strKeyText.empty();
 	}
 
-	if (Key == KEY_NONE)
-		Key=-1;
-
-	PassNumber(Key);
-	return Key != static_cast<DWORD>(-1);
+	PassNumber(Key == KEY_NONE? -1 : Key);
+	return Key != KEY_NONE;
 }
 
 // n=min(n1,n2)
@@ -4322,7 +4323,7 @@ int FarMacroApi::panelsetposFunc()
 				//SelPanel->Show();
 				// <Mantis#0000289> - грозно, но со вкусом :-)
 				//ShellUpdatePanels(SelPanel);
-				SelPanel->UpdateIfChanged(false);
+				SelPanel->UpdateIfChanged();
 				Global->WindowManager->RefreshWindow(Global->WindowManager->GetCurrentWindow());
 				// </Mantis#0000289>
 				Ret = static_cast<long long>(SelPanel->GetCurrentPos()) + 1;

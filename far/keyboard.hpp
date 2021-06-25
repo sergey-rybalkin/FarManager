@@ -61,7 +61,7 @@ enum
 };
 
 void ClearKeyQueue();
-void wake_main_loop();
+void main_loop_process_messages();
 
 struct FarKeyboardState
 {
@@ -139,13 +139,9 @@ DWORD GetInputRecord(INPUT_RECORD *rec,bool ExcludeMacro=false,bool ProcessMouse
 DWORD GetInputRecordNoMacroArea(INPUT_RECORD *rec,bool AllowSynchro=true);
 DWORD PeekInputRecord(INPUT_RECORD *rec,bool ExcludeMacro=true);
 bool IsRepeatedKey();
-unsigned int ShieldCalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros = nullptr);
-unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros = nullptr);
-DWORD WaitKey(DWORD KeyWait = static_cast<DWORD>(-1), DWORD delayMS = 0, bool ExcludeMacro = true);
+DWORD WaitKey(DWORD KeyWait = static_cast<DWORD>(-1), std::optional<std::chrono::milliseconds> Timeout = {}, bool ExcludeMacro = true);
 int SetFLockState(unsigned vkKey, int State);
 bool WriteInput(int Key);
-int IsNavKey(DWORD Key);
-int IsShiftKey(DWORD Key);
 bool IsModifKey(DWORD Key);
 bool IsInternalKeyReal(unsigned int Key);
 bool IsCharKey(unsigned int Key);

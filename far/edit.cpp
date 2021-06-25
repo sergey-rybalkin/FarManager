@@ -116,9 +116,12 @@ static int Recurse=0;
 static const wchar_t EDMASK_ANY    = L'X'; // позволяет вводить в строку ввода любой символ;
 static const wchar_t EDMASK_DSS    = L'#'; // позволяет вводить в строку ввода цифры, пробел и знак минуса;
 static const wchar_t EDMASK_DIGIT  = L'9'; // позволяет вводить в строку ввода только цифры;
-static const wchar_t EDMASK_DIGITS = L'N'; // позволяет вводить в строку ввода только цифры и пробелы;
 static const wchar_t EDMASK_ALPHA  = L'A'; // позволяет вводить в строку ввода только буквы.
 static const wchar_t EDMASK_HEX    = L'H'; // позволяет вводить в строку ввода шестнадцатиричные символы.
+
+// Unofficial
+static const wchar_t EDMASK_DIGITS = L'N';  // позволяет вводить в строку ввода только цифры и пробелы;
+static const wchar_t EDMASK_BIN    = L'\1'; // 0 and 1 only
 
 Edit::Edit(window_ptr Owner):
 	SimpleScreenObject(std::move(Owner))
@@ -316,7 +319,7 @@ void Edit::FastShow(const ShowInfo* Info)
 		}
 
 		const auto Begin = OutStrTmp.cbegin() + std::min(static_cast<size_t>(RealLeftPos), OutStrTmp.size());
-		for(auto i = Begin, End = OutStrTmp.cend(); i != End; ++i)
+		for(auto i = Begin, End = OutStrTmp.cend(); i != End && static_cast<size_t>(i - Begin) < RealRight; ++i)
 		{
 			if (*i == L' ')
 			{
@@ -336,11 +339,6 @@ void Edit::FastShow(const ShowInfo* Info)
 			else
 			{
 				OutStr.push_back(!*i? L' ' : *i);
-			}
-
-			if (static_cast<size_t>(i - Begin) >= RealRight)
-			{
-				break;
 			}
 		}
 
@@ -648,25 +646,13 @@ bool Edit::ProcessKey(const Manager::Key& Key)
 
 	if (
 		!IntKeyState.ShiftPressed() &&
-		(!Global->CtrlObject->Macro.IsExecuting() || IsNavKey(LocalKey)) &&
-		!IsShiftKey(LocalKey) &&
 		!Recurse &&
-		// No single ctrl, alt, shift key or their combination
-		LocalKey & ~KEY_CTRLMASK &&
-		none_of(LocalKey, KEY_NONE, KEY_INS, KEY_KILLFOCUS, KEY_GOTFOCUS) &&
-		none_of(LocalKey & ~KEY_CTRLMASK, KEY_LWIN, KEY_RWIN, KEY_APPS)
+		is_clear_selection_key(LocalKey)
 	)
 	{
 		m_Flags.Clear(FEDITLINE_MARKINGBLOCK);
 
-		if (
-			!m_Flags.CheckAny(FEDITLINE_PERSISTENTBLOCKS | FEDITLINE_EDITORMODE) &&
-			none_of(LocalKey,
-				KEY_CTRLINS, KEY_RCTRLINS, KEY_CTRLNUMPAD0, KEY_RCTRLNUMPAD0,
-				KEY_SHIFTDEL, KEY_SHIFTNUMDEL, KEY_SHIFTDECIMAL,
-				KEY_CTRLQ, KEY_RCTRLQ,
-				KEY_SHIFTINS, KEY_SHIFTNUMPAD0)
-			)
+		if (!m_Flags.CheckAny(FEDITLINE_PERSISTENTBLOCKS | FEDITLINE_EDITORMODE))
 		{
 			if (m_SelStart != -1 || m_SelEnd )
 			{
@@ -778,7 +764,7 @@ bool Edit::ProcessKey(const Manager::Key& Key)
 				m_Flags.Set(FEDITLINE_MARKINGBLOCK);
 			}
 
-			if ((m_SelStart != -1 && m_SelEnd == -1) || m_SelEnd > SavedCurPos)
+			if ((m_SelStart != -1 && m_SelEnd == -1) || (SavedCurPos != m_CurPos && m_SelEnd > SavedCurPos))
 			{
 				if (m_CurPos == m_SelEnd)
 					RemoveSelection();
@@ -786,7 +772,7 @@ bool Edit::ProcessKey(const Manager::Key& Key)
 					Select(m_CurPos, m_SelEnd);
 			}
 			else
-				AddSelect(SavedCurPos, m_CurPos);
+				AddSelect(SavedCurPos, m_CurPos == SavedCurPos && m_CurPos < m_Str.size()? m_Str.size() : m_CurPos);
 
 			Show();
 
@@ -1176,24 +1162,31 @@ bool Edit::ProcessKey(const Manager::Key& Key)
 
 			if (!Mask.empty())
 			{
-				const size_t MaskLen = Mask.size();
-				size_t j = m_CurPos;
-				for (size_t i = m_CurPos; i < MaskLen; ++i)
+				if (Mask[m_CurPos] == EDMASK_BIN)
 				{
-					if (i+1 < MaskLen && CheckCharMask(Mask[i+1]))
-					{
-						while (j < MaskLen && !CheckCharMask(Mask[j]))
-							j++;
-
-						if (!CharInMask(m_Str[i + 1], Mask[j]))
-							break;
-
-						m_Str[j]=m_Str[i+1];
-						j++;
-					}
+					m_Str[m_CurPos] = L'0';
 				}
+				else
+				{
+					const size_t MaskLen = Mask.size();
+					size_t j = m_CurPos;
+					for (size_t i = m_CurPos; i < MaskLen; ++i)
+					{
+						if (i + 1 < MaskLen && CheckCharMask(Mask[i + 1]))
+						{
+							while (j < MaskLen && !CheckCharMask(Mask[j]))
+								j++;
 
-				m_Str[j]=L' ';
+							if (!CharInMask(m_Str[i + 1], Mask[j]))
+								break;
+
+							m_Str[j] = m_Str[i + 1];
+							j++;
+						}
+					}
+
+					m_Str[j] = L' ';
+				}
 			}
 			else
 			{
@@ -1378,24 +1371,16 @@ bool Edit::ProcessKey(const Manager::Key& Key)
 // обработка Ctrl-Q
 bool Edit::ProcessCtrlQ()
 {
-	INPUT_RECORD rec;
 	for (;;)
 	{
+		INPUT_RECORD rec;
 		const auto Key = GetInputRecord(&rec);
+		if (Key == KEY_NONE)
+			continue;
 
-		if (none_of(Key, KEY_NONE, KEY_IDLE) && rec.Event.KeyEvent.uChar.UnicodeChar)
-			break;
-
-		if (Key==KEY_CONSOLE_BUFFER_RESIZE)
-		{
-			// BUGBUG currently GetInputRecord will never return anything but KEY_NONE if manager queue isn't empty,
-			// and it will be non-empty if we allow async resizing here.
-			// It's better to exit from Ctrl-Q mode at all than hang.
-			return false;
-		}
+		if (rec.Event.KeyEvent.uChar.UnicodeChar)
+			return InsertKey(rec.Event.KeyEvent.uChar.UnicodeChar);
 	}
-
-	return InsertKey(rec.Event.KeyEvent.uChar.UnicodeChar);
 }
 
 bool Edit::InsertKey(wchar_t const Key)
@@ -2014,7 +1999,7 @@ void Edit::DeleteBlock()
 		{
 			if (CheckCharMask(Mask[i]))
 			{
-				m_Str[i] = L' ';
+				m_Str[i] = MaskDefaultChar(Mask[i]);
 			}
 		}
 		m_CurPos=m_SelStart;
@@ -2080,7 +2065,7 @@ void Edit::ApplyColor(int XPos, int FocusedLeftPos, positions_cache& RealToVisua
 			continue;
 
 		auto First = RealToVisual.get(CurItem.StartPos);
-		auto LastFirst = RealToVisual.get(CurItem.EndPos);
+		const auto LastFirst = RealToVisual.get(CurItem.EndPos);
 		int LastLast = LastFirst;
 		for (int i = 0; i != 2; ++i)
 		{
@@ -2184,18 +2169,58 @@ void Edit::Xlat(bool All)
 
 bool Edit::CharInMask(wchar_t const Char, wchar_t const Mask)
 {
-	return
-		(Mask == EDMASK_ANY) ||
-		(Mask == EDMASK_DSS && (std::iswdigit(Char) || Char == L' ' || Char == L'-')) ||
-		(Mask == EDMASK_DIGITS && (std::iswdigit(Char) || Char == L' ')) ||
-		(Mask == EDMASK_DIGIT && (std::iswdigit(Char))) ||
-		(Mask == EDMASK_ALPHA && is_alpha(Char)) ||
-		(Mask == EDMASK_HEX && std::iswxdigit(Char));
+	switch (Mask)
+	{
+	case EDMASK_ANY:
+		return true;
+
+	case EDMASK_DSS:
+		return std::iswdigit(Char) || Char == L' ' || Char == L'-';
+
+	case EDMASK_DIGIT:
+		return std::iswdigit(Char) != 0;
+
+	case EDMASK_ALPHA:
+		return is_alpha(Char);
+
+	case EDMASK_HEX:
+		return std::iswxdigit(Char) != 0;
+
+	case EDMASK_DIGITS:
+		return std::iswdigit(Char) || Char == L' ';
+
+	case EDMASK_BIN:
+		return Char == L'0' || Char == L'1';
+
+	default:
+		return false;
+	}
 }
 
 int Edit::CheckCharMask(wchar_t Chr)
 {
-	return Chr==EDMASK_ANY || Chr==EDMASK_DIGIT || Chr==EDMASK_DIGITS || Chr==EDMASK_DSS || Chr==EDMASK_ALPHA || Chr==EDMASK_HEX;
+	return any_of(
+		Chr,
+		EDMASK_ANY,
+		EDMASK_DIGIT,
+		EDMASK_DSS,
+		EDMASK_ALPHA,
+		EDMASK_HEX,
+		EDMASK_DIGITS,
+		EDMASK_BIN
+	);
+}
+
+int Edit::MaskDefaultChar(wchar_t const Mask)
+{
+	switch (Mask)
+	{
+	case EDMASK_BIN:
+		return L'0';
+
+	default:
+		return L' ';
+	}
 }
 
 void Edit::SetDialogParent(DWORD Sets)
@@ -2296,4 +2321,22 @@ bool Edit::is_valid_surrogate_pair_at(size_t const Position) const
 {
 	string_view const Str(m_Str);
 	return Position < Str.size() && is_valid_surrogate_pair(Str.substr(Position));
+}
+
+bool Edit::is_clear_selection_key(unsigned const Key)
+{
+	static const unsigned int Keys[]
+	{
+		KEY_LEFT,      KEY_NUMPAD4,
+		KEY_RIGHT,     KEY_NUMPAD6,
+		KEY_HOME,      KEY_NUMPAD7,
+		KEY_END,       KEY_NUMPAD1,
+		KEY_CTRLHOME,  KEY_RCTRLHOME,  KEY_CTRLNUMPAD7,  KEY_RCTRLNUMPAD7,
+		KEY_CTRLEND,   KEY_RCTRLEND,   KEY_CTRLNUMPAD1,  KEY_RCTRLNUMPAD1,
+		KEY_CTRLLEFT,  KEY_RCTRLLEFT,  KEY_CTRLNUMPAD4,  KEY_RCTRLNUMPAD4,
+		KEY_CTRLRIGHT, KEY_RCTRLRIGHT, KEY_CTRLNUMPAD7,  KEY_RCTRLNUMPAD7,
+		KEY_CTRLS,     KEY_RCTRLS,
+	};
+
+	return contains(Keys, Key);
 }
