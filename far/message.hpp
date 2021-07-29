@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Common:
 #include "common/2d/rectangle.hpp"
+#include "common/preprocessor.hpp"
 #include "common/range.hpp"
 
 // External:
@@ -58,15 +59,16 @@ enum
 
 	MSG_KILLSAVESCREEN = 28_bit,
 	MSG_NOPLUGINS      = 29_bit,
-	MSG_NOFLUSH        = 30_bit,
 };
 
 class Plugin;
 class Dialog;
 
-class Message: noncopyable
+class Message
 {
 public:
+	NONCOPYABLE(Message);
+
 	Message(
 		unsigned Flags,
 		string_view Title,
@@ -108,7 +110,6 @@ public:
 	};
 
 	result GetExitCode() const {return static_cast<result>(m_ExitCode);}
-	rectangle GetPosition() const;
 	operator result() const { return GetExitCode(); }
 
 private:

@@ -131,6 +131,7 @@ intptr_t VMenu2::VMenu2DlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void*
 			if(!Call(DN_INPUT, &rec))
 				Dlg->SendMessage( DM_KEY, 1, &rec);
 		}
+		Call(Msg, Param2);
 		break;
 
 	case DN_INPUT:
@@ -153,8 +154,7 @@ intptr_t VMenu2::VMenu2DlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void*
 	case DN_LISTCHANGE:
 		if (Dlg->CheckDialogMode(DMODE_ISMENU))
 			break;
-		[[fallthrough]];
-	case DN_ENTERIDLE:
+
 		if(!cancel)
 		{
 			if(Call(Msg, Param2))
@@ -234,10 +234,6 @@ void VMenu2::Resize(bool force)
 	}
 	NeedResize=false;
 
-	FarListInfo info={sizeof(FarListInfo)};
-	SendMessage(DM_LISTINFO, 0, &info);
-
-
 	int X1 = m_X1;
 	int Y1 = m_Y1;
 	if(m_BoxType == box_type::full)
@@ -248,8 +244,7 @@ void VMenu2::Resize(bool force)
 			Y1-=1;
 	}
 
-
-	int width = info.MaxLength + (m_BoxType == box_type::none? 0 : m_BoxType == box_type::thin? 2 : 6) + 3;
+	int width = static_cast<int>(ListBox().MaxItemLength()) + (m_BoxType == box_type::none? 0 : m_BoxType == box_type::thin? 2 : 6) + 3;
 	if(m_X2>0)
 		width=m_X2-X1+1;
 

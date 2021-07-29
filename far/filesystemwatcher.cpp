@@ -136,15 +136,14 @@ void FileSystemWatcher::Release()
 	}
 
 	m_Cancelled.reset();
-	m_Notification = {};
 	m_PreviousLastWriteTime = m_CurrentLastWriteTime;
 }
 
-bool FileSystemWatcher::Signaled() const
+bool FileSystemWatcher::TimeChanged() const
 {
 	PropagateException();
 
-	return (m_Notification && m_Notification.is_signaled()) || m_PreviousLastWriteTime != m_CurrentLastWriteTime;
+	return m_PreviousLastWriteTime != m_CurrentLastWriteTime;
 }
 
 void FileSystemWatcher::Register()
@@ -156,42 +155,76 @@ void FileSystemWatcher::Register()
 		cpp_try(
 		[&]
 		{
-			try
-			{
-				m_Notification = os::fs::FindFirstChangeNotification(m_Directory, m_WatchSubtree,
+			LOGDEBUG(L"Start monitoring {}"sv, m_Directory);
+			const auto Notification = os::fs::find_first_change_notification(
+				m_Directory,
+				m_WatchSubtree,
 					FILE_NOTIFY_CHANGE_FILE_NAME |
 					FILE_NOTIFY_CHANGE_DIR_NAME |
 					FILE_NOTIFY_CHANGE_ATTRIBUTES |
 					FILE_NOTIFY_CHANGE_SIZE |
-					FILE_NOTIFY_CHANGE_LAST_WRITE);
+					FILE_NOTIFY_CHANGE_LAST_WRITE
+			);
 
-				if (!m_Notification)
-				{
-					LOGWARNING(L"FindFirstChangeNotification {}"sv, last_error());
-					return;
-				}
-
-				if (const auto Result = os::handle::wait_any({ m_Notification.native_handle(), m_Cancelled.native_handle() }); Result == 0)
-				{
-					message_manager::instance().notify(m_EventId);
-				}
-			}
-			catch(far_fatal_exception const& e)
+			if (!Notification)
 			{
-				if (e.Win32Error == ERROR_INVALID_HANDLE)
+				LOGWARNING(L"find_first_change_notification({}): {}"sv, m_Directory, last_error());
+				return;
+			}
+
+			for (;;)
+			{
+				try
 				{
-					// https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
-					// Some functions use ERROR_INVALID_HANDLE to indicate that the object itself is no longer valid.
-					// For example, a function that attempts to use a handle to a file on a network might fail
-					// with ERROR_INVALID_HANDLE if the network connection is severed, because the file object
-					// is no longer available. In this case, the application should close the handle.
-					m_Notification.close();
+					switch (os::handle::wait_any({ Notification.native_handle(), m_Cancelled.native_handle() }))
+					{
+					case 0:
+						LOGDEBUG(L"Change event in {}"sv, m_Directory);
 
-					LOGWARNING(L"handle::wait_any: {}"sv, e);
-					return;
+						message_manager::instance().notify(m_EventId);
+
+						// FS changes can occur at a high rate.
+						// We don't want to DoS ourselves here, so notifications are throttled down to one per second at most:
+						if (m_Cancelled.is_signaled(1s))
+						{
+							LOGDEBUG(L"Stop monitoring {}"sv, m_Directory);
+							return;
+						}
+
+						// https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findnextchangenotification
+						// If a change occurs after a call to FindFirstChangeNotification
+						// but before a call to FindNextChangeNotification, the operating system records the change.
+						// When FindNextChangeNotification is executed, the recorded change
+						// immediately satisfies a wait for the change notification.
+
+						// In other words, even with throttled notifications we shouldn't miss anything.
+						if (!os::fs::find_next_change_notification(Notification))
+						{
+							LOGWARNING(L"find_next_change_notification({}): {}"sv, m_Directory, last_error());
+							return;
+						}
+						break;
+
+					case 1:
+						LOGDEBUG(L"Stop monitoring {}"sv, m_Directory);
+						return;
+					}
 				}
+				catch(far_fatal_exception const& e)
+				{
+					if (e.Win32Error == ERROR_INVALID_HANDLE)
+					{
+						// https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-closehandle
+						// Some functions use ERROR_INVALID_HANDLE to indicate that the object itself is no longer valid.
+						// For example, a function that attempts to use a handle to a file on a network might fail
+						// with ERROR_INVALID_HANDLE if the network connection is severed, because the file object
+						// is no longer available. In this case, the application should close the handle.
+						LOGWARNING(L"Wait for change in {} failed: {}"sv, m_Directory, e);
+						return;
+					}
 
-				throw;
+					throw;
+				}
 			}
 		},
 		[&]

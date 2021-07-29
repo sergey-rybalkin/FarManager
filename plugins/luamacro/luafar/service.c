@@ -3041,6 +3041,10 @@ static int far_SendDlgMessage(lua_State *L)
 	Msg = CAST(int, check_env_flag(L, 2));
 	lua_settop(L, 4);
 
+	// Special cases (implemented as no-ops as these message types are used internally)
+	if (Msg == DM_GETDLGDATA || Msg == DM_SETDLGDATA)
+		return lua_pushnil(L), 1;
+
 	// Param1
 	switch(Msg)
 	{
@@ -3051,7 +3055,6 @@ static int far_SendDlgMessage(lua_State *L)
 		case DM_ENABLEREDRAW:
 		case DM_GETDIALOGINFO:
 		case DM_GETDIALOGTITLE:
-		case DM_GETDLGDATA:
 		case DM_GETDLGRECT:
 		case DM_GETDROPDOWNOPENED:
 		case DM_GETFOCUS:
@@ -3059,7 +3062,6 @@ static int far_SendDlgMessage(lua_State *L)
 		case DM_MOVEDIALOG:
 		case DM_REDRAW:
 		case DM_RESIZEDIALOG:
-		case DM_SETDLGDATA:
 		case DM_SETINPUTNOTIFY:
 		case DM_SHOWDIALOG:
 		case DM_USER:
@@ -3067,7 +3069,6 @@ static int far_SendDlgMessage(lua_State *L)
 		case DN_DRAGGED:
 		case DN_DRAWDIALOG:
 		case DN_DRAWDIALOGDONE:
-		case DN_ENTERIDLE:
 			Param1 = luaL_optinteger(L,3,0);
 			break;
 		default: // dialog element position
@@ -3099,7 +3100,6 @@ static int far_SendDlgMessage(lua_State *L)
 		case DM_GETCHECK:
 		case DM_GETCOMBOBOXEVENT:
 		case DM_GETCURSORSIZE:
-		case DM_GETDLGDATA:
 		case DM_GETDROPDOWNOPENED:
 		case DM_GETFOCUS:
 		case DM_GETITEMDATA:
@@ -3107,7 +3107,6 @@ static int far_SendDlgMessage(lua_State *L)
 		case DM_REDRAW:               // alias: DM_SETREDRAW
 		case DM_SET3STATE:
 		case DM_SETCURSORSIZE:
-		case DM_SETDLGDATA:
 		case DM_SETDROPDOWNOPENED:
 		case DM_SETFOCUS:
 		case DM_SETITEMDATA:
@@ -3122,7 +3121,6 @@ static int far_SendDlgMessage(lua_State *L)
 		case DN_DRAWDIALOG:
 		case DN_DRAWDIALOGDONE:
 		case DN_DROPDOWNOPENED:
-		case DN_ENTERIDLE:
 			Param2 = (void*)(intptr_t)luaL_optint(L,4,0);
 			break;
 		case DM_LISTGETDATASIZE:
@@ -3562,7 +3560,6 @@ int PushDNParams (lua_State *L, intptr_t Msg, intptr_t Param1, void *Param2)
 		case DN_DRAGGED:
 		case DN_DRAWDIALOG:
 		case DN_DRAWDIALOGDONE:
-		case DN_ENTERIDLE:
 		case DN_INPUT:
 		case DN_RESIZECONSOLE:
 			break;

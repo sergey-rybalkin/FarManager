@@ -1770,6 +1770,16 @@ Options::Options():
 		char_width::enable(static_cast<int>(Value));
 	}));
 
+	Clock.SetCallback(option::notifier([](bool const Value)
+	{
+		wakeup_for_clock(Value);
+	}));
+
+	ScreenSaver.SetCallback(option::notifier([](bool const Value)
+	{
+		wakeup_for_screensaver(Value);
+	}));
+
 	// По умолчанию - брать плагины из основного каталога
 	LoadPlug.MainPluginDir = true;
 	LoadPlug.PluginsPersonal = true;
@@ -3442,7 +3452,7 @@ int GetFarIniInt(string_view const AppName, string_view const KeyName, int Defau
 	return GetPrivateProfileInt(null_terminated(AppName).c_str(), null_terminated(KeyName).c_str(), Default, Global->g_strFarINI.c_str());
 }
 
-std::chrono::steady_clock::duration GetRedrawTimeout() noexcept
+std::chrono::milliseconds GetRedrawTimeout() noexcept
 {
 	return std::chrono::milliseconds(Global->Opt->RedrawTimeout);
 }

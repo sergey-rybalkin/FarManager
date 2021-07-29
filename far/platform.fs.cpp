@@ -340,6 +340,32 @@ namespace os::fs
 		}
 	}
 
+	// gh-425 Incorrect file sizes shown/calculated for files compressed with LZX
+	// WOF-based compression doesn't set FILE_ATTRIBUTE_COMPRESSED and doesn't fill AllocationSize
+	static void fill_allocation_size_alternative(find_data& FindData, string_view Directory)
+	{
+		if (FindData.AllocationSize)
+			return;
+
+		if (!FindData.FileSize)
+			return;
+
+		if (flags::check_any(FindData.Attributes, FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))
+			return;
+
+		static const auto IsWeirdCompressionAvailable = IsWindows10OrGreater();
+		if (!IsWeirdCompressionAvailable && !flags::check_any(FindData.Attributes, FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_SPARSE_FILE))
+			return;
+
+		// TODO: It's a separate call so we might need an elevation for it
+		ULARGE_INTEGER Size;
+		Size.LowPart = GetCompressedFileSize(NTPath(path::join(Directory, FindData.FileName)).c_str(), &Size.HighPart);
+		if (Size.LowPart == INVALID_FILE_SIZE && GetLastError() != NO_ERROR)
+			return;
+
+		FindData.AllocationSize = Size.QuadPart;
+	}
+
 	static find_file_handle FindFirstFileInternal(string_view const Name, find_data& FindData)
 	{
 		if (Name.empty() || path::is_separator(Name.back()))
@@ -407,6 +433,7 @@ namespace os::fs
 
 		const auto DirectoryInfo = reinterpret_cast<const FILE_ID_BOTH_DIR_INFORMATION*>(Handle->BufferBase.data());
 		DirectoryInfoToFindData(*DirectoryInfo, FindData, Handle->Extended);
+		fill_allocation_size_alternative(FindData, Directory);
 		Handle->NextOffset = DirectoryInfo->NextEntryOffset;
 		return find_file_handle(Handle.release());
 	}
@@ -445,6 +472,7 @@ namespace os::fs
 		if (Status)
 		{
 			DirectoryInfoToFindData(*DirectoryInfo, FindData, Handle.Extended);
+			fill_allocation_size_alternative(FindData, Handle.Object.GetName());
 			Handle.NextOffset = DirectoryInfo->NextEntryOffset? Handle.NextOffset + DirectoryInfo->NextEntryOffset : 0;
 			Result = true;
 		}
@@ -2187,9 +2215,14 @@ namespace os::fs
 		return true;
 	}
 
-	find_notification_handle FindFirstChangeNotification(const string& PathName, bool WatchSubtree, DWORD NotifyFilter)
+	find_notification_handle find_first_change_notification(const string& PathName, bool WatchSubtree, DWORD NotifyFilter)
 	{
 		return find_notification_handle(::FindFirstChangeNotification(NTPath(PathName).c_str(), WatchSubtree, NotifyFilter));
+	}
+
+	bool find_next_change_notification(find_notification_handle const& Handle)
+	{
+		return FindNextChangeNotification(Handle.native_handle()) != FALSE;
 	}
 
 	bool IsDiskInDrive(string_view const Root)

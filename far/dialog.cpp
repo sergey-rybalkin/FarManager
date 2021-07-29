@@ -197,14 +197,14 @@ static string_view ItemString(const DialogItemEx *Data)
 	return Str;
 }
 
-static size_t ConvertItemEx2(const DialogItemEx *ItemEx, FarGetDialogItem *Item)
+static size_t ConvertItemEx2(const DialogItemEx *ItemEx, FarGetDialogItem *Item, bool const ConvertListbox)
 {
 	auto size = aligned_sizeof<FarDialogItem>();
 	const auto offsetList = size;
 	auto offsetListItems = size;
 	vmenu_ptr ListBox;
 	size_t ListBoxSize = 0;
-	if (ItemEx->Type==DI_LISTBOX || ItemEx->Type==DI_COMBOBOX)
+	if (ConvertListbox && (ItemEx->Type==DI_LISTBOX || ItemEx->Type==DI_COMBOBOX))
 	{
 		ListBox=ItemEx->ListPtr;
 		if (ListBox)
@@ -445,7 +445,7 @@ void Dialog::CheckDialogCoord()
 	// X2 при этом = ширине диалога.
 	if (m_Where.left == -1)
 	{
-		m_Where.left = (ScrX - m_Where.right + 1) / 2;
+		m_Where.left = (ScrX + 1 - m_Where.right) / 2;
 		m_Where.right += m_Where.left - 1;
 	}
 
@@ -453,7 +453,7 @@ void Dialog::CheckDialogCoord()
 	// Y2 при этом = высоте диалога.
 	if (m_Where.top == -1)
 	{
-		m_Where.top = (ScrY - m_Where.bottom + 1) / 2;
+		m_Where.top = (ScrY + 1 - m_Where.bottom) / 2;
 		m_Where.bottom += m_Where.top - 1;
 	}
 }
@@ -1115,7 +1115,7 @@ bool Dialog::GetItemRect(size_t I, SMALL_RECT& Rect)
 		case DI_MEMOEDIT:
 			break;
 		default:
-			Len = static_cast<int>((Item.Flags & DIF_SHOWAMPERSAND)? Item.strData.size() : HiStrlen(Item.strData));
+			Len = static_cast<int>((Item.Flags & DIF_SHOWAMPERSAND)? visual_string_length(Item.strData) : HiStrlen(Item.strData));
 			break;
 	}
 
@@ -1708,9 +1708,9 @@ void Dialog::ShowDialog(size_t ID)
 					GotoXY(X, m_Where.top + CY1);
 
 					if (Item.Flags & DIF_SHOWAMPERSAND)
-						Text(strStr);
+						Text(strStr, LenText);
 					else
-						HiText(strStr,ItemColor[1]);
+						HiText(strStr,ItemColor[1], LenText);
 				}
 
 				break;
@@ -1835,9 +1835,9 @@ void Dialog::ShowDialog(size_t ID)
 						SetColor(ItemColor[0]);
 
 						if (Item.Flags & DIF_SHOWAMPERSAND)
-							Text(strResult);
+							Text(strResult, LenText);
 						else
-							HiText(strResult,ItemColor[1]);
+							HiText(strResult,ItemColor[1], LenText);
 
 						if (++CountLine >= static_cast<DWORD>(CH))
 							break;
@@ -2130,12 +2130,12 @@ int Dialog::LenStrItem(size_t ID)
 
 int Dialog::LenStrItem(size_t ID, string_view const Str) const
 {
-	return static_cast<int>((Items[ID].Flags & DIF_SHOWAMPERSAND)? Str.size() : HiStrlen(Str));
+	return static_cast<int>((Items[ID].Flags & DIF_SHOWAMPERSAND)? visual_string_length(Str) : HiStrlen(Str));
 }
 
 int Dialog::LenStrItem(const DialogItemEx& Item)
 {
-	return static_cast<int>((Item.Flags & DIF_SHOWAMPERSAND)? Item.strData.size() : HiStrlen(Item.strData));
+	return static_cast<int>((Item.Flags & DIF_SHOWAMPERSAND)? visual_string_length(Item.strData) : HiStrlen(Item.strData));
 }
 
 bool Dialog::ProcessMoveDialog(DWORD Key)
@@ -2454,9 +2454,8 @@ bool Dialog::ProcessKey(const Manager::Key& Key)
 			return true;
 	}
 
-	if (any_of(LocalKey(), KEY_NONE, KEY_IDLE))
+	if (LocalKey() == KEY_NONE)
 	{
-		DlgProc(DN_ENTERIDLE, 0, nullptr); // $ 28.07.2000 SVS Передадим этот факт в обработчик :-)
 		return false;
 	}
 
@@ -4232,18 +4231,18 @@ intptr_t Dialog::CloseDialog()
 	GetDialogObjectsData();
 
 	const auto result = DlgProc(DN_CLOSE, m_ExitCode, nullptr);
-	if (result)
-	{
-		GetDialogObjectsExpandData();
-		DialogMode.Set(DMODE_ENDLOOP);
-		Hide();
+	if (!result)
+		return 0;
 
-		if (DialogMode.Check(DMODE_BEGINLOOP) && (DialogMode.Check(DMODE_MSGINTERNAL) || Global->WindowManager->ManagerStarted()))
-		{
-			DialogMode.Clear(DMODE_BEGINLOOP);
-			Global->WindowManager->DeleteWindow(shared_from_this());
-			Global->WindowManager->PluginCommit();
-		}
+	GetDialogObjectsExpandData();
+	DialogMode.Set(DMODE_ENDLOOP);
+	Hide();
+
+	if (DialogMode.Check(DMODE_BEGINLOOP))
+	{
+		DialogMode.Clear(DMODE_BEGINLOOP);
+		Global->WindowManager->DeleteWindow(shared_from_this());
+		Global->WindowManager->PluginCommit();
 	}
 	return result;
 }
@@ -4413,8 +4412,6 @@ intptr_t Dialog::DefProc(intptr_t Msg, intptr_t Param1, void* Param2)
 			return FALSE;
 		case DN_CTLCOLORDLGLIST:
 			return FALSE;
-		case DN_ENTERIDLE:
-			return 0;     // always 0
 		default:
 			break;
 	}
@@ -5306,11 +5303,11 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 		case DN_EDITCHANGE:
 		{
 			FarGetDialogItem Item={sizeof(FarGetDialogItem),0,nullptr};
-			Item.Size=ConvertItemEx2(CurItem,nullptr);
+			Item.Size = ConvertItemEx2(CurItem, nullptr, false);
 			block_ptr<FarDialogItem> Buffer(Item.Size);
 			Item.Item = Buffer.data();
 			intptr_t I=FALSE;
-			if(ConvertItemEx2(CurItem,&Item)<=Item.Size)
+			if (ConvertItemEx2(CurItem, &Item, false) <= Item.Size)
 			{
 				if(CurItem->Type==DI_EDIT||CurItem->Type==DI_COMBOBOX||CurItem->Type==DI_FIXEDIT||CurItem->Type==DI_PSWEDIT)
 				{
@@ -5427,11 +5424,11 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 		case DN_DRAWDLGITEM:
 		{
 			FarGetDialogItem Item={sizeof(FarGetDialogItem),0,nullptr};
-			Item.Size=ConvertItemEx2(CurItem,nullptr);
+			Item.Size = ConvertItemEx2(CurItem, nullptr, false);
 			block_ptr<FarDialogItem> Buffer(Item.Size);
 			Item.Item = Buffer.data();
 			intptr_t I=FALSE;
-			if(ConvertItemEx2(CurItem,&Item)<=Item.Size)
+			if (ConvertItemEx2(CurItem, &Item, false) <= Item.Size)
 			{
 				I=DlgProc(Msg,Param1,Item.Item);
 
@@ -5754,7 +5751,7 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 		case DM_GETDLGITEM:
 		{
 			const auto Item = static_cast<FarGetDialogItem*>(Param2);
-			return (CheckNullOrStructSize(Item)) ? static_cast<intptr_t>(ConvertItemEx2(CurItem, Item)) : 0;
+			return (CheckNullOrStructSize(Item))? static_cast<intptr_t>(ConvertItemEx2(CurItem, Item, true)) : 0;
 		}
 		/*****************************************************************/
 		case DM_GETDLGITEMSHORT:

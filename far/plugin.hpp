@@ -104,7 +104,23 @@ static const FARCOLORFLAGS
 
 	FCF_NONE          = 0;
 
-struct rgba { unsigned char r, g, b, a; };
+struct rgba
+{
+	unsigned char
+		r,
+		g,
+		b,
+		a;
+};
+
+struct color_index
+{
+	unsigned char
+		i,
+		reserved0,
+		reserved1,
+		a;
+};
 
 struct FarColor
 {
@@ -112,6 +128,7 @@ struct FarColor
 	union
 	{
 		COLORREF ForegroundColor;
+		struct color_index ForegroundIndex;
 		struct rgba ForegroundRGBA;
 	}
 #ifndef __cplusplus
@@ -121,6 +138,7 @@ struct FarColor
 	union
 	{
 		COLORREF BackgroundColor;
+		struct color_index BackgroundIndex;
 		struct rgba BackgroundRGBA;
 	}
 #ifndef __cplusplus
@@ -409,7 +427,6 @@ enum FARMESSAGE
 	DN_DRAWDIALOG                   = 4101,
 	DN_DRAWDLGITEM                  = 4102,
 	DN_EDITCHANGE                   = 4103,
-	DN_ENTERIDLE                    = 4104,
 	DN_GOTFOCUS                     = 4105,
 	DN_HELP                         = 4106,
 	DN_HOTKEY                       = 4107,

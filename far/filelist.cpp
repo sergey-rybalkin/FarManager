@@ -1240,10 +1240,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 
 	switch (LocalKey)
 	{
-		case KEY_IDLE:
-			ProcessPluginEvent(FE_IDLE, nullptr);
-			break;
-
 		case KEY_GOTFOCUS:
 			if (Global->Opt->SmartFolderMonitor)
 			{
@@ -2823,6 +2819,9 @@ bool FileList::SetCurDir(string_view const NewDir, bool ClosePanel, bool IsUpdat
 
 	if (!NewDir.empty())
 	{
+		if (m_PanelMode != panel_mode::PLUGIN_PANEL)
+			Panel::SetCurDir(NewDir, ClosePanel, IsUpdated, Silent);
+
 		return ChangeDir(NewDir, NewDir == L".."sv, true, IsUpdated, &UsedData, OFP_NORMAL, Silent);
 	}
 
@@ -2831,6 +2830,8 @@ bool FileList::SetCurDir(string_view const NewDir, bool ClosePanel, bool IsUpdat
 
 bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePath,bool IsUpdated, const UserDataItem* DataItem, OPENFILEPLUGINTYPE OfpType, bool const Silent)
 {
+	bool IsPopPlugin = false;
+
 	SCOPE_EXIT
 	{
 		if (m_PanelMode == panel_mode::PLUGIN_PANEL)
@@ -2847,6 +2848,8 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 		else
 		{
 			Global->CtrlObject->FolderHistory->AddToHistory(GetCurDir());
+			if (!IsPopPlugin)
+				InitFSWatcher(false);
 		}
 	};
 
@@ -2951,6 +2954,7 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 			Update(UPDATE_KEEP_SELECTION);
 
 		PopPrevData(strFindDir, PluginClosed, !GoToPanelFile, IsParent, SetDirectorySuccess);
+		IsPopPlugin = true;
 
 		return SetDirectorySuccess;
 	}
@@ -3023,6 +3027,7 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 	}
 
 	m_CurDir = os::fs::GetCurrentDirectory();
+
 	if (!IsUpdated)
 		return SetDirectorySuccess;
 
@@ -3484,6 +3489,12 @@ void FileList::OnSortingChange()
 	ProcessPluginEvent(FE_CHANGESORTPARAMS, nullptr);
 	if (IsVisible())
 		Show();
+}
+
+void FileList::InitCurDir(string_view CurDir)
+{
+	Panel::InitCurDir(CurDir);
+	InitFSWatcher(false);
 }
 
 bool FileList::GoToFile(long idxItem)
@@ -5154,6 +5165,7 @@ void FileList::CountDirSize(bool IsRealNames)
 	SortFileList(true);
 	ShowFileList();
 	Parent()->Redraw();
+
 	InitFSWatcher(true);
 }
 
@@ -6625,7 +6637,6 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	DizRead = false;
 	decltype(m_ListData) OldData;
 	string strCurName, strNextCurName;
-	StopFSWatcher();
 
 	// really?
 	if (!Parent()->IsLeft(this) && !Parent()->IsRight(this))
@@ -6938,7 +6949,6 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 		}
 	}
 
-	InitFSWatcher(false);
 	CorrectPosition();
 
 	string strLastSel, strGetSel;
@@ -6984,18 +6994,15 @@ void FileList::ReadFileNames(int KeepSelection, int UpdateEvenIfPanelInvisible, 
 	FarChDir(strSaveDir); //???
 }
 
-void FileList::UpdateIfChanged()
+void FileList::UpdateIfChanged(bool Changed)
 {
-	if (!Global->IsPanelsActive())
-		return;
-
 	if (Global->Opt->AutoUpdateLimit && m_ListData.size() > static_cast<size_t>(Global->Opt->AutoUpdateLimit))
 		return;
 
-	if (!IsVisible())
+	if (m_PanelMode != panel_mode::NORMAL_PANEL)
 		return;
 
-	if (m_PanelMode != panel_mode::NORMAL_PANEL || !FSWatcher.Signaled())
+	if (!Changed && !FSWatcher.TimeChanged())
 		return;
 
 	if (const auto AnotherPanel = Parent()->GetAnotherPanel(this); AnotherPanel->GetType() == panel_type::INFO_PANEL)
@@ -7005,7 +7012,8 @@ void FileList::UpdateIfChanged()
 	}
 
 	Update(UPDATE_KEEP_SELECTION);
-	Redraw();
+
+	m_UpdatePending = false;
 }
 
 class FileList::background_updater
@@ -7024,7 +7032,15 @@ public:
 private:
 	listener m_Listener{[this]
 	{
-		m_Owner->UpdateIfChanged();
+		if (Global->WindowManager->IsPanelsActive() && m_Owner->IsVisible())
+		{
+			m_Owner->UpdateIfChanged(true);
+			m_Owner->Redraw();
+		}
+		else
+		{
+			m_Owner->m_UpdatePending = true;
+		}
 	}};
 
 	FileList* m_Owner;
@@ -7032,8 +7048,12 @@ private:
 
 void FileList::InitFSWatcher(bool CheckTree)
 {
-	DWORD DriveType=DRIVE_REMOTE;
+	if (m_PanelMode == panel_mode::PLUGIN_PANEL)
+		return;
+
 	StopFSWatcher();
+
+	DWORD DriveType=DRIVE_REMOTE;
 	const auto Type = ParsePath(m_CurDir);
 
 	if (Type == root_type::drive_letter || Type == root_type::win32nt_drive_letter)
@@ -7147,7 +7167,6 @@ void FileList::UpdatePlugin(int KeepSelection, int UpdateEvenIfPanelInvisible)
 	DizRead = false;
 	decltype(m_ListData) OldData;
 	std::optional<string> strCurName, strNextCurName;
-	StopFSWatcher();
 	LastCurFile=-1;
 
 	const auto Item = GetPluginItem();
@@ -7494,6 +7513,10 @@ void FileList::ShowFileList(bool Fast)
 		Global->CtrlObject->Plugins->GetOpenPanelInfo(GetPluginHandle(), &m_CachedOpenPanelInfo);
 		strInfoCurDir = NullToEmpty(m_CachedOpenPanelInfo.CurDir);
 	}
+	else
+	{
+		UpdateIfChanged(m_UpdatePending);
+	}
 
 	bool CurFullScreen=IsFullScreen();
 	PrepareViewSettings(m_ViewMode);
@@ -7503,6 +7526,12 @@ void FileList::ShowFileList(bool Fast)
 	{
 		Parent()->SetScreenPosition();
 		Parent()->GetAnotherPanel(this)->Update(UPDATE_KEEP_SELECTION | UPDATE_SECONDARY);
+	}
+
+	if (!ProcessingPluginCommand && LastCurFile != m_CurFile)
+	{
+		LastCurFile = m_CurFile;
+		UpdateViewPanel();
 	}
 
 	SetScreen({ m_Where.left + 1, m_Where.top + 1, m_Where.right - 1, m_Where.bottom - 1 }, L' ', colors::PaletteColorToFarColor(COL_PANELTEXT));
@@ -7763,12 +7792,6 @@ void FileList::ShowFileList(bool Fast)
 	}
 
 	ShowScreensCount();
-
-	if (!ProcessingPluginCommand && LastCurFile!=m_CurFile)
-	{
-		LastCurFile=m_CurFile;
-		UpdateViewPanel();
-	}
 
 	if (m_PanelMode == panel_mode::PLUGIN_PANEL)
 		Parent()->RedrawKeyBar();

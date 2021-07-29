@@ -118,18 +118,6 @@ bool PluginManager::plugin_less::operator()(const Plugin* a, const Plugin *b) co
 	return string_sort::less(PointToName(a->ModuleName()), PointToName(b->ModuleName()));
 }
 
-static void CallPluginSynchroEvent(const std::any& Payload)
-{
-	const auto& [Id, Param] = std::any_cast<const std::pair<UUID, void*>&>(Payload);
-	if (const auto pPlugin = Global->CtrlObject->Plugins->FindPlugin(Id))
-	{
-		ProcessSynchroEventInfo Info = { sizeof(Info) };
-		Info.Event = SE_COMMONSYNCHRO;
-		Info.Param = Param;
-		pPlugin->ProcessSynchroEvent(&Info);
-	}
-}
-
 static void EnsureLuaCpuCompatibility()
 {
 // All AMD64 processors have SSE2
@@ -144,7 +132,6 @@ static void EnsureLuaCpuCompatibility()
 }
 
 PluginManager::PluginManager():
-	m_PluginSynchro(plugin_synchro, &CallPluginSynchroEvent),
 #ifndef NO_WRAPPER
 	OemPluginsCount(),
 #endif // NO_WRAPPER
@@ -639,7 +626,7 @@ std::unique_ptr<plugin_panel> PluginManager::OpenFilePlugin(const string* Name, 
 
 			if (hPlugin == PANEL_STOP)   //сразу на выход, плагин решил нагло обработать все сам (Autorun/PictureView)!!!
 			{
-				LOGDEBUG(L"OpenFilePlugin: {} accepted and asked to stop processing"sv, i->Title());
+				LOGINFO(L"OpenFilePlugin: {} accepted and asked to stop processing"sv, i->Title());
 
 				StopProcessing = true;
 				return nullptr;
