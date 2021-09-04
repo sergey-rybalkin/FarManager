@@ -40,7 +40,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "poscache.hpp"
 #include "bitflags.hpp"
 #include "config.hpp"
-#include "TPreRedrawFunc.hpp"
 #include "mix.hpp"
 #include "eol.hpp"
 
@@ -57,7 +56,7 @@ class FileEditor;
 class KeyBar;
 class Edit;
 
-class Editor: public SimpleScreenObject
+class Editor final: public SimpleScreenObject
 {
 public:
 	explicit Editor(window_ptr Owner, uintptr_t Codepage, bool DialogUsed = false);
@@ -74,11 +73,10 @@ public:
 	uintptr_t GetCodePage() const; //BUGBUG
 	void KeepInitParameters() const;
 	void SetStartPos(int LineNum, int CharNum);
-	bool IsFileModified() const;
-	bool IsFileChanged() const;
+	bool IsModified() const;
+	bool IsChanged() const;
 	long long GetCurPos(bool file_pos = false, bool add_bom = false) const;
 	int EditorControl(int Command, intptr_t Param1, void *Param2);
-	void SetHostFileEditor(FileEditor *Editor) { HostFileEditor = Editor; }
 	void SetOptions(const Options::EditorOptions& Options);
 	void SetTabSize(int NewSize);
 	size_t GetTabSize() const { return EdOpt.TabSize; }
@@ -102,7 +100,7 @@ public:
 	int GetReadOnlyLock() const { return EdOpt.ReadOnlyLock; }
 	void SetShowScrollBar(bool NewMode) { EdOpt.ShowScrollBar = NewMode; }
 	void SetSearchCursorAtEnd(bool NewMode) { EdOpt.SearchCursorAtEnd = NewMode; }
-	void SetWordDiv(const wchar_t *WordDiv) { EdOpt.strWordDiv = WordDiv; }
+	void SetWordDiv(string_view const WordDiv) { EdOpt.strWordDiv = string(WordDiv); }
 	const string& GetWordDiv() const { return EdOpt.strWordDiv; }
 	void SetAllowEmptySpaceAfterEof(bool NewMode) { EdOpt.AllowEmptySpaceAfterEof = NewMode; }
 	bool GetAllowEmptySpaceAfterEof() const { return EdOpt.AllowEmptySpaceAfterEof; }
@@ -144,7 +142,6 @@ public:
 	void AutoDeleteColors();
 	int GetId() const { return EditorID; }
 
-	static void PR_EditorShowMsg();
 	static void SetReplaceMode(bool Mode);
 	static eol GetDefaultEOL();
 
@@ -389,7 +386,6 @@ private:
 	bool LastSearchCase{}, LastSearchWholeWords{}, LastSearchReverse{}, LastSearchRegexp{}, LastSearchPreserveStyle{};
 
 	int EditorID{};
-	FileEditor *HostFileEditor{};
 	int EditorControlLock{};
 	FarColor Color;
 	FarColor SelColor;
@@ -403,18 +399,6 @@ class EditorContainer
 public:
 	virtual ~EditorContainer() = default;
 	virtual Editor* GetEditor() = 0;
-};
-
-class editor_progress
-{
-public:
-	editor_progress(string_view Title, string_view Msg, size_t Percent);
-	~editor_progress();
-
-	void update(size_t Percent) const;
-
-private:
-	dialog_ptr m_Dialog;
 };
 
 #endif // EDITOR_HPP_79DE09D5_8F9C_467E_A3BF_8E1BB34E4BD3

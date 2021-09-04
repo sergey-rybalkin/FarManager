@@ -1956,7 +1956,7 @@ l:
 "Configurazione"
 "Системні параметри"
 "Сістэмныя параметры"
-"Sisteminiai nuostatai"
+"Sisteminiai nustatymai"
 
 MConfigRecycleBin
 "Удалять в &Корзину"
@@ -2250,7 +2250,7 @@ MConfigAutoSave
 "Salvataggio A&utomatico Impostazioni"
 "Автозапис кон&фігурації"
 "А&ўтазапіс наладаў"
-"&Auto išsaugoti nuostatus"
+"&Automatiškai išsaugoti nustatymus"
 
 MConfigTreeTitle
 l:
@@ -2462,7 +2462,7 @@ MConfigHighlight
 "&Evidenzia Files"
 "&Розмальовка файлів"
 "&Размалёўка файлаў"
-"Par&yškinti failus"
+"S&palvinti failus"
 
 MConfigSelectFolders
 "Пометка &папок"
@@ -2634,7 +2634,7 @@ MConfigShowFree
 
 MConfigShowScrollbar
 "Показывать по&лосу прокрутки"
-"Show a scroll&bar"
+"Show scroll&bar"
 "Zobrazovat &posuvník"
 "Scroll&balken anzeigen"
 "Gördítősá&v mutatva"
@@ -2701,7 +2701,7 @@ l:
 "Impostazioni ► Interfaccia"
 "Налаштування інтерфейсу"
 "Налады знешняга выгляду"
-"Sąsajos nuostatai"
+"Sąsajos nustatymai"
 
 MConfigClock
 "&Часы"
@@ -2863,8 +2863,8 @@ upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
-upd:"Fullwidth-aware rendering"
 "R&enderowanie na pełnej szerokości"
+upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
@@ -3613,7 +3613,7 @@ MConfigInfoPanelShowCDInfo
 "Zobrazit parametry &CD jednotky"
 "&CD-Platte Parameter anzeigen"
 upd:"Show &CD drive parameters"
-"Pokaż parametry dysku &CD"
+"Pokaż parametry dysku &optycznego"
 "Mostrar parámetros de uni&dad de CD\DVD\BD"
 "Zobraziť parametre jednotky &CD"
 "Mostra Parametri C&D"
@@ -3789,7 +3789,7 @@ MViewConfigSaveShortPos
 "Salva I &Bookmarks"
 "Зберігати &закладки"
 "Захоўваць &закладкі"
-upd:"Save &bookmarks"
+"Išsaugoti nu&orodas"
 
 MViewConfigSaveCodepage
 "Сохранять ко&довую страницу файла"
@@ -3882,13 +3882,13 @@ MViewConfigScrollbar
 "Zobrazovat posu&vník"
 "Scro&llbalken anzeigen"
 "Gör&dítősáv mutatva"
-"P&okaż pasek przewijania"
+"Wyświetl suwak"
 "Mostrar &barra de desplazamiento"
-"Zobraziť posu&vník"
+"Zobrazovať posu&vník"
 "Mostra Barre Di &Scorrimento"
 "Показувати &смужку прокручування"
 "Адлюстроўваць &працяжнік"
-upd:"Show scro&llbar"
+"Rodyti šlia&užiklį"
 
 MViewConfigArrows
 "Показывать стре&лки сдвига"
@@ -3902,7 +3902,7 @@ MViewConfigArrows
 "&Mostra Frecce Di Scorrimento"
 "Показувати стрі&лки зсуву"
 "Адлюстроўваць стрэ&лкі зруху"
-upd:"Show scrolling arro&ws"
+"Rodyti šliaužiklio rodykles"
 
 MViewConfigPersistentSelection
 "Постоянное &выделение"
@@ -4137,7 +4137,7 @@ MEditConfigSavePos
 "&Ukládat pozici v souboru"
 "Dateipositionen &speichern"
 "Fájl&pozíció mentése"
-"&Zapamiętaj pozycję kursora w pliku"
+"Zapamiętaj poz&ycję kursora w pliku"
 "&Guardar posición de archivo"
 "&Ukladať pozíciu v súbore"
 "Sal&va Posizione Cursore"
@@ -4249,13 +4249,13 @@ MEditConfigScrollbar
 "Zobr&azovat posuvník"
 "Scro&llbalken anzeigen"
 "&Gördítősáv mutatva"
-"Pokaż pasek przewi&jania"
+"Wyświetl suwak"
 "Mostrar barra de despla&zamiento"
 "Zobr&azovať posuvník"
 "Mostra Barre Di &Scorrimento"
 "Показ&увати смужку прокручування"
 "Адлюстроўваць працяжн&ік"
-upd:"S&how scrollbar"
+"Rodyti šlia&užiklį"
 
 MEditShowWhiteSpace
 "Пробел&ьные символы"
@@ -4277,7 +4277,7 @@ MEditConfigSelFound
 "Vy&ber nalezené"
 "Treffer &markieren"
 "&Találat kijelölése"
-"W&ybierz znalezione"
+"&Zaznacz znalezione"
 "Se&leccionar lo encontrado"
 "Vy&brať nájdené"
 "Seleziona Tro&vato"
@@ -4305,7 +4305,7 @@ MEditConfigDefaultCodePage
 "Výchozí stránka kódování:"
 "Codepage standardmäßig voreingestellt:"
 upd:"Default code page:"
-"Domyślna strona kodowa:"
+"&Domyślna strona kodowa:"
 "Página de códigos por defecto:"
 "Predvolená tabuľka znakov:"
 "Codifica Caratteri Default:"
@@ -4537,7 +4537,7 @@ MCopyOnlyNewerFiles
 "Solo File &Nuovo/i"
 "Лише &нові/оновлені файли"
 "Толькі &новыя файлы"
-upd:"Only ne&wer file(s)"
+"&Tik naujesnius failus"
 
 MLinkType
 "&Тип ссылки:"
@@ -5673,20 +5673,6 @@ MCopyEncryptWarn2
 "Нельга капіяваць ці перанесці, не згубіўшы яго шыфраванне."
 upd:"cannot be copied or moved without losing its encryption."
 
-MCopyEncryptWarn3
-"Можно пропустить эту ошибку или отменить операцию."
-"You can choose to ignore this error and continue, or cancel."
-"Můžete tuto chybu ignorovat a pokračovat, nebo operaci ukončit."
-"Sie können dies ignorieren und fortfahren oder abbrechen."
-"Ennek ellenére folytathatja vagy felfüggesztheti."
-"Możesz zignorować błąd i kontynuować lub anulować operację."
-"Usted puede ignorar este error y continuar, o cancelar."
-"Môžete túto chybu ignorovať a pokračovať, alebo operáciu zrušiť."
-"Puoi Scegliere Di Ignorare Questo Errore E Continuare, O Annullare."
-"Можна пропустити цю помилку або скасувати операцію."
-"Можна прапусціць гэтую памылку, альбо адмяніць дзеянне."
-upd:"You can choose to ignore this error and continue, or cancel."
-
 MCopyReadError
 l:
 "Ошибка чтения данных из"
@@ -6545,7 +6531,7 @@ MReload
 "&Znovu načíst"
 "Aktualisie&ren"
 "Újra&tölti"
-"&Załaduj"
+"&Przeładuj"
 "R&ecargar"
 "&Znova načítať"
 "&Rileggi"
@@ -6794,7 +6780,7 @@ MEditFileLong2
 "Che Eccede La Dimensione Massima Di {0}"
 "що перевищує задане обмеження {0}."
 "што перавышае зададзенае абмежаванне ў {0}."
-upd:"which exceeds the configured maximum size of {0}."
+"kuris viršyja sukonfigūruotą maksimalų dydį {0}."
 
 MEditROOpen
 "Вы хотите редактировать его?"
@@ -6808,7 +6794,7 @@ MEditROOpen
 "Vuoi Modificarlo?"
 "Ви бажаєте редагувати його?"
 "Вы жадаеце мяняць яго?"
-upd:"Do you wish to edit it?"
+"Ar norite jį redaguoti?"
 
 MEditCanNotEditDirectory
 l:
@@ -6908,7 +6894,7 @@ MEditSearchWholeWords
 "&Parole Intere"
 "Лише &цілі слова"
 "Толькі по&ўныя словы"
-upd:"&Whole words"
+"Visi ž&odžiai"
 
 MEditSearchReverse
 "Обратн&ый поиск"
@@ -10096,7 +10082,7 @@ MViewShiftF2
 "A Capo"
 "Слова"
 "Словы"
-upd:"WWrap"
+"Kelti"
 
 MViewShiftF3
 ""
@@ -11542,7 +11528,7 @@ MFindFileWholeWords
 "Parole &Esatte"
 "Лише &цілі слова"
 "Толькі по&ўныя словы"
-upd:"&Whole words"
+"Visi ž&odžiai"
 
 MFindFileAllCodePages
 "Все стандартные кодовые страницы"
@@ -12192,7 +12178,7 @@ l:
 "Evidenzia File"
 "Розмальовка файлів"
 "Разфарбоўка файлаў"
-"Failų paryškinimai"
+"Failų spalvos"
 
 MHighlightUpperSortGroup
 "Верхняя группа сортировки"
@@ -12248,7 +12234,7 @@ MHighlightAskDel
 "Vuoi Cancellare Le Informazioni Per"
 "Ви бажаєте видалити розмальовку для"
 "Вы жадаеце выдаліць разфарбоўку для"
-"Ar norite ištrinti paryškinimą failams"
+"Ar norite ištrinti spalvą failams"
 
 MHighlightWarning
 "Будут потеряны все Ваши настройки"
@@ -12262,7 +12248,7 @@ MHighlightWarning
 "Perderai Tutti I Cambiamenti!"
 "Будуть втрачені всі ваші налаштування"
 "Будуць згублены усе Налады"
-upd:"You will lose all changes"
+"Bus prarasti visi pakeitimai"
 
 MHighlightAskRestore
 "Вы хотите восстановить раскраску файлов по умолчанию?"
@@ -12276,7 +12262,7 @@ MHighlightAskRestore
 "Vuoi Ripristinare Le Informazioni?"
 "Ви бажаєте відновити розмальовку файлів за замовчуванням?"
 "Вы жадаеце узнавіць прадвызначаную разфарбоўку файлаў?"
-upd:"Do you wish to restore default highlighting?"
+"Ar norite grįžti į standartines spalvas?"
 
 MHighlightEditTitle
 l:
@@ -12291,7 +12277,7 @@ l:
 "Modifica Le Evidenziazioni"
 "Редагування розмальовки файлів"
 "Мяняць разфарбоўку файлаў"
-"Redaguoti failų paryškinimus"
+"Redaguoti failų spalvas"
 
 MHighlightMarkChar
 "Оп&циональный символ пометки,"
@@ -12309,9 +12295,9 @@ MHighlightMarkChar
 
 MHighlightTransparentMarkChar
 "прозра&чный"
-"tra&nsparent"
+"trans&parent"
 "průh&ledný"
-"tra&nsparent"
+"trans&parent"
 "át&látszó"
 "prze&zroczyste"
 "tra&nsparente"
@@ -12319,7 +12305,7 @@ MHighlightTransparentMarkChar
 "Traspare&nte"
 "прозор&ий"
 "празр&ысты"
-upd:"tra&nsparent"
+upd:"trans&parent"
 
 MHighlightColors
 "Цвета файлов (\"чёрный на чёрном\" - цвет по умолчанию)"
@@ -14399,7 +14385,7 @@ l:
 "► &Sistema"
 "Си&стемні параметри"
 "Сістэ&іныя налады"
-"Siste&miniai nuostatai"
+"Siste&miniai nustatymai"
 
 MMenuPanelSettings
 "Настройки па&нели"
@@ -14441,7 +14427,7 @@ MMenuInterface
 "► &Interfaccia"
 "Налаштування &інтерфейсу"
 "Налады знешняга в&ыгляду"
-"&Sąsajos nuostatai"
+"&Sąsajos nustatymai"
 
 MMenuLanguages
 "&Языки"
@@ -14637,7 +14623,7 @@ MMenuViewer
 "► Visuali&zzatore Interno"
 "Налаштування про&грами перегляду"
 "Налады пра&гляду"
-"Per&žiūros nuostatai"
+"Per&žiūros nustatymai"
 
 MMenuEditor
 "Настройки &редактора"
@@ -14651,7 +14637,7 @@ MMenuEditor
 "► Editor In&terno"
 "Налаштування &редактора"
 "Налады &змены"
-"&Redaktoriaus nuostatai"
+"&Redaktoriaus nustatymai"
 
 MMenuCodePages
 "Кодов&ые страницы"
@@ -15800,7 +15786,7 @@ MChangeDriveDisconnectReconnect
 "&Znovu připojit při přihlášení"
 "Bei Anmeldung &verbinden"
 "&Bejelentkezésnél újracsatlakoztat"
-"&Podłącz ponownie przy logowaniu"
+"&Podłącz przy logowaniu"
 "&Reconectar al iniciar sesión"
 "&Znova pripojiť pri prihlásení"
 "&Reconnetti Al Riavvio"
@@ -15913,7 +15899,7 @@ MChangeDriveShowLabelUseShell
 "Použít název shellu"
 upd:"Use shell name"
 upd:"Use shell name"
-"Użyj nazwy z Windows"
+"Użyj &nazwy z Windows"
 upd:"Use shell name"
 upd:"Use shell name"
 upd:"Use shell name"
@@ -15941,7 +15927,7 @@ MChangeDriveShowSize
 "Zobrazi&t velikost"
 "&Größe anzeigen"
 upd:"Show &size"
-"Pokaż &pojemność"
+"Pokaż po&jemność"
 "Mostrar tamaño"
 "Zobrazi&ť veľkosť"
 "Mostra Dimensio&ne"
@@ -15955,7 +15941,7 @@ MChangeDriveShowSizeFloat
 "Zobrazit velikost jako desetinný zlomek"
 upd:"Show size as a decimal fraction"
 upd:"Show size as a decimal fraction"
-"Wielkość w jednostkach dziesiętnych"
+"W&ielkość w jednostkach dziesiętnych"
 "Mostrar tamaño como fracción decimal"
 "Zobraz veľkosť ako zlomok desiatky"
 "Mostra Dimensione Come Frazione Decimale"
@@ -15997,7 +15983,7 @@ MChangeDriveSortPluginsByHotkey
 "Řadit moduly podle zkratky"
 "Plugins mit dem Hotkey sortieren"
 upd:"Sort plugins by hotkey"
-"Sortuj wtyczki wg skrótów"
+"Sortuj wty&czki wg skrótów"
 "Ordenar complementos por tecla de atajo"
 "Triediť moduly podľa skratky"
 "Ordina Plugin In Base Al T&asto Rapido"
@@ -16011,7 +15997,7 @@ MChangeDriveShowCD
 "Zobrazit parametry &CD jednotky"
 "&CD Parameter anzeigen"
 upd:"Show &CD drive parameters"
-"Pokaż parametry napędów &CD"
+"Pokaż parametry napędów &optycznych"
 "Mostrar parámetros unidad de &CD\DVD\BD"
 "Zobraziť parametre jednotky &CD"
 "Mostra Parametri &CD/DVD"
@@ -16039,7 +16025,7 @@ MChangeDriveShowVirtualDisk
 upd:"Detect virtual disks"
 upd:"Detect virtual disks"
 upd:"Detect virtual disks"
-"Wykrywaj dyski wrtualne"
+"W&ykrywaj dyski wirtualne"
 upd:"Detect virtual disks"
 upd:"Detect virtual disks"
 upd:"Detect virtual disks"
@@ -16618,7 +16604,7 @@ MSetAttrTemporary
 "Dočasný"
 "Temporär"
 "&Átmeneti"
-"T&ymczasowy"
+"&Tymczasowy"
 "Temporal"
 "Dočasný"
 "&Temporaneo"
@@ -16632,7 +16618,7 @@ MSetAttrOffline
 "Offline"
 "Offline"
 "O&ffline"
-"Offline"
+"O&ffline"
 "Desconectado"
 "Offline"
 "Non In &Linea"
@@ -16646,7 +16632,7 @@ MSetAttrReparsePoint
 "Reparse point"
 "Analysepunkt"
 upd:"Reparse point"
-"Punkt analizy"
+"Punkt &analizy"
 "Punto de análisis"
 "Reparse point"
 "P&unto Di Reparse"
@@ -16660,7 +16646,7 @@ MSetAttrVirtual
 "Virtuální"
 "Virtuell"
 "&Virtuális"
-"Wirtualny"
+"&Wirtualny"
 "Virtual"
 "Virtuálny"
 "&Virtuale"
@@ -16674,7 +16660,7 @@ MSetAttrIntegrityStream
 "Integrity stream"
 "Integrität"
 upd:"Integrity stream"
-"Integralny strumień"
+"&Integralny strumień"
 "Cadena de integridad"
 "Integrita dát"
 "Integrità Flusso"
@@ -16688,7 +16674,7 @@ MSetAttrNoScrubData
 "No scrub data"
 "Keine Datenbereinigung"
 upd:"No scrub data"
-"Brak danych kontrolnych"
+"&Brak danych kontrolnych"
 "No hay datos depurados"
 "Žiadne dáta pre skener integrity dát"
 "Nessun Dato Scrub"
@@ -16702,7 +16688,7 @@ MSetAttrPinned
 "Připnuto"
 upd:"Pinned"
 upd:"Pinned"
-"Przypięty"
+"&Przypięty"
 "Anclado"
 upd:"Pinned"
 upd:"Pinned"
@@ -16716,7 +16702,7 @@ MSetAttrUnpinned
 "Odepnuto"
 upd:"Unpinned"
 upd:"Unpinned"
-"Odpiety"
+"&Odpięty"
 "Desanclado"
 upd:"Unpinned"
 upd:"Unpinned"
@@ -16730,7 +16716,7 @@ upd:"Recall on open"
 "Zavolat při otevření"
 upd:"Recall on open"
 upd:"Recall on open"
-"Przywołaj na otwarcie"
+"Przywołaj na otwar&cie"
 upd:"Recall on open"
 upd:"Recall on open"
 upd:"Recall on open"
@@ -16744,7 +16730,7 @@ upd:"Recall on data access"
 "Zavolat při přístupu k datům"
 upd:"Recall on data access"
 upd:"Recall on data access"
-"Przywołaj na dostęp danych"
+"Przywołaj na &dostęp danych"
 upd:"Recall on data access"
 upd:"Recall on data access"
 upd:"Recall on data access"
@@ -16758,7 +16744,7 @@ upd:"Strictly sequential"
 "Striktně sekvenční"
 upd:"Strictly sequential"
 upd:"Strictly sequential"
-"Czysto sekwencyjny"
+"&Sekwencyjny"
 upd:"Strictly sequential"
 upd:"Strictly sequential"
 upd:"Strictly sequential"
@@ -16772,7 +16758,7 @@ MSetAttrMore
 "Více"
 "Mehr"
 "Továbbiak"
-"Więcej"
+"Więce&j"
 "Más"
 "Viac"
 "Altro"
@@ -16856,7 +16842,7 @@ MSetAttrChange
 "Čas změny:"
 "Änderungsdatum:"
 upd:"Change time:"
-"Zmień czas:"
+"&Czas zmiany:"
 "Cambiar &hora:"
 "Čas zmeny:"
 "Cambia Data&/Ora:"
@@ -16898,7 +16884,7 @@ MSetAttrBlank
 "P&rázdný"
 "L&eer"
 "&Üres"
-"Wy&czyść"
+"Wycz&yść"
 "&Vaciar"
 "P&rázdny"
 "&Vuoto"
@@ -16983,7 +16969,7 @@ MSetAttrSystemDialog
 "Vlastnosti systému"
 "Systemeigenschaften"
 upd:"System properties"
-"Właściwości systemu"
+"Właściwości syste&mu"
 "Propiedades del sistema"
 "Vlastnosti systému"
 "Proprietà di Sistema"
@@ -17478,9 +17464,9 @@ MSetColorPanelScrollbar
 "Scrollbalken"
 "Gördítősáv"
 "Suwak"
-"Barra desplazamiento"
+"Barra de desplazamiento"
 "Posuvník"
-"Barre Di Scorrimento"
+"Barra Di Scorrimento"
 "Смужка прокручування"
 "Працяжнік"
 "Šliaužiklis"
@@ -17540,7 +17526,7 @@ MSetColorDialogDisabled
 "Testo Disabilitato"
 "Блокований текст"
 "Забаронены тэкст"
-upd:"Disabled text"
+"Atjungtas tekstas"
 
 MSetColorDialogBox
 "Рамка"
@@ -17638,7 +17624,7 @@ MSetColorDialogEditDisabled
 "Testo Di Input Disabilitato"
 "Блоковане поле введення"
 "Забаронены радок уводу"
-upd:"Disabled input line"
+"Atjungta įvedimo eilutė"
 
 MSetColorDialogButtons
 "Кнопки"
@@ -17914,10 +17900,10 @@ MSetColorDialogListScrollBar
 "Scrollbalken"
 "Gördítősáv"
 "Suwak"
-"Barra desplazamiento"
+"Barra de desplazamiento"
 "Posuvník"
-"Barre Di Scorrimento"
-"Смужка прокручув."
+"Barra Di Scorrimento"
+"Смужка прокручування"
 "Працяжнік"
 "Šliaužiklis"
 
@@ -18032,7 +18018,7 @@ upd:"Disabled text"
 "Testo Disabilitato"
 "Недоступний пункт"
 "Забаронены тэкст"
-upd:"Disabled text"
+"Atjungtas tekstas"
 
 MSetColorMenuGrayed
 "Серый текст"
@@ -18099,7 +18085,7 @@ MSetColorMenuScrollBar
 "Suwak"
 "Barra de desplazamiento"
 "Posuvník"
-"Barre Di Scorrimento"
+"Barra Di Scorrimento"
 "Смужка прокручування"
 "Працяжнік"
 "Šliaužiklis"
@@ -18287,7 +18273,7 @@ MSetColorCommandLinePrefix
 "Testo Prefisso"
 "Текст префікса"
 "Тэкст прыстаўкі"
-upd:"Prefix text"
+"Prefix tekstas"
 
 MSetColorCommandLineUserScreen
 "Пользовательский экран"
@@ -18401,7 +18387,7 @@ MSetColorViewerArrows
 "Frecce Di Scorrimento"
 "Стрілки зсуву екрану"
 "Стрэлкі зруху экрана"
-"Ekrano postūmio rodyklės"
+"Šliaužiklio rodyklės"
 
 MSetColorViewerScrollbar
 "Полоса прокрутки"
@@ -18609,7 +18595,7 @@ l:
 "Barva"
 "Farbe"
 "Színek"
-"Kolor"
+"Ustawienie kolorów"
 "Color"
 "Farba"
 "Colore"
@@ -18623,7 +18609,7 @@ MSetColorForeground
 "&Popředí:"
 "&Vordergrund:"
 "&Előtér:"
-"&Kolor:"
+"Ko&lor:"
 "&Caracteres:"
 "&Popredie:"
 "&PrimoPiano:"
@@ -18757,11 +18743,11 @@ MSetColorStyle
 
 MSetColorStyleInherit
 "Наследовать"
-"Inherit"
+"&Inherit"
 "Zdědí"
 "Erben"
 "Örökölje"
-"Dziedziczyć"
+"&Dziedziczenie"
 "Heredar"
 "Zdediť"
 "Eredita"
@@ -18771,11 +18757,11 @@ MSetColorStyleInherit
 
 MSetColorStyleBold
 "Жирный"
-"Bold"
+"B&old"
 "Tučné"
 "Fett"
 "Félkövér"
-"Pogrubienie"
+"&Pogrubienie"
 "Negrita"
 "Tučné"
 "Grassetto"
@@ -18785,11 +18771,11 @@ MSetColorStyleBold
 
 MSetColorStyleItalic
 "Курсив"
-"Italic"
+"I&talic"
 "Kurzíva"
 "Kursiv"
 "Dőlt"
-"Kursywa"
+"&Kursywa"
 "Cursiva"
 "Kurzíva"
 "Corsivo"
@@ -18799,11 +18785,11 @@ MSetColorStyleItalic
 
 MSetColorStyleUnderline
 "Подчёркнутый"
-"Underline"
+"&Underline"
 "Podtržené"
 "Unterstrichen"
 "Aláhúzott"
-"Podkreślenie"
+"Podkr&eślenie"
 "Subrayado"
 "Podčiarknuté"
 "Sottolineato"
@@ -18813,11 +18799,11 @@ MSetColorStyleUnderline
 
 MSetColorStyleUnderline2
 "Двойное"
-"Double"
+"&Double"
 "Dvojitě"
 "Doppelt"
 "Dupla"
-"Podwójne"
+"Pod&wójne"
 "Doble"
 "Dvojité"
 "Doppia"
@@ -18827,11 +18813,11 @@ MSetColorStyleUnderline2
 
 MSetColorStyleOverline
 "Надчёркивание"
-"Overline"
+"O&verline"
 "Nadtržítko"
 "Überstrichen"
 "Föléhúzás"
-"Nadkreślenie"
+"&Nadkreślenie"
 "Línea alta"
 "Horná čiara"
 "Linea sopra"
@@ -18841,11 +18827,11 @@ MSetColorStyleOverline
 
 MSetColorStyleStrikeout
 "Зачёркнутый"
-"Strikeout"
+"&Strikeout"
 "Přeškrtnuté"
 "Durchgestrichen"
 "Áthúzás"
-"Przekreślenie"
+"Pr&zekreślenie"
 "Tachado"
 "Prečiarknuté"
 "Barrato"
@@ -18855,11 +18841,11 @@ MSetColorStyleStrikeout
 
 MSetColorStyleFaint
 "Бледный"
-"Faint"
+"F&aint"
 "Tmavé"
 "Abblenden"
 "Sötét"
-"Przygaszone"
+"Przy&gaszenie"
 "Atenuado"
 "Temné"
 "Tenue"
@@ -18869,11 +18855,11 @@ MSetColorStyleFaint
 
 MSetColorStyleBlink
 "Мерцающий"
-"Blink"
+"B&link"
 "Blikající"
 "Blinkend"
 "Villogás"
-"Miganie"
+"&Miganie"
 "Intermitente"
 "Blikanie"
 "Intermittente"
@@ -19099,7 +19085,7 @@ MSetConfirmAllowReedit
 "&Obnovit upravovaný soubor"
 "Bea&rbeitete Datei neu laden"
 "&Szerkesztett fájl újratöltése"
-"&Załaduj edytowany plik"
+"Przeładuj &edytowany plik"
 "&Recargar archivo editado"
 "&Obnovenie upravovaného súboru"
 "&Ricarica File Editati"
@@ -21150,7 +21136,7 @@ MViewSearchWholeWords
 "Parole Intere"
 "Только &целие слова"
 "Толькі по&ўныя словы"
-upd:"&Whole words"
+"Visi ž&odžiai"
 
 MViewSearchReverse
 "Обратн&ый поиск"
@@ -21396,19 +21382,19 @@ MPrintFilesTo
 "Друк {0} файлаў на"
 "Spausdinti {0} failus su"
 
-MPreparingForPrinting
-"Подготовка файлов к печати"
-"Preparing files for printing"
-"Připravuji soubory pro tisk"
-"Vorbereiten der Druckaufträge"
-"Fájlok előkészítése nyomtatáshoz"
-"Przygotowuję plik(i) do drukowania"
-"Preparando archivos para imprimir"
-"Pripravujem súbory na tlač"
-"Preparazione Dei Files Per La Stampa"
-"Підготовка файлів до друку"
-"Падрыхтоўка файлаў да друку"
-"Ruošiu failus spausdinimui"
+MPrintingFile
+"Печать {0}"
+"Printing {0}"
+"Tisk {0}"
+"Drucken {0}"
+"Nyomtatás {0}"
+"Druk {0}"
+"Impresión {0}"
+"Tlač {0}"
+"Stampa {0}"
+"Друк {0}"
+"Друк {0}"
+"Spausdinimas {0}"
 
 MCannotEnumeratePrinters
 "Не удалось получить список доступных принтеров"
@@ -22656,7 +22642,7 @@ upd:"Unload plugin"
 "Scarica Plugin"
 "Вивантажити плагін"
 "Выгрузіць дадатак"
-upd:"&Unload plugin"
+"Iškrauti priedą"
 
 MExcFullDump
 "Полный дамп"
@@ -22715,7 +22701,7 @@ l:
 "Non Posso Leggere Il Contenuto Della Cartella"
 "Не вдалося прочитати вміст папки"
 "Немагчыма прачытаць змест каталогу"
-upd:"Cannot read folder contents"
+"Negaliu perskaityti katalogo"
 
 MPlgBadVers
 l:
@@ -22730,7 +22716,7 @@ l:
 "Questo Plugin Richiede Una Versione Maggiore Di Far"
 "Для роботи цього плагіна потрібна новіша версія Far"
 "Для працы дадатку патрабуецца больш новая версія Far"
-upd:"This plugin requires more recent version of Far"
+"Šis priedas veikia tik su vėlesne Far versija"
 
 MPlgRequired
 "Требуемая версия Far - {0},"
@@ -22744,7 +22730,7 @@ MPlgRequired
 "Richiesta La Versione {0} Di Far"
 "Потрібна версія Far - {0},"
 "Патрабуемая версія Far - {0},"
-upd:"Required Far version is {0},"
+"Reikalinga Far versija - {0},"
 
 MPlgRequired2
 "текущая версия Far - {0}."
@@ -22753,12 +22739,12 @@ MPlgRequired2
 "aktuelle Far-Version ist {0}."
 "a jelenlegi Far verzió: {0}."
 "bieżąca wersja Far: {0}."
-"La versión actual de Far es {0}."
+"la versión actual de Far es {0}."
 "terajšia verzia Faru je {0}."
 "Versione Attuale: {0}"
 "поточна версія Far - {0}."
 "бягучая версія Far - {0}."
-upd:"current Far version is {0}."
+"naudojama Far versija - {0}."
 
 MPlgLoadPluginError
 "Ошибка при загрузке плагина"
@@ -22772,7 +22758,7 @@ upd:"Plugin betöltési hiba"
 "Errore Di Caricamento Del Modulo Plugin"
 "Помилка при завантаженні плагіна"
 "Памылка пры запамоўцы дадатку"
-upd:"Error loading plugin"
+"Priedo pakrovimo klaida"
 
 MHelpTitle
 l:
@@ -22801,7 +22787,7 @@ MHelpActivatorURL
 "Questa Voce Avvia Una Applicazione Esterna"
 "Це посилання запускає зовнішній додаток"
 "Гэты спасылак запускае знешнюю праграму"
-upd:"This reference starts an external application"
+"Ši nuoroda paleis šorinę programą:"
 
 MHelpActivatorFormat
 "с параметром:"
@@ -22815,7 +22801,7 @@ MHelpActivatorFormat
 "Con Il Parametro:"
 "з параметром:"
 "з параметрамі:"
-upd:"with parameter:"
+"su parametrais:"
 
 MHelpActivatorQ
 "Желаете запустить?"
@@ -22829,7 +22815,7 @@ MHelpActivatorQ
 "Vuoi Avviarla?"
 "Бажаєте запустити?"
 "Вы жадаеце запусіць?"
-upd:"Do you wish to start it?"
+"Ar norite ją paleisti?"
 
 MCannotOpenHelp
 "Ошибка открытия файла"
@@ -24489,7 +24475,7 @@ MInfoShiftF2
 "A Capo"
 "Слова"
 "Словы"
-upd:"WWrap"
+"Kelti"
 
 MInfoShiftF3
 ""
@@ -24743,7 +24729,7 @@ MInfoAltF8
 "Vai A"
 "Рядок"
 "Радок"
-upd:"Goto"
+"Eiti"
 
 MInfoAltF9
 "Видео"
@@ -25849,7 +25835,7 @@ MQViewShiftF2
 "A Capo"
 "Слова"
 "Словы"
-upd:"WWrap"
+"Kelti"
 
 MQViewShiftF3
 ""
@@ -26103,7 +26089,7 @@ MQViewAltF8
 "Vai A"
 "Рядок"
 "Радок"
-upd:"Goto"
+"Eiti"
 
 MQViewAltF9
 "Видео"

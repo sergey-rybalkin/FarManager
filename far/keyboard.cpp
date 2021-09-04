@@ -46,7 +46,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "scrbuf.hpp"
 #include "savescr.hpp"
 #include "lockscrn.hpp"
-#include "TPreRedrawFunc.hpp"
 #include "interf.hpp"
 #include "message.hpp"
 #include "config.hpp"
@@ -761,11 +760,6 @@ static DWORD ProcessBufferSizeEvent(point const Size)
 
 		Global->WindowManager->ResizeAllWindows();
 		Global->WindowManager->GetCurrentWindow()->Show();
-
-		TPreRedrawFunc::instance()([](const PreRedrawItem& Item)
-		{
-			Item();
-		});
 	}
 
 	return KEY_CONSOLE_BUFFER_RESIZE;
@@ -1031,18 +1025,36 @@ static DWORD GetInputRecordImpl(INPUT_RECORD *rec,bool ExcludeMacro,bool Process
 		return ProcessFocusEvent(rec->Event.FocusEvent.bSetFocus != FALSE);
 	}
 
-	if (
-		// Legitimate event, but skip if the size isn't changed to filter out Windows 10 rubbish (see https://github.com/Microsoft/console/issues/281)
-		(rec->EventType == WINDOW_BUFFER_SIZE_EVENT && rec->Event.WindowBufferSizeEvent.dwSize.X && rec->Event.WindowBufferSizeEvent.dwSize.Y && IsConsoleSizeChanged()) ||
-		// Fake event, generated internally
-		(rec->EventType == WINDOW_BUFFER_SIZE_EVENT && !rec->Event.WindowBufferSizeEvent.dwSize.X && !rec->Event.WindowBufferSizeEvent.dwSize.Y) ||
-		// Size changed
-		IsConsoleSizeChanged()
-	)
+	if (rec->EventType == WINDOW_BUFFER_SIZE_EVENT)
 	{
-		// Do not use rec->Event.WindowBufferSizeEvent.dwSize here - we need a 'virtual' size
-		point Size;
-		return console.GetSize(Size)? ProcessBufferSizeEvent(Size) : static_cast<DWORD>(KEY_CONSOLE_BUFFER_RESIZE);
+		// Fake event, generated internally
+		const auto IsInternalEvent = !rec->Event.WindowBufferSizeEvent.dwSize.X && !rec->Event.WindowBufferSizeEvent.dwSize.Y;
+
+		static point LastBufferSize{};
+		SCOPE_EXIT
+		{
+			if (!IsInternalEvent)
+				LastBufferSize = rec->Event.WindowBufferSizeEvent.dwSize;
+		};
+
+		if (
+			// Skip if the size isn't changed to filter out Windows 10 rubbish (see https://github.com/Microsoft/console/issues/281)
+			IsInternalEvent || IsConsoleViewportSizeChanged()
+		)
+		{
+			// Do not use rec->Event.WindowBufferSizeEvent.dwSize here - we need a 'virtual' size
+			point Size;
+			return console.GetSize(Size)? ProcessBufferSizeEvent(Size) : static_cast<DWORD>(KEY_CONSOLE_BUFFER_RESIZE);
+		}
+
+		if (LastBufferSize != rec->Event.WindowBufferSizeEvent.dwSize)
+		{
+			// Buffer size changed, but the window size stayed the same.
+			// In window mode this means that the actual drawing area could now be dramatically different
+			console.ResetViewportPosition();
+			Global->ScrBuf->Invalidate();
+			Global->ScrBuf->Flush();
+		}
 	}
 
 	if (rec->EventType==KEY_EVENT)
@@ -1249,19 +1261,6 @@ bool CheckForEscSilent()
 		Global->ScrBuf->Flush();
 
 	return false;
-}
-
-bool ConfirmAbortOp()
-{
-	return (Global->Opt->Confirm.Esc && !Global->CloseFAR)? AbortMessage() : true;
-}
-
-/* $ 09.02.2001 IS
-     Подтверждение нажатия Esc
-*/
-bool CheckForEsc()
-{
-	return CheckForEscSilent()? ConfirmAbortOp() : false;
 }
 
 using tfkey_to_text = string_view(const TFKey&);
@@ -2134,7 +2133,7 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 	if (KeyCode==VK_MENU)
 		AltValue=0;
 
-	if (in_closed_range(unsigned(VK_F1), KeyCode, unsigned(VK_F24)))
+	if (in_closed_range(static_cast<unsigned>(VK_F1), KeyCode, static_cast<unsigned>(VK_F24)))
 		return Modif + KEY_F1 + (KeyCode - VK_F1);
 
 	if (IntKeyState.OnlyAltPressed())

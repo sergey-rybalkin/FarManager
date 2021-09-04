@@ -295,7 +295,7 @@ static bool EditItemImpl(Shortcuts::shortcut& Item, bool raw)
 	if (Item.PluginUuid != FarUuid)
 	{
 		const auto plugin = Global->CtrlObject->Plugins->FindPlugin(Item.PluginUuid);
-		Builder.AddSeparator(plugin? plugin->Title().c_str() : uuid::str(Item.PluginUuid).c_str());
+		Builder.AddSeparator(plugin? plugin->Title() : uuid::str(Item.PluginUuid));
 		Builder.AddText(lng::MFSShortcutPluginFile);
 		Builder.AddEditField(NewItem.PluginFile, 50, L"FS_PluginFile"sv, DIF_EDITPATH);
 		Builder.AddText(lng::MFSShortcutPluginData);
@@ -329,7 +329,7 @@ static bool EditItemImpl(Shortcuts::shortcut& Item, bool raw)
 						NewItem.Folder,
 						msg(lng::MSaveThisShortcut)
 					},
-					{ lng::MYes, lng::MNo }) != Message::first_button)
+					{ lng::MYes, lng::MNo }) != message_result::first_button)
 				{
 					return false;
 				}

@@ -47,7 +47,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-class FileFilter;
+class multifilter;
 struct PluginPanelItem;
 struct UserDataItem;
 
@@ -74,16 +74,8 @@ struct DirInfoData: public BasicDirInfoData
 	unsigned long long ClusterSize{};
 };
 
-enum getdirinfo_message_delay
-{
-	getdirinfo_infinite_delay = -1,
-	getdirinfo_no_delay = 0,
-	getdirinfo_default_delay = 500, // ms
-};
-
 using dirinfo_callback = function_ref<void(string_view Name, unsigned long long Items, unsigned long long Size)>;
-int GetDirInfo(string_view DirName, DirInfoData& Data, FileFilter *Filter, dirinfo_callback Callback, DWORD Flags = GETDIRINFO_SCANSYMLINKDEF);
-void DirInfoMsg(string_view Title, string_view Name, unsigned long long Items, unsigned long long Size);
+int GetDirInfo(string_view DirName, DirInfoData& Data, multifilter* Filter, dirinfo_callback Callback, DWORD Flags = GETDIRINFO_SCANSYMLINKDEF);
 
 class plugin_panel;
 

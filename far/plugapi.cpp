@@ -56,7 +56,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ctrlobj.hpp"
 #include "window.hpp"
 #include "scrbuf.hpp"
-#include "TPreRedrawFunc.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
 #include "message.hpp"
@@ -90,7 +89,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "lockscrn.hpp"
 #include "exception_handler.hpp"
-#include "history.hpp"
+#include "setcolor.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -1273,13 +1272,14 @@ intptr_t WINAPI apiMessageFn(const UUID* PluginId, const UUID* Id, unsigned long
 			((Flags & FMSG_KEEPBACKGROUND)? MSG_KEEPBACKGROUND : 0) |
 			((Flags & FMSG_LEFTALIGN)? MSG_LEFTALIGN : 0);
 
-		return Message(
+		return static_cast<intptr_t>(Message(
 			InternalFlags,
 			Flags & FMSG_ERRORTYPE? &ErrorState : nullptr,
 			Title,
 			std::move(MsgItems),
 			std::move(Buttons),
-			strTopic, Id, PluginNumber);
+			strTopic, Id, PluginNumber)
+		);
 	},
 	[]
 	{
@@ -1600,7 +1600,6 @@ intptr_t WINAPI apiGetDirList(const wchar_t *Dir,PluginPanelItem **pPanelItem,si
 					{});
 			};
 
-			SCOPED_ACTION(TPreRedrawFuncGuard)(std::make_unique<PreRedrawItem>(PR_FarGetDirListMsg));
 			SCOPED_ACTION(SaveScreen);
 			os::fs::find_data FindData;
 			string strFullName;
@@ -1617,7 +1616,7 @@ intptr_t WINAPI apiGetDirList(const wchar_t *Dir,PluginPanelItem **pPanelItem,si
 			{
 				if (TimeCheck)
 				{
-					if (CheckForEsc())
+					if (CheckForEscAndConfirmAbort())
 					{
 						FreePluginPanelItemsData(*Items);
 						return FALSE;
@@ -1664,11 +1663,19 @@ intptr_t WINAPI apiGetPluginDirList(const UUID* PluginId, HANDLE hPlugin, const 
 		// BUGBUG This is API, shouldn't the callback be empty?
 
 		const time_check TimeCheck;
+		std::optional<dirinfo_progress> DirinfoProgress;
 
 		const auto DirInfoCallback = [&](string_view const Name, unsigned long long const ItemsCount, unsigned long long const Size)
 		{
-			if (TimeCheck)
-				DirInfoMsg(msg(lng::MPreparingList), Name, ItemsCount, Size);
+			if (!TimeCheck)
+				return;
+
+			if (!DirinfoProgress)
+				DirinfoProgress.emplace(msg(lng::MPreparingList));
+
+			DirinfoProgress->set_name(Name);
+			DirinfoProgress->set_count(ItemsCount);
+			DirinfoProgress->set_size(Size);
 		};
 
 		const auto Result = GetPluginDirList(UuidToPlugin(PluginId), hPlugin, Dir, nullptr, *Items, DirInfoCallback);
@@ -2743,26 +2750,26 @@ intptr_t WINAPI apiFileFilterControl(HANDLE hHandle, FAR_FILE_FILTER_CONTROL_COM
 			if (!Param2)
 				return false;
 
-			*static_cast<FileFilter**>(Param2) = std::make_unique<FileFilter>(GetHostPanel(hHandle), static_cast<FAR_FILE_FILTER_TYPE>(Param1)).release();
+			*static_cast<multifilter**>(Param2) = std::make_unique<multifilter>(GetHostPanel(hHandle), static_cast<FAR_FILE_FILTER_TYPE>(Param1)).release();
 			return true;
 		}
 
 		case FFCTL_FREEFILEFILTER:
-			delete static_cast<FileFilter*>(hHandle);
+			delete static_cast<multifilter*>(hHandle);
 			return true;
 
 		case FFCTL_OPENFILTERSMENU:
-			static_cast<FileFilter*>(hHandle)->FilterEdit();
+			filters::EditFilters(static_cast<multifilter*>(hHandle)->area(), static_cast<multifilter*>(hHandle)->panel());
 			return true;
 
 		case FFCTL_STARTINGTOFILTER:
-			static_cast<FileFilter*>(hHandle)->UpdateCurrentTime();
+			static_cast<multifilter*>(hHandle)->UpdateCurrentTime();
 			return true;
 
 		case FFCTL_ISFILEINFILTER:
 			if (!Param2)
 				break;
-			return static_cast<FileFilter*>(hHandle)->FileInFilter(*static_cast<const PluginPanelItem*>(Param2));
+			return static_cast<multifilter*>(hHandle)->FileInFilter(*static_cast<const PluginPanelItem*>(Param2));
 		}
 		return false;
 	},
@@ -3079,7 +3086,7 @@ BOOL WINAPI apiColorDialog(const UUID* PluginId, COLORDIALOGFLAGS Flags, FarColo
 	return cpp_try(
 	[&]
 	{
-		return !Global->WindowManager->ManagerIsDown() && console.GetColorDialog(*Color, true);
+		return !Global->WindowManager->ManagerIsDown() && GetColorDialog(*Color, true);
 	},
 	[]
 	{
@@ -3330,7 +3337,10 @@ intptr_t WINAPI apiCallFar(intptr_t CheckCode, FarMacroCall* Data) noexcept
 	return cpp_try(
 	[&]
 	{
-		return Global->CtrlObject? Global->CtrlObject->Macro.CallFar(CheckCode, Data) : 0;
+		if (Global->CtrlObject)
+			Global->CtrlObject->Macro.CallFar(CheckCode, Data);
+
+		return 0;
 	},
 	[]
 	{

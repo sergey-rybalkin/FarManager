@@ -38,11 +38,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lang.hpp"
 #include "config.hpp"
 #include "keyboard.hpp"
-#include "constitle.hpp"
 #include "mix.hpp"
 #include "strmix.hpp"
 #include "interf.hpp"
-#include "message.hpp"
 #include "dialog.hpp"
 
 // Platform:
@@ -131,28 +129,8 @@ copy_progress::copy_progress(bool Move, bool Total, bool Time):
 		ProgressDlgItems[progress_items::pr_doublebox].Y2 -= 2;
 	}
 
-	m_Dialog = Dialog::create(ProgressDlgItems, [](Dialog* const Dlg, intptr_t const Msg, intptr_t const Param1, void* const Param2)
-	{
-		if (Msg == DN_RESIZECONSOLE)
-		{
-			COORD Position{ -1, -1 };
-			Dlg->SendMessage(DM_MOVEDIALOG, 1, &Position);
-		}
-
-		return Dlg->DefProc(Msg, Param1, Param2);
-	});
-
 	const int DialogHeight = ProgressDlgItems[progress_items::pr_doublebox].Y2 - ProgressDlgItems[progress_items::pr_doublebox].Y1 + 1 + 2;
-	m_Dialog->SetPosition({ -1, -1, DlgW, DialogHeight });
-	m_Dialog->SetCanLoseFocus(true);
-	m_Dialog->Process();
-
-}
-
-copy_progress::~copy_progress()
-{
-	if (m_Dialog)
-		m_Dialog->CloseDialog();
+	init(ProgressDlgItems, { -1, -1, DlgW, DialogHeight });
 }
 
 size_t copy_progress::CanvasWidth()
@@ -184,7 +162,6 @@ void copy_progress::next()
 void copy_progress::undo()
 {
 	m_BytesTotal.Copied -= m_BytesCurrent.Copied;
-	m_BytesTotal.Total -= m_BytesCurrent.Total;
 
 	m_BytesCurrent.Copied = 0;
 
@@ -198,13 +175,10 @@ unsigned long long copy_progress::get_total_bytes() const
 
 bool copy_progress::CheckEsc()
 {
-	if (!m_IsCancelled)
-	{
-		if (CheckForEscSilent())
-		{
-			m_IsCancelled = ConfirmAbortOp() != 0;
-		}
-	}
+	if (m_IsCancelled)
+		return m_IsCancelled;
+
+	m_IsCancelled = CheckForEscAndConfirmAbort();
 	return m_IsCancelled;
 }
 

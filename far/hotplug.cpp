@@ -413,7 +413,7 @@ static bool RemoveHotplugDriveDevice(const DeviceInfo& Info, bool const Confirm,
 	if (GetDevicePropertyRecursive(Info.DevInst, SPDRP_DEVICEDESC, strDescription))
 		inplace::trim(strDescription);
 
-	int MessageResult = Message::first_button;
+	auto MessageResult = message_result::first_button;
 
 	if (Confirm)
 	{
@@ -452,7 +452,7 @@ static bool RemoveHotplugDriveDevice(const DeviceInfo& Info, bool const Confirm,
 			{ lng::MHRemove, lng::MHCancel });
 	}
 
-	if (MessageResult != Message::first_button)
+	if (MessageResult != message_result::first_button)
 	{
 		Cancelled = true;
 		return false;
@@ -534,7 +534,7 @@ bool RemoveHotplugDrive(string_view const Path, bool const Confirm, bool& Cancel
 
 void ShowHotplugDevices()
 {
-	const auto HotPlugList = VMenu2::create(msg(lng::MHotPlugListTitle), {}, 0);
+	const auto HotPlugList = VMenu2::create(msg(lng::MHotPlugListTitle), {});
 	std::vector<DeviceInfo> Info;
 
 	const auto FillMenu = [&]()

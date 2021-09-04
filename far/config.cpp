@@ -526,7 +526,7 @@ void Options::MaskGroupsSettings()
 						msg(lng::MMaskGroupAskDelete),
 						*Item
 					},
-					{ lng::MDelete, lng::MCancel }) == Message::first_button)
+					{ lng::MDelete, lng::MCancel }) == message_result::first_button)
 				{
 					ConfigProvider().GeneralCfg()->DeleteValue(L"Masks"sv, *Item);
 					Changed = true;
@@ -577,7 +577,7 @@ void Options::MaskGroupsSettings()
 						{
 							msg(lng::MMaskGroupRestore),
 						},
-						{ lng::MYes, lng::MCancel }) == Message::first_button)
+						{ lng::MYes, lng::MCancel }) == message_result::first_button)
 					{
 						ApplyDefaultMaskGroups();
 						Changed = true;
@@ -1311,7 +1311,7 @@ void Options::SetFilePanelModes()
 			{ DI_BUTTON,    {{0,  16}, {0,  16}}, DIF_CENTERGROUP, msg(lng::MCancel), },
 		});
 
-		RemoveHighlights(ModeDlg[MD_DOUBLEBOX].strData);
+		inplace::remove_highlight(ModeDlg[MD_DOUBLEBOX].strData);
 
 		static const std::pair<ModeItems, panel_view_settings_flags> ModesFlagsMapping[] =
 		{
@@ -2422,7 +2422,7 @@ void Options::Save(bool Manual)
 			msg(lng::MSaveSetupAsk1),
 			msg(lng::MSaveSetupAsk2)
 		},
-		{ lng::MSaveSetup, lng::MCancel }) != Message::first_button)
+		{ lng::MSaveSetup, lng::MCancel }) != message_result::first_button)
 		return;
 
 	/* <ПРЕПРОЦЕССЫ> *************************************************** */
@@ -2468,7 +2468,7 @@ void Options::Save(bool Manual)
 		}
 	}
 
-	FileFilter::Save(Manual);
+	filters::Save(Manual);
 	SavePanelModes(Manual);
 	SaveSortLayers(Manual);
 	Global->CtrlObject->Macro.SaveMacros(Manual);
