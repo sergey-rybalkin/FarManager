@@ -1,5 +1,13 @@
-ROOT_PATH=../../
-!include ../../makefile_vc_base
+!ifndef ROOTDIR
+ROOTDIR = ..\..\..
+!endif
+!if exists($(ROOTDIR)\make_vc_defs)
+!include $(ROOTDIR)\make_vc_defs
+!endif
+!ifndef TREEDIR
+TREEDIR=$(ROOTDIR)
+!endif
+!include $(TREEDIR)\_build\vc\config\common.mak
 
 CC=$(_BIN_PATH_)cl.exe
 LIBR=$(_BIN_PATH_)lib.exe
@@ -92,18 +100,18 @@ CPP_PROJ=$(CPP_BASE) /Zp8 $(COMPAT64)
 CPP_PROJ=$(CPP_BASE) /Oy
 !endif
 
-LINK_FLAGS=/nologo /nodefaultlib /out:"$(OUTDIR)\$(DLLNAME)"
+LINKFLAGS=/nologo /nodefaultlib /out:"$(OUTDIR)\$(DLLNAME)"
 
 ALL: dirs $(OUTDIR)\$(DLLNAME)
 
 $(OUTDIR)\$(DLLNAME) : $(LINK_OBJS)
 !ifndef __MAKE__
 	@$(LIBR) @<<
-	$(LINK_FLAGS) $(LINK_OBJS)
+	$(LINKFLAGS) $(LINK_OBJS)
 <<
 !else
 	@$(LIBR) @&&<
-	$(LINK_FLAGS) $(LINK_OBJS)
+	$(LINKFLAGS) $(LINK_OBJS)
 <
 !endif
 

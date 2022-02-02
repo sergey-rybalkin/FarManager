@@ -62,10 +62,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-enum
-{
-	KEY_COUNT = 12
-};
+static const size_t KEY_COUNT = 12;
 
 KeyBar::KeyBar(window_ptr Owner):
 	SimpleScreenObject(std::move(Owner)),
@@ -110,7 +107,7 @@ void KeyBar::DisplayObject()
 
 	static_assert(std::size(Mapping) == KBL_GROUP_COUNT);
 
-	for (size_t i=0; i<KEY_COUNT; i++)
+	for (const auto& i: irange(KEY_COUNT))
 	{
 		if (WhereX() + LabelWidth >= m_Where.right)
 			break;
@@ -274,8 +271,7 @@ void KeyBar::SetCustomLabels(KEYBARAREA Area)
 
 bool KeyBar::ProcessKey(const Manager::Key& Key)
 {
-	const auto LocalKey = Key();
-	switch (LocalKey)
+	switch (Key())
 	{
 		case KEY_KILLFOCUS:
 		case KEY_GOTFOCUS:

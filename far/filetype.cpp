@@ -85,7 +85,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 bool ProcessLocalFileTypes(string_view const Name, string_view const ShortName, FILETYPE_MODE Mode, bool AlwaysWaitFinish, bool AddToHistory, bool RunAs, function_ref<void(execute_info&)> const Launcher)
 {
-	string strCommand, strDescription;
+	string strCommand;
 
 	const subst_context Context(Name, ShortName);
 
@@ -96,10 +96,12 @@ bool ProcessLocalFileTypes(string_view const Name, string_view const ShortName, 
 		int CommandCount=0;
 
 		std::vector<MenuItemEx> MenuItems;
+		string strDescription;
 
 		for(const auto& [Id, Mask]: ConfigProvider().AssocConfig()->TypedMasksEnumerator(Mode))
 		{
 			strCommand.clear();
+			strDescription.clear();
 
 			if (FMask.assign(Mask, FMF_SILENT))
 			{
@@ -262,11 +264,11 @@ bool GetFiletypeOpenMode(int keyPressed, FILETYPE_MODE& mode, bool& shouldForceI
 /*
   Используется для запуска внешнего редактора и вьювера
 */
-void ProcessExternal(string_view const Command, string_view const Name, string_view const ShortName, bool const AlwaysWaitFinish)
+void ProcessExternal(string_view const Command, string_view const Name, string_view const ShortName, bool const AlwaysWaitFinish, string_view const CurrentDirectory)
 {
 	string strExecStr(Command);
 	bool PreserveLFN = false;
-	if (!SubstFileName(strExecStr, subst_context(Name, ShortName), &PreserveLFN) || strExecStr.empty())
+	if (!SubstFileName(strExecStr, { Name, ShortName }, &PreserveLFN) || strExecStr.empty())
 		return;
 
 	// If you want your history to be usable - use full paths yourself. We cannot reliably substitute them.
@@ -277,6 +279,7 @@ void ProcessExternal(string_view const Command, string_view const Name, string_v
 	execute_info Info;
 	Info.DisplayCommand = strExecStr;
 	Info.Command = strExecStr;
+	Info.Directory = CurrentDirectory;
 	Info.WaitMode = AlwaysWaitFinish? execute_info::wait_mode::wait_finish : execute_info::wait_mode::if_needed;
 
 	Global->CtrlObject->CmdLine()->ExecString(Info);
@@ -369,7 +372,7 @@ static intptr_t EditTypeRecordDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 
 			if (Param1==ETR_BUTTON_OK)
 			{
-				return filemasks().assign(reinterpret_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, ETR_EDIT_MASKS, nullptr)));
+				return filemasks().assign(view_as<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, ETR_EDIT_MASKS, nullptr)));
 			}
 			break;
 

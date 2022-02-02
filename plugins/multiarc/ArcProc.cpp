@@ -1,6 +1,7 @@
 ﻿#include "MultiArc.hpp"
 #include "marclng.hpp"
 
+#include <cstdlib>
 
 BOOL PluginClass::GetFormatName(char *FormatName, char *DefExt)
 {
@@ -235,11 +236,6 @@ int PluginClass::SelectFormat(char *ArcFormat,int AddOnly)
 
         NewMenuItems=(struct FarMenuItemEx *)realloc(MenuItems,
                              (MenuItemsNumber+1)*sizeof(struct FarMenuItemEx));
-        if (NewMenuItems==NULL)
-        {
-          free(MenuItems);
-          return FALSE;
-        }
         MenuItems=NewMenuItems;
         memset(MenuItems+MenuItemsNumber,0,sizeof(struct FarMenuItemEx));
         MenuItems[MenuItemsNumber].UserData = MAKEWPARAM((WORD)i,(WORD)j);
@@ -291,8 +287,7 @@ int PluginClass::SelectFormat(char *ArcFormat,int AddOnly)
     MenuItems=NULL;
     MenuItemsNumber=0;
   }
-  if(MenuItems)
-    free(MenuItems);
+  free(MenuItems);
   return ExitCode >= 0;
 }
 

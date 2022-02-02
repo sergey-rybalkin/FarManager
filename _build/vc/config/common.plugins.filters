@@ -41,21 +41,24 @@
     <ResourceCompile Include="*.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
-    <CustomBuild Include="*.lng">
+    <CopyFileToFolders Include="*.lng">
       <Filter>Language Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="*.hlf">
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="*.hlf">
       <Filter>Help Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="*.lua">
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="*.lua">
       <Filter>Lua Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="*.farconfig">
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="*.farconfig">
       <Filter>Configuration Files</Filter>
-    </CustomBuild>
-    <CustomBuild Include="*.ini">
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="*.ini">
       <Filter>Configuration Files</Filter>
-    </CustomBuild>
+    </CopyFileToFolders>
+    <CopyFileToFolders Include="*.xml">
+      <Filter>Configuration Files</Filter>
+    </CopyFileToFolders>
     <None Include="*.def">
       <Filter>Source Files</Filter>
     </None>

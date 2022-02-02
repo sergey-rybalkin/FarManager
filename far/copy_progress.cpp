@@ -112,8 +112,9 @@ copy_progress::copy_progress(bool Move, bool Total, bool Time):
 	if (!m_Total)
 	{
 		ProgressDlgItems[progress_items::pr_total_progress].Flags |= DIF_HIDDEN;
+		ProgressDlgItems[progress_items::pr_console_title].strData = ProgressDlgItems[progress_items::pr_doublebox].strData;
 
-		for (size_t i = progress_items::pr_total_progress + 1; i != progress_items::pr_count; ++i)
+		for (const auto& i: irange(progress_items::pr_total_progress + 1, progress_items::pr_count))
 		{
 			--ProgressDlgItems[i].Y1;
 			--ProgressDlgItems[i].Y2;
@@ -306,7 +307,7 @@ void copy_progress::add_total_bytes(unsigned long long const Value)
 	m_BytesTotal.Total += Value;
 }
 
-void copy_progress::SetNames(const string& Src, const string& Dst)
+void copy_progress::SetNames(const string_view Src, const string_view Dst)
 {
 	if (m_ShowTime && !m_Files.Copied)
 	{

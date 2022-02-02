@@ -114,7 +114,7 @@ struct DialogItemEx: public FarDialogItem
 		X2 += Delta;
 	}
 
-	bool AddAutomation(DialogItemEx* DlgItem,
+	bool AddAutomation(DialogItemEx& DlgItem,
 		FARDIALOGITEMFLAGS UncheckedSet, FARDIALOGITEMFLAGS UncheckedSkip,
 		FARDIALOGITEMFLAGS CheckedSet, FARDIALOGITEMFLAGS CheckedSkip,
 		FARDIALOGITEMFLAGS Checked3Set, FARDIALOGITEMFLAGS Checked3Skip);
@@ -241,7 +241,7 @@ public:
 	intptr_t GetListItemSimpleUserData(size_t ListId, size_t ItemId) const;
 
 	void SetListItemComplexUserData(size_t ListId, size_t ItemId, const std::any& Data);
-	std::any* GetListItemComplexUserData(size_t ListId, size_t ItemId);
+	std::any* GetListItemComplexUserData(size_t ListId, size_t ItemId) const;
 
 	template<class T>
 	const T* GetListItemComplexUserDataPtr(size_t ListId, size_t ItemId)
@@ -289,21 +289,21 @@ private:
 	*/
 	void ChangeFocus2(size_t SetFocusPos);
 	size_t ChangeFocus(size_t CurFocusPos, int Step, bool SkipGroup) const;
-	bool SelectFromEditHistory(DialogItemEx const* CurItem, DlgEdit* EditLine, string_view HistoryName);
-	int SelectFromComboBox(DialogItemEx *CurItem,DlgEdit*EditLine);
-	bool AddToEditHistory(DialogItemEx const* CurItem, string_view AddStr) const;
-	void ProcessLastHistory(DialogItemEx *CurItem, int MsgIndex);  // обработка DIF_USELASTHISTORY
+	bool SelectFromEditHistory(DialogItemEx const& CurItem, DlgEdit& EditLine, string_view HistoryName);
+	int SelectFromComboBox(DialogItemEx& CurItem, DlgEdit& EditLine);
+	bool AddToEditHistory(DialogItemEx const& CurItem, string_view AddStr) const;
+	void ProcessLastHistory(DialogItemEx& CurItem, int MsgIndex);  // обработка DIF_USELASTHISTORY
 	bool ProcessHighlighting(int Key, size_t FocusPos, bool Translate);
-	int CheckHighlights(WORD CheckSymbol, int StartPos = 0);
+	int CheckHighlights(WORD CheckSymbol, int StartPos = 0) const;
 	void SelectOnEntry(size_t Pos, bool Selected);
 	void CheckDialogCoord();
-	bool GetItemRect(size_t I,SMALL_RECT& Rect);
+	bool GetItemRect(size_t I,SMALL_RECT& Rect) const;
 	bool SetItemRect(size_t ID, const SMALL_RECT& Rect);
 	bool SetItemRect(DialogItemEx& Item, const SMALL_RECT& Rect);
 	void SetDropDownOpened(int Status) { DropDownOpened=Status; }
 	void ProcessCenterGroup();
 	size_t ProcessRadioButton(size_t CurRB, bool UncheckAll);
-	bool ProcessOpenComboBox(FARDIALOGITEMTYPES Type,DialogItemEx *CurItem,size_t CurFocusPos);
+	bool ProcessOpenComboBox(FARDIALOGITEMTYPES Type, DialogItemEx& CurItem, size_t CurFocusPos);
 	bool ProcessMoveDialog(DWORD Key);
 	bool Do_ProcessTab(bool Next);
 	bool Do_ProcessNextCtrl(bool Up, bool IsRedraw=true);

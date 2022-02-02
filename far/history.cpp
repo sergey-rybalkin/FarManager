@@ -43,7 +43,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "message.hpp"
 #include "clipboard.hpp"
 #include "config.hpp"
-#include "strmix.hpp"
 #include "dialog.hpp"
 #include "interf.hpp"
 #include "ctrlobj.hpp"
@@ -153,7 +152,7 @@ void History::AddToHistory(string_view const Str, history_record_type const Type
 	if (m_SuppressAdd)
 		return;
 
-	if (Global->CtrlObject->Macro.IsExecuting() && Global->CtrlObject->Macro.IsHistoryDisabled(static_cast<int>(m_TypeHistory)))
+	if (Global->CtrlObject->Macro.IsExecuting() && Global->CtrlObject->Macro.IsHistoryDisabled(m_TypeHistory))
 		return;
 
 	if (m_TypeHistory!=HISTORYTYPE_DIALOG && (m_TypeHistory!=HISTORYTYPE_FOLDER || !Uuid || *Uuid == FarUuid) && Str.empty())
@@ -167,7 +166,7 @@ void History::AddToHistory(string_view const Str, history_record_type const Type
 
 	const bool ignore_data = m_TypeHistory == HISTORYTYPE_CMD;
 
-	for (const auto& i: HistoryCfgRef()->Enumerator(m_TypeHistory, m_HistoryName, Str))
+	for (const auto& i: HistoryCfgRef()->Enumerator(m_TypeHistory, m_HistoryName, Str, true))
 	{
 		if (!EqualType(Type, i.Type))
 			continue;
@@ -238,7 +237,7 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 	}
 	SelectedRecord;
 
-	FarListPos Pos={sizeof(FarListPos)};
+	FarListPos Pos{ sizeof(Pos) };
 	int MenuExitCode=-1;
 	history_return_type RetCode = HRT_ENTER;
 	bool Done=false;
@@ -302,8 +301,8 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 					LastYear = SavedTime.wYear;
 					MenuItemEx Separator;
 					Separator.Flags = LIF_SEPARATOR;
-					string strTime;
-					ConvertDate(i.Time, Separator.Name, strTime, 8, 1);
+					string Time;
+					std::tie(Separator.Name, Time) = ConvertDate(i.Time, 8, 1);
 					HistoryMenu.AddItem(Separator);
 				}
 				strRecord += i.Name;
@@ -326,9 +325,7 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 
 			if (!SetUpMenuPos && !bSelected && m_TypeHistory!=HISTORYTYPE_DIALOG && !HistoryMenu.empty())
 			{
-				FarListPos p={sizeof(FarListPos)};
-				p.SelectPos = HistoryMenu.size() - 1;
-				p.TopPos = 0;
+				FarListPos p{ sizeof(p), static_cast<intptr_t>(HistoryMenu.size() - 1) };
 				HistoryMenu.SetSelectPos(&p);
 			}
 		}
@@ -503,10 +500,8 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 					if (CurrentRecord)
 					{
 						HistoryCfgRef()->FlipLock(CurrentRecord);
-						ResetPosition();
-						HistoryMenu.Close(Pos.SelectPos);
-						IsUpdate=true;
-						SetUpMenuPos=true;
+
+						HistoryMenu.FlipCheck(Pos.SelectPos);
 					}
 
 					break;
@@ -517,14 +512,12 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 					if (CurrentRecord && !HistoryCfgRef()->IsLocked(CurrentRecord))
 					{
 						HistoryCfgRef()->Delete(CurrentRecord);
+						ResetPosition();
 
 						if (os::chrono::time_point Time; HistoryCfgRef()->Get(CurrentRecord, {}, {}, &Time, {}, {}, {}))
 							forget_record(Time);
 
-						ResetPosition();
-						HistoryMenu.Close(Pos.SelectPos);
-						IsUpdate=true;
-						SetUpMenuPos=true;
+						HistoryMenu.DeleteItem(Pos.SelectPos);
 					}
 
 					break;

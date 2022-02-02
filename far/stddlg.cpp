@@ -58,6 +58,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 #include "copy_progress.hpp"
 #include "keyboard.hpp"
+#include "pathmix.hpp"
 
 // Platform:
 #include "platform.com.hpp"
@@ -80,7 +81,7 @@ int GetSearchReplaceString(
 	string& ReplaceStr,
 	string_view TextHistoryName,
 	string_view ReplaceHistoryName,
-	bool* pCase,
+	search_case_fold* pCaseFold,
 	bool* pWholeWords,
 	bool* pReverse,
 	bool* pRegexp,
@@ -105,7 +106,7 @@ int GetSearchReplaceString(
 		SubTitle = msg(lng::MEditSearchFor);
 
 
-	bool Case=pCase?*pCase:false;
+	auto CaseFold = pCaseFold? *pCaseFold : search_case_fold::icase;
 	bool WholeWords=pWholeWords?*pWholeWords:false;
 	bool Reverse=pReverse?*pReverse:false;
 	bool Regexp=pRegexp?*pRegexp:false;
@@ -116,9 +117,9 @@ int GetSearchReplaceString(
 	const auto& SelectionLabel = msg(lng::MEditSearchPickSelection);
 	const auto WordButtonSize = HiStrlen(WordLabel) + 4;
 	const auto SelectionButtonSize = HiStrlen(SelectionLabel) + 4;
-	const auto SelectionButtonX2 = static_cast<int>(DlgWidth - 4 - 1);
+	const auto SelectionButtonX2 = DlgWidth - 4 - 1;
 	const auto SelectionButtonX1 = static_cast<int>(SelectionButtonX2 - SelectionButtonSize);
-	const auto WordButtonX2 = static_cast<int>(SelectionButtonX1 - 1);
+	const auto WordButtonX2 = SelectionButtonX1 - 1;
 	const auto WordButtonX1 = static_cast<int>(WordButtonX2 - WordButtonSize);
 
 	const auto YFix = IsReplaceMode? 0 : 2;
@@ -156,7 +157,7 @@ int GetSearchReplaceString(
 		{ DI_TEXT,      {{5,                 4      }, {0,                 4      }}, DIF_NONE, msg(lng::MEditReplaceWith), },
 		{ DI_EDIT,      {{5,                 5      }, {70,                5      }}, DIF_USELASTHISTORY | DIF_HISTORY, ReplaceStr, },
 		{ DI_TEXT,      {{-1,                6-YFix }, {0,                 6-YFix }}, DIF_SEPARATOR, },
-		{ DI_CHECKBOX,  {{5,                 7-YFix }, {0,                 7-YFix }}, DIF_NONE, msg(lng::MEditSearchCase), },
+		{ DI_CHECKBOX,  {{5,                 7-YFix }, {0,                 7-YFix }}, DIF_3STATE, msg(lng::MEditSearchCase), },
 		{ DI_CHECKBOX,  {{5,                 8-YFix }, {0,                 8-YFix }}, DIF_NONE, msg(lng::MEditSearchWholeWords), },
 		{ DI_CHECKBOX,  {{5,                 9-YFix }, {0,                 9-YFix }}, DIF_NONE, msg(lng::MEditSearchReverse), },
 		{ DI_CHECKBOX,  {{40,                7-YFix }, {0,                 7-YFix }}, DIF_NONE, msg(lng::MEditSearchRegexp), },
@@ -169,7 +170,10 @@ int GetSearchReplaceString(
 
 	ReplaceDlg[dlg_edit_search].strHistory = TextHistoryName;
 	ReplaceDlg[dlg_edit_replace].strHistory = ReplaceHistoryName;
-	ReplaceDlg[dlg_checkbox_case].Selected = Case;
+	ReplaceDlg[dlg_checkbox_case].Selected =
+		CaseFold == search_case_fold::exact? BSTATE_CHECKED :
+		CaseFold == search_case_fold::icase? BSTATE_UNCHECKED :
+		BSTATE_3STATE;
 	ReplaceDlg[dlg_checkbox_words].Selected = WholeWords;
 	ReplaceDlg[dlg_checkbox_reverse].Selected = Reverse;
 	ReplaceDlg[dlg_checkbox_regex].Selected = Regexp;
@@ -194,7 +198,7 @@ int GetSearchReplaceString(
 		ReplaceDlg[dlg_button_selection].Flags |= DIF_HIDDEN;
 	}
 
-	if (!pCase)
+	if (!pCaseFold)
 		ReplaceDlg[dlg_checkbox_case].Flags |= DIF_DISABLE; // DIF_HIDDEN ??
 	if (!pWholeWords)
 		ReplaceDlg[dlg_checkbox_words].Flags |= DIF_DISABLE; // DIF_HIDDEN ??
@@ -234,15 +238,18 @@ int GetSearchReplaceString(
 		Result = ExitCode == dlg_button_action ? 1 : 2;
 		SearchStr = ReplaceDlg[dlg_edit_search].strData;
 		ReplaceStr = ReplaceDlg[dlg_edit_replace].strData;
-		Case=ReplaceDlg[dlg_checkbox_case].Selected == BSTATE_CHECKED;
+		CaseFold =
+			ReplaceDlg[dlg_checkbox_case].Selected == BSTATE_CHECKED? search_case_fold::exact :
+			ReplaceDlg[dlg_checkbox_case].Selected == BSTATE_UNCHECKED? search_case_fold::icase :
+			search_case_fold::fuzzy;
 		WholeWords=ReplaceDlg[dlg_checkbox_words].Selected == BSTATE_CHECKED;
 		Reverse=ReplaceDlg[dlg_checkbox_reverse].Selected == BSTATE_CHECKED;
 		Regexp=ReplaceDlg[dlg_checkbox_regex].Selected == BSTATE_CHECKED;
 		PreserveStyle=ReplaceDlg[dlg_checkbox_style].Selected == BSTATE_CHECKED;
 	}
 
-	if (pCase)
-		*pCase=Case;
+	if (pCaseFold)
+		*pCaseFold = CaseFold;
 	if (pWholeWords)
 		*pWholeWords=WholeWords;
 	if (pReverse)
@@ -467,6 +474,80 @@ bool GetNameAndPassword(
 	return true;
 }
 
+static string format_process_name(DWORD const Pid, string_view const ImageName, const wchar_t* const AppName, const wchar_t* const ServiceShortName)
+{
+	const auto
+		HaveAppHame = AppName && *AppName,
+		HaveServiceName = ServiceShortName && *ServiceShortName;
+
+	return format(
+		FSTR(L"{} (PID {}{}{}{}{}{})"sv),
+		!ImageName.empty()? ImageName : L"Unknown"sv,
+		Pid,
+		HaveAppHame? L", "sv : L""sv,
+		HaveAppHame? AppName : L""sv,
+		HaveServiceName? L", ["sv : L""sv,
+		HaveServiceName? ServiceShortName : L""sv,
+		HaveServiceName? L"]"sv : L""sv
+	);
+}
+
+static std::vector<string> get_locking_processes(const string& FullName, size_t const MaxProcesses, DWORD& Reasons, size_t& ProcessCount)
+{
+	// This method allows to get names of all processes, even those we can't open.
+	std::optional<os::process::enum_processes> Enum;
+	std::unordered_map<DWORD, string_view> ActiveProcesses;
+	string NameBuffer;
+
+	auto process_name = [&](DWORD const Pid)
+	{
+		if (!Enum)
+		{
+			Enum.emplace();
+			std::transform(ALL_CONST_RANGE(*Enum), std::inserter(ActiveProcesses, ActiveProcesses.end()), [](os::process::enum_process_entry const& Entry)
+			{
+				return std::pair(Entry.Pid, Entry.Name);
+			});
+		}
+
+		if (const auto Iterator = ActiveProcesses.find(Pid); Iterator != ActiveProcesses.end())
+			return Iterator->second;
+
+		// Should never happen, but just in case
+		NameBuffer = os::process::get_process_name(Pid);
+		return PointToName(NameBuffer);
+	};
+
+	std::vector<string> Result;
+
+	{
+		// RM implementation returns separate entries for services; we don't care and want them collapsed
+		std::map<DWORD, string> UniqueProcesses;
+		ProcessCount = os::process::enumerate_locking_processes_rm(FullName, Reasons, [&](DWORD const Pid, const wchar_t* AppName, const wchar_t* ServiceShortName)
+		{
+			UniqueProcesses.try_emplace(Pid, format_process_name(Pid, process_name(Pid), AppName, ServiceShortName));
+			return UniqueProcesses.size() != MaxProcesses;
+		});
+
+		for (auto& [Pid, Name]: UniqueProcesses)
+		{
+			Result.emplace_back(std::move(Name));
+		}
+	}
+
+	if (Result.empty())
+	{
+		ProcessCount = os::process::enumerate_locking_processes_nt(FullName, [&](DWORD const Pid, const wchar_t* const AppName, const wchar_t* const ServiceShortName)
+		{
+			Result.emplace_back(format_process_name(Pid, process_name(Pid), AppName, ServiceShortName));
+			return Result.size() != MaxProcesses;
+		});
+	}
+
+	return Result;
+}
+
+
 operation OperationFailed(const error_state_ex& ErrorState, string_view const Object, lng Title, string Description, bool AllowSkip, bool AllowSkipAll)
 {
 	std::vector<string> Msg;
@@ -533,17 +614,14 @@ operation OperationFailed(const error_state_ex& ErrorState, string_view const Ob
 		}
 		else
 		{
-			const size_t MaxRmProcesses = 5;
+			const size_t MaxProcesses = 5;
 			DWORD Reasons = RmRebootReasonNone;
-			const auto ProcessCount = os::process::enumerate_rm_processes(FullName, Reasons, [&](string&& Str)
-			{
-				Msg.emplace_back(std::move(Str));
-				return Msg.size() != MaxRmProcesses;
-			});
+			size_t ProcessCount{};
+			Msg = get_locking_processes(FullName, MaxProcesses, Reasons, ProcessCount);
 
-			if (ProcessCount > MaxRmProcesses)
+			if (ProcessCount > MaxProcesses)
 			{
-				Msg.emplace_back(format(msg(lng::MObjectLockedAndMore), ProcessCount - MaxRmProcesses));
+				Msg.emplace_back(format(msg(lng::MObjectLockedAndMore), ProcessCount - MaxProcesses));
 			}
 
 			static const std::pair<DWORD, lng> Mappings[] =
@@ -682,75 +760,22 @@ bool retryable_ui_operation(function_ref<bool()> const Action, string_view const
 	return true;
 }
 
-static string GetReErrorString(int code)
-{
-	// TODO: localization
-	switch (code)
-	{
-	case errNone:
-		return L"No errors"s;
-	case errNotCompiled:
-		return L"RegExp wasn't even tried to compile"s;
-	case errSyntax:
-		return L"Expression contains a syntax error"s;
-	case errBrackets:
-		return L"Unbalanced brackets"s;
-	case errMaxDepth:
-		return L"Max recursive brackets level reached"s;
-	case errOptions:
-		return L"Invalid options combination"s;
-	case errInvalidBackRef:
-		return L"Reference to nonexistent bracket"s;
-	case errInvalidEscape:
-		return L"Invalid escape char"s;
-	case errInvalidRange:
-		return L"Invalid range value"s;
-	case errInvalidQuantifiersCombination:
-		return L"Quantifier applied to invalid object. f.e. lookahead assertion"s;
-	case errNotEnoughMatches:
-		return L"Size of match array isn't large enough"s;
-	case errNoStorageForNB:
-		return L"Attempt to match RegExp with Named Brackets but no storage class provided"s;
-	case errReferenceToUndefinedNamedBracket:
-		return L"Reference to undefined named bracket"s;
-	case errVariableLengthLookBehind:
-		return L"Only fixed length look behind assertions are supported"s;
-	default:
-		return L"Unknown error"s;
-	}
-}
-
-void ReCompileErrorMessage(const RegExp& re, string_view const str)
+void ReCompileErrorMessage(regex_exception const& e, string_view const str)
 {
 	Message(MSG_WARNING | MSG_LEFTALIGN,
 		msg(lng::MError),
 		{
-			GetReErrorString(re.LastError()),
+			e.message(),
 			string(str),
-			string(re.ErrorPosition(), L' ') + L'↑'
+			string(e.position(), L' ') + L'↑'
 		},
 		{ lng::MOk });
 }
 
-void ReMatchErrorMessage(const RegExp& re)
+static void GetRowCol(const string_view Str, bool Hex, goto_coord& Row, goto_coord& Col)
 {
-	if (re.LastError() != errNone)
+	const auto Parse = [Hex](string_view Part, goto_coord& Dest)
 	{
-		Message(MSG_WARNING | MSG_LEFTALIGN,
-			msg(lng::MError),
-			{
-				GetReErrorString(re.LastError())
-			},
-			{ lng::MOk });
-	}
-}
-
-static void GetRowCol(const string& Str, bool Hex, goto_coord& Row, goto_coord& Col)
-{
-	const auto Parse = [Hex](string Part, goto_coord& Dest)
-	{
-		inplace::erase_all(Part, L' ');
-
 		if (Part.empty())
 			return;
 
@@ -758,12 +783,12 @@ static void GetRowCol(const string& Str, bool Hex, goto_coord& Row, goto_coord& 
 		switch (Part.front())
 		{
 		case L'-':
-			Part.erase(0, 1);
+			Part.remove_prefix(1);
 			Dest.relative = -1;
 			break;
 
 		case L'+':
-			Part.erase(0, 1);
+			Part.remove_prefix(1);
 			Dest.relative = +1;
 			break;
 
@@ -777,7 +802,7 @@ static void GetRowCol(const string& Str, bool Hex, goto_coord& Row, goto_coord& 
 		// он хочет процентов
 		if (Part.back() == L'%')
 		{
-			Part.pop_back();
+			Part.remove_suffix(1);
 			Dest.percent = true;
 		}
 
@@ -789,22 +814,22 @@ static void GetRowCol(const string& Str, bool Hex, goto_coord& Row, goto_coord& 
 		// он умный - hex код ввел!
 		if (starts_with(Part, L"0x"sv))
 		{
-			Part.erase(0, 2);
+			Part.remove_prefix(2);
 			Radix = 16;
 		}
 		else if (starts_with(Part, L"$"sv))
 		{
-			Part.erase(0, 1);
+			Part.remove_prefix(1);
 			Radix = 16;
 		}
 		else if (ends_with(Part, L"h"sv))
 		{
-			Part.pop_back();
+			Part.remove_suffix(1);
 			Radix = 16;
 		}
 		else if (ends_with(Part, L"m"sv))
 		{
-			Part.pop_back();
+			Part.remove_suffix(1);
 			Radix = 10;
 		}
 
@@ -818,7 +843,7 @@ static void GetRowCol(const string& Str, bool Hex, goto_coord& Row, goto_coord& 
 		Dest.exist = true;
 	};
 
-	const auto SeparatorPos = Str.find_first_of(L".,;:"sv);
+	const auto SeparatorPos = Str.find_first_of(L" .,;:"sv);
 
 	if (SeparatorPos == Str.npos)
 	{
@@ -896,12 +921,13 @@ bool RetryAbort(std::vector<string>&& Messages)
 			{ lng::MRetry, lng::MAbort }) == message_result::first_button;
 	}
 
-	std::wcerr << L"\nError:\n\n"sv;
+	return ConsoleYesNo(L"Retry"sv, false, [&]
+	{
+		std::wcerr << L"\nError:\n\n"sv;
 
-	for (const auto& i: Messages)
-		std::wcerr << i << L'\n';
-
-	return ConsoleYesNo(L"Retry"sv, false);
+		for (const auto& i: Messages)
+			std::wcerr << i << L'\n';
+	});
 }
 
 progress_impl::~progress_impl()
@@ -922,6 +948,12 @@ void progress_impl::init(span<DialogItemEx> const Items, rectangle const Positio
 
 		return Dlg->DefProc(Msg, Param1, Param2);
 	});
+
+	// BUGBUG This is so wrong
+	// It's here to prevent panels update, because currently,
+	// for some insane reason, "repaint" is actually "refresh",
+	// which degrades performance and break plugins.
+	m_Dialog->SetFlags(FSCROBJ_SPECIAL);
 
 	m_Dialog->SetPosition(Position);
 	m_Dialog->SetCanLoseFocus(true);
@@ -975,7 +1007,7 @@ void single_progress::update(size_t const Percent) const
 {
 	m_Dialog->SendMessage(DM_SETTEXTPTR, single_progress_detail::items::pr_progress, UNSAFE_CSTR(make_progressbar(single_progress_detail::DlgW - 10, Percent, true, true)));
 
-	const auto Title = reinterpret_cast<const wchar_t*>(m_Dialog->SendMessage(DM_GETCONSTTEXTPTR, single_progress_detail::items::pr_doublebox, {}));
+	const auto Title = view_as<const wchar_t*>(m_Dialog->SendMessage(DM_GETCONSTTEXTPTR, single_progress_detail::items::pr_doublebox, {}));
 	m_Dialog->SendMessage(DM_SETTEXTPTR, single_progress_detail::items::pr_console_title, UNSAFE_CSTR(concat(L'{', str(Percent), L"%} "sv, Title)));
 }
 

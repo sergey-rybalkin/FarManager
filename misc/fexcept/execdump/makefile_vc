@@ -1,15 +1,12 @@
-ROOT_PATH=../../../
-!include ../../../plugins/makefile_vc_base
+ROOTDIR = ..\..\..
 
 ANSI = 1
 
 NAME = ExcDump
-LINK_OBJS = $(OBJDIR)\ExcDump.obj
+LINK_OBJS = $(INTDIR)\ExcDump.obj
 
-COMMON = ..\..\..\plugins\common
-
-XXLIB=$(OBJDIR)\xxLib.lib
-OBJLIB=$(OBJDIR)\LibObj
+XXLIB=$(INTDIR)\xxLib.lib
+OBJLIB=$(INTDIR)\LibObj
 LIBSRC=xxlib\std
 
 LIB_OBJS = \
@@ -56,12 +53,12 @@ USERCPP=$(USERCPP) /D__NOPLOG__=1
 
 All: dirs libdir
 
-!include ..\..\..\plugins\makefile_vc_def_inc
+!include $(ROOTDIR)\plugins\makefile_vc_def_inc
 
 All: $(XXLIB)
 
 LIBS=$(XXLIB) $(LIBS)
-!include ..\..\..\plugins\makefile_vc_target_inc
+!include $(ROOTDIR)\plugins\makefile_vc_target_inc
 
 .PHONY: libdir
 libdir:
@@ -99,5 +96,5 @@ All: copyto
 
 .PHONY: copyto
 copyto:
-	@copy /Y $(WORKDIR)\$(NAME).dll $(COPYTO)
+	@copy /Y $(OUTDIR)\$(NAME).dll $(COPYTO)
 !endif

@@ -140,19 +140,18 @@ static int SplitCopy(
 
 static int nAdds = -1;
 static bool bOpenFail;
+static bool bMessageSuppressed;
+static DWORD dwShowMessageTicks;
+#define MessageOutputDelayMsecs 500
 
 /****************************************************************************
  * Показывает сообщение о сравнении двух файлов
  ****************************************************************************/
-static void ShowMessage(const wchar_t *Name1, const wchar_t *Name2)
+static void ShowMessageRaw(const wchar_t *Name1, const wchar_t *Name2, DWORD dwNewTicks)
 {
-	static DWORD dwTicks;
-	DWORD dwNewTicks = GetTickCount();
+	dwShowMessageTicks = dwNewTicks;
+	bMessageSuppressed = false;
 
-	if (dwNewTicks - dwTicks < 500)
-		return;
-
-	dwTicks = dwNewTicks;
 	wchar_t name1[MAX_PATH], name2[MAX_PATH], sep[MAX_PATH];
 
 	wchar_t *MsgItems[1+5+1+5] = {const_cast<wchar_t*>(GetMsg(MCmpTitle)), name1};
@@ -182,6 +181,41 @@ static void ShowMessage(const wchar_t *Name1, const wchar_t *Name2)
 		delete[] MsgItems[1+n1];
 }
 
+/****************************************************************************
+ * Показывает сообщение о сравнении двух файлов с ограничением частоты вывода
+ ****************************************************************************/
+static void ShowMessage(const wchar_t *Name1, const wchar_t *Name2)
+{
+	DWORD dwNewTicks = GetTickCount();
+
+	if (dwNewTicks - dwShowMessageTicks < MessageOutputDelayMsecs) {
+		bMessageSuppressed = true;
+		return;
+	}
+
+	ShowMessageRaw(Name1, Name2, dwNewTicks);
+}
+
+
+/******************************************************************************
+ * Обёртка над ShowMessageRaw() для отображения "подавленных" ранее имён файлов
+ ******************************************************************************/
+static void ShowMessageWhenComparingContents(const wchar_t *Name1, const wchar_t *Name2, bool CancelMessageShown)
+{
+	DWORD dwNewTicks;
+	if (CancelMessageShown)
+		dwNewTicks = GetTickCount();
+	else if (bMessageSuppressed) {
+		dwNewTicks = GetTickCount();
+
+		if (dwNewTicks - dwShowMessageTicks < MessageOutputDelayMsecs)
+			return;
+	}
+	else
+		return;
+
+	ShowMessageRaw(Name1, Name2, dwNewTicks);
+}
 
 /****************************************************************************
  * Обработчик диалога для ShowDialog
@@ -461,8 +495,10 @@ static HANDLE hConInp = INVALID_HANDLE_VALUE;
 
 /****************************************************************************
  * Проверка на Esc. Возвращает true, если пользователь нажал Esc
+ * MessageWasShown устанавливается в true, если было показано диалоговое
+ * окно; не изменяется в остальных случаях.
  ****************************************************************************/
-static bool CheckForEsc()
+static bool CheckForEsc(bool& MessageWasShown)
 {
 	if (hConInp == INVALID_HANDLE_VALUE)
 		return false;
@@ -494,6 +530,8 @@ static bool CheckForEsc()
 					GetMsg(MYes),
 					GetMsg(MNo)
 				};
+
+				MessageWasShown = true;
 
 				if (!PsInfo.Message(&MainGuid, nullptr, FMSG_WARNING, {}, MsgItems, ARRAYSIZE(MsgItems), 2))
 					return bBrokenByEsc = true;
@@ -616,7 +654,6 @@ static bool BuildPanelIndex(const OwnPanelInfo *pInfo, FileIndex *pIndex, HANDLE
 	{
 		free(pIndex->ppi);
 		pIndex->ppi = {};
-		pIndex->iCount = 0;
 	}
 
 	return true;
@@ -627,8 +664,7 @@ static bool BuildPanelIndex(const OwnPanelInfo *pInfo, FileIndex *pIndex, HANDLE
  ****************************************************************************/
 static void FreePanelIndex(FileIndex *pIndex)
 {
-	if (pIndex->ppi)
-		free(pIndex->ppi);
+	free(pIndex->ppi);
 
 	pIndex->ppi = {};
 	pIndex->iCount = 0;
@@ -836,8 +872,8 @@ static bool CompareFiles(const PluginPanelItem *AData, const PluginPanelItem *PD
 		{
 			HANDLE hFileA, hFileP;
 
-			const wchar_t *cpFileA = FileA.BuildName(ACurDir, AData->FileName);
-			const wchar_t *cpFileP = FileP.BuildName(PCurDir, PData->FileName);
+			const wchar_t *const cpFileA = FileA.BuildName(ACurDir, AData->FileName);
+			const wchar_t *const cpFileP = FileP.BuildName(PCurDir, PData->FileName);
 
 			ShowMessage(cpFileA, cpFileP);
 
@@ -862,7 +898,8 @@ static bool CompareFiles(const PluginPanelItem *AData, const PluginPanelItem *PD
 			{
 				do
 				{
-					if (CheckForEsc()
+					bool CancelMessageShown = false;
+					if (CheckForEsc(CancelMessageShown)
 					        || !ReadFile(hFileA, ABuf, bufSize, &ReadSizeA, {})
 					        || !ReadFile(hFileP, PBuf, bufSize, &ReadSizeP, {})
 					        || ReadSizeA != ReadSizeP
@@ -871,6 +908,8 @@ static bool CompareFiles(const PluginPanelItem *AData, const PluginPanelItem *PD
 						bEqual = false;
 						break;
 					}
+
+					ShowMessageWhenComparingContents(cpFileA, cpFileP, CancelMessageShown);
 				}
 				while (ReadSizeA == bufSize);
 			}
@@ -886,11 +925,14 @@ static bool CompareFiles(const PluginPanelItem *AData, const PluginPanelItem *PD
 				{
 					while (PtrA >= ABuf+ReadSizeA && ReadSizeA)
 					{
-						if (CheckForEsc() || !ReadFile(hFileA, ABuf, bufSize, &ReadSizeA, {}))
+						bool CancelMessageShown = false;
+						if (CheckForEsc(CancelMessageShown) || !ReadFile(hFileA, ABuf, bufSize, &ReadSizeA, {}))
 						{
 							bEqual = false;
 							break;
 						}
+
+						ShowMessageWhenComparingContents(cpFileA, cpFileP, CancelMessageShown);
 
 						PtrA=ABuf;
 					}
@@ -900,11 +942,14 @@ static bool CompareFiles(const PluginPanelItem *AData, const PluginPanelItem *PD
 
 					while (PtrP >= PBuf+ReadSizeP && ReadSizeP)
 					{
-						if (CheckForEsc() || !ReadFile(hFileP, PBuf, bufSize, &ReadSizeP, {}))
+						bool CancelMessageShown = false;
+						if (CheckForEsc(CancelMessageShown) || !ReadFile(hFileP, PBuf, bufSize, &ReadSizeP, {}))
 						{
 							bEqual = false;
 							break;
 						}
+
+						ShowMessageWhenComparingContents(cpFileA, cpFileP, CancelMessageShown);
 
 						PtrP=PBuf;
 					}
@@ -1051,7 +1096,8 @@ static bool CompareDirs(const OwnPanelInfo *AInfo, const OwnPanelInfo *PInfo, bo
 		{
 			iCounter = iMaxCounter;
 
-			if (CheckForEsc())
+			bool CancelMessageShown = false;
+			if (CheckForEsc(CancelMessageShown))
 				break;
 		}
 

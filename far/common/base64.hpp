@@ -32,6 +32,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
+#include "algorithm.hpp"
 #include "bytes_view.hpp"
 
 //----------------------------------------------------------------------------
@@ -135,10 +136,10 @@ namespace base64
 		auto Iterator = Data.cbegin();
 		auto const Chunks = Data.size() / 3;
 
-		for (size_t i = 0; i != Chunks; ++i)
+		repeat(Chunks, [&]
 		{
 			detail::encode<3>(Iterator, Str);
-		}
+		});
 
 		switch (Data.size() - Chunks * 3)
 		{

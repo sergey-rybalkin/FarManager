@@ -213,8 +213,14 @@ static bool PartCmdLine(string_view const FullCommand, string& Command, string& 
 		if (Re.Pattern != Condition)
 		{
 			Re.Re = std::make_unique<RegExp>();
-			if (!Re.Re->Compile(Condition, OP_OPTIMIZE))
+
+			try
 			{
+				Re.Re->Compile(Condition, OP_OPTIMIZE);
+			}
+			catch (regex_exception const& e)
+			{
+				LOGERROR(L"ComspecCondition regex error: {}; position: {}"sv, e.message(), e.position());
 				Re.Re.reset();
 			}
 			Re.Pattern = Condition;
@@ -225,10 +231,7 @@ static bool PartCmdLine(string_view const FullCommand, string& Command, string& 
 			if (Re.Re->Search(FullCommand))
 				return false;
 
-			if (Re.Re->LastError() == errNone)
-			{
-				UseDefaultCondition = false;
-			}
+			UseDefaultCondition = false;
 		}
 	}
 
@@ -291,17 +294,13 @@ void OpenFolderInShell(string_view const Folder)
 	// To avoid collisions with bat/cmd/etc.
 	AddEndSlash(Info.Command);
 	Info.WaitMode = execute_info::wait_mode::no_wait;
-	Info.SourceMode = execute_info::source_mode::known;
+	Info.SourceMode = execute_info::source_mode::known_external;
 
 	Execute(Info);
 }
 
 static void wait_for_process_or_detach(os::handle const& Process, int const ConsoleDetachKey, point const& ConsoleSize, rectangle const& ConsoleWindowRect)
 {
-	const auto
-		hInput = console.GetInputHandle(),
-		hOutput = console.GetOutputHandle();
-
 	const auto ConfigVKey = TranslateKeyToVK(ConsoleDetachKey);
 
 	enum class dual_key_t
@@ -358,7 +357,7 @@ static void wait_for_process_or_detach(os::handle const& Process, int const Cons
 			Buffer.resize(NumberOfEvents + NumberOfEvents / 2);
 		}
 
-		if (!os::handle::is_signaled(hInput, 100ms))
+		if (!os::handle::is_signaled(console.GetInputHandle(), 100ms))
 			continue;
 
 		size_t EventsRead;
@@ -368,7 +367,7 @@ static void wait_for_process_or_detach(os::handle const& Process, int const Cons
 		if (std::none_of(Buffer.cbegin(), Buffer.cbegin() + EventsRead, is_detach_key))
 			continue;
 
-		const auto Aliases = console.GetAllAliases();
+		auto Aliases = console.GetAllAliases();
 
 		consoleicons::instance().restore_icon();
 
@@ -380,9 +379,6 @@ static void wait_for_process_or_detach(os::handle const& Process, int const Cons
 		  ConsoleMode на тот, что был до запуска Far'а,
 		  чего работающее приложение могло и не ожидать.
 		*/
-
-		os::handle{ hInput };
-		os::handle{ hOutput };
 
 		console.Free();
 		console.Allocate();
@@ -398,7 +394,7 @@ static void wait_for_process_or_detach(os::handle const& Process, int const Cons
 		InitConsole();
 
 		consoleicons::instance().set_icon();
-		console.SetAllAliases(Aliases);
+		console.SetAllAliases(std::move(Aliases));
 
 		return;
 	}
@@ -512,9 +508,9 @@ static bool execute_createprocess(string const& Command, string const& Parameter
 	return true;
 }
 
-static bool execute_shell(string const& Command, string const& Parameters, string const& Directory, bool const SourceIsKnown, bool const RunAs, bool const Wait, HANDLE& Process)
+static bool execute_shell(string const& Command, string const& Parameters, string const& Directory, execute_info::source_mode const SourceMode, bool const RunAs, bool const Wait, HANDLE& Process)
 {
-	SHELLEXECUTEINFO Info = { sizeof(Info) };
+	SHELLEXECUTEINFO Info{ sizeof(Info) };
 	Info.lpFile = Command.c_str();
 	Info.lpParameters = EmptyToNull(Parameters);
 	Info.lpDirectory = Directory.c_str();
@@ -522,7 +518,7 @@ static bool execute_shell(string const& Command, string const& Parameters, strin
 	Info.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS | (Wait? SEE_MASK_NO_CONSOLE : 0);
 	Info.lpVerb = RunAs? L"runas" : nullptr;
 
-	if (SourceIsKnown && !path::is_separator(Command.back()))
+	if (any_of(SourceMode, execute_info::source_mode::known, execute_info::source_mode::known_executable))
 	{
 		assert(Parameters.empty());
 
@@ -600,7 +596,7 @@ private:
 };
 
 static bool execute_impl(
-	execute_info& Info,
+	const execute_info& Info,
 	function_ref<void(bool)> const ConsoleActivator,
 	string& FullCommand,
 	string& Command,
@@ -644,18 +640,25 @@ static bool execute_impl(
 
 	};
 
-	if (execute_process())
-		return true;
+	// Filter out the cases where the source is known, but is not a known executable (exe, com, bat, cmd, see IsExecutable in filelist.cpp)
+	// This should cover gh-449 and is usually pointless anyway.
+	if (
+		Info.SourceMode == execute_info::source_mode::known_executable ||
+		Info.SourceMode == execute_info::source_mode::unknown)
+	{
+		if (execute_process())
+			return true;
 
-	if (last_error().Win32Error == ERROR_EXE_MACHINE_TYPE_MISMATCH)
-		return false;
+		if (last_error().Win32Error == ERROR_EXE_MACHINE_TYPE_MISMATCH)
+			return false;
+	}
 
 	ExtendedActivator(Info.WaitMode != execute_info::wait_mode::no_wait);
 
 	const auto execute_shell = [&]
 	{
 		HANDLE Process;
-		if (!::execute_shell(Command, Parameters, CurrentDirectory, Info.SourceMode == execute_info::source_mode::known, Info.RunAs, Info.WaitMode != execute_info::wait_mode::no_wait, Process))
+		if (!::execute_shell(Command, Parameters, CurrentDirectory, Info.SourceMode, Info.RunAs, Info.WaitMode != execute_info::wait_mode::no_wait, Process))
 			return false;
 
 		if (Process)
@@ -677,7 +680,7 @@ void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator
 {
 	// CreateProcess retardedly doesn't take into account CurrentDirectory when searching for the executable.
 	// SearchPath looks there as well and if it's set to something else we could get unexpected results.
-	const auto CurrentDirectory = short_name_if_too_long(os::fs::GetCurrentDirectory());
+	const auto CurrentDirectory = short_name_if_too_long(Info.Directory.empty()? os::fs::get_current_directory() : Info.Directory);
 	os::fs::process_current_directory_guard const Guard(CurrentDirectory);
 
 
@@ -690,7 +693,7 @@ void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator
 		Info.WaitMode = execute_info::wait_mode::no_wait;
 	}
 
-	if (Info.SourceMode == execute_info::source_mode::known)
+	if (Info.SourceMode != execute_info::source_mode::unknown)
 	{
 		FullCommand = Info.Command;
 		Command = short_name_if_too_long(Info.Command);
@@ -719,7 +722,7 @@ void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator
 
 	const auto IgnoreInternalAssociations =
 		!Info.UseAssociations ||
-		Info.SourceMode == execute_info::source_mode::known ||
+		Info.SourceMode != execute_info::source_mode::unknown ||
 		Info.WaitMode == execute_info::wait_mode::no_wait ||
 		UsingComspec ||
 		!Global->Opt->Exec.UseAssociations;

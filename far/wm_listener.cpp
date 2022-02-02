@@ -46,6 +46,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.debug.hpp"
 
 // Common:
 #include "common/scope_exit.hpp"
@@ -77,11 +78,11 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 				case DBT_DEVICEARRIVAL:
 				case DBT_DEVICEREMOVECOMPLETE:
 					{
-						const auto& BroadcastHeader = *reinterpret_cast<const DEV_BROADCAST_HDR*>(lParam);
+						const auto& BroadcastHeader = *view_as<const DEV_BROADCAST_HDR*>(lParam);
 						if (BroadcastHeader.dbch_devicetype == DBT_DEVTYP_VOLUME)
 						{
 							LOGINFO(L"WM_DEVICECHANGE(DBT_DEVTYP_VOLUME)"sv);
-							const auto& BroadcastVolume = *reinterpret_cast<const DEV_BROADCAST_VOLUME*>(&BroadcastHeader);
+							const auto& BroadcastVolume = *view_as<const DEV_BROADCAST_VOLUME*>(&BroadcastHeader);
 							message_manager::instance().notify(update_devices, update_devices_message
 							{
 								BroadcastVolume.dbcv_unitmask,
@@ -98,7 +99,7 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 		case WM_SETTINGCHANGE:
 			if (lParam)
 			{
-				const auto Area = reinterpret_cast<const wchar_t*>(lParam);
+				const auto Area = view_as<const wchar_t*>(lParam);
 
 				if (Area == L"Environment"sv)
 				{
@@ -112,6 +113,10 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 				{
 					LOGINFO(L"WM_SETTINGCHANGE(intl)"sv);
 					message_manager::instance().notify(update_intl);
+				}
+				else
+				{
+					LOGDEBUG(L"WM_SETTINGCHANGE({}) ignored"sv, Area);
 				}
 			}
 			break;
@@ -145,7 +150,7 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 wm_listener::wm_listener()
 {
 	os::event ReadyEvent(os::event::type::automatic, os::event::state::nonsignaled);
-	m_Thread = os::thread(os::thread::mode::join, &wm_listener::WindowThreadRoutine, this, &ReadyEvent);
+	m_Thread = os::thread(os::thread::mode::join, &wm_listener::WindowThreadRoutine, this, std::ref(ReadyEvent));
 	ReadyEvent.wait();
 }
 
@@ -162,18 +167,18 @@ void wm_listener::Check()
 	rethrow_if(m_ExceptionPtr);
 }
 
-void wm_listener::WindowThreadRoutine(const os::event* ReadyEvent)
+void wm_listener::WindowThreadRoutine(const os::event& ReadyEvent)
 {
 	os::debug::set_thread_name(L"Window messages processor");
 
-	WNDCLASSEX wc={sizeof(wc)};
+	WNDCLASSEX wc{ sizeof(wc) };
 	wc.lpfnWndProc = WndProc;
 	wc.lpszClassName = L"FarHiddenWindowClass";
 	UnregisterClass(wc.lpszClassName, nullptr);
 	if (!RegisterClassEx(&wc))
 	{
 		LOGERROR(L"RegisterClassEx(): {}"sv, last_error());
-		ReadyEvent->set();
+		ReadyEvent.set();
 		return;
 	}
 
@@ -183,7 +188,7 @@ void wm_listener::WindowThreadRoutine(const os::event* ReadyEvent)
 	if (!m_Hwnd)
 	{
 		LOGERROR(L"CreateWindowEx(): {}"sv, last_error());
-		ReadyEvent->set();
+		ReadyEvent.set();
 		return;
 	}
 
@@ -197,7 +202,7 @@ void wm_listener::WindowThreadRoutine(const os::event* ReadyEvent)
 	MSG Msg;
 	WndProcExceptionPtr = &m_ExceptionPtr;
 
-	ReadyEvent->set();
+	ReadyEvent.set();
 
 	while (!m_ExceptionPtr)
 	{

@@ -6,10 +6,10 @@ THIS_MAKE = $(TOP_MAKEFILE)
 EXEDIR = $(DIRNAME).$(DIRBIT).gcc/
 OBJDIR = $(EXEDIR)obj/
 export BOOTSTRAPDIR=$(OBJDIR)include/bootstrap/
+export FORCEINCLUDELIST=headers.hpp memcheck.hpp
 EXENAME = Far.exe
 EXEFULLNAME = $(EXEDIR)$(EXENAME)
 DEPFILE = $(BOOTSTRAPDIR)far.gcc.dep
-STATICDEPFILE = static.dep
 
 ifdef DEBUG
 ENABLE_TESTS = 1
@@ -103,6 +103,7 @@ SRCS = \
 	macro.cpp \
 	main.cpp \
 	manager.cpp \
+	map_file.cpp \
 	memcheck.cpp \
 	menubar.cpp \
 	message.cpp \
@@ -123,6 +124,7 @@ SRCS = \
 	platform.chrono.cpp \
 	platform.com.cpp \
 	platform.concurrency.cpp \
+	platform.debug.cpp \
 	platform.env.cpp \
 	platform.fs.cpp \
 	platform.memory.cpp \
@@ -183,7 +185,7 @@ MAP = $(patsubst %.exe,%.map,$(EXEFULLNAME))
 TESTOBJS = $(OBJDIR)api_test_c.testobj $(OBJDIR)api_test_c++.testobj
 
 ADDINCLUDE=-I$(BOOTSTRAPDIR).. 
-FORCEINCLUDE=-include headers.hpp -include memcheck.hpp
+FORCEINCLUDE=$(patsubst %, -include %, $(FORCEINCLUDELIST))
 
 CPPFLAGS += $(ADDINCLUDE) $(FORCEINCLUDE)
 
@@ -314,7 +316,6 @@ $(FARINCLUDE)vc_crt_fix_ulink.cpp: vc_crt_fix_ulink.cpp
 
 ifeq ($(MAKECMDGOALS),build)
  include $(DEPFILE)
- include $(STATICDEPFILE)
 endif
 
 .PHONY: clean

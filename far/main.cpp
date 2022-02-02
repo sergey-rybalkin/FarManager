@@ -153,10 +153,10 @@ static void show_help()
 }
 
 static int MainProcess(
-	const string& EditName,
-	const string& ViewName,
-	const string& DestName1,
-	const string& DestName2,
+	const string_view EditName,
+	const string_view ViewName,
+	const string_view DestName1,
+	const string_view DestName2,
 	int StartLine,
 	int StartChar
 )

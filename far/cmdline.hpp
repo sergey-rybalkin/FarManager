@@ -52,11 +52,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 struct execute_info
 {
 	enum class wait_mode { no_wait, if_needed, wait_finish };
-	enum class source_mode { unknown, known };
+	enum class source_mode { unknown, known, known_executable, known_external };
 	enum class echo { disabled, enabled, ignored };
 
 	string Command;
 	string DisplayCommand;
+	string Directory;
 	wait_mode WaitMode{ wait_mode::if_needed };
 	source_mode SourceMode{ source_mode::unknown };
 	bool RunAs{};

@@ -557,7 +557,7 @@ constexpr auto
 
 static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2)
 {
-	auto& ColorState = *reinterpret_cast<color_state*>(Dlg->SendMessage(DM_GETDLGDATA, 0, nullptr));
+	auto& ColorState = edit_as<color_state>(Dlg->SendMessage(DM_GETDLGDATA, 0, nullptr));
 	auto& CurColor = ColorState.CurColor;
 
 	const auto GetColor = [Param1](size_t const Offset)
@@ -645,7 +645,7 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 
 					SCOPED_ACTION(Dialog::suppress_redraw)(Dlg);
 					const auto Offset = IsFg? cd_fg_color_first : cd_bg_color_first;
-					for (auto i = 0; i != 16; ++i)
+					for (const auto& i: irange(16))
 					{
 						Dlg->SendMessage(DM_ENABLE, i + Offset, Param2);
 					}
@@ -666,7 +666,7 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 					Params.Flags = CC_ANYCOLOR | CC_FULLOPEN | CC_RGBINIT;
 					Params.lpCustColors = CustomColors.data();
 
-					auto& Component = IsFg? CurColor.ForegroundColor : CurColor.BackgroundColor;
+					const auto& Component = IsFg? CurColor.ForegroundColor : CurColor.BackgroundColor;
 
 					Params.rgbResult = colors::color_value(CurColor.Flags & Flag4Bit(IsFg)?
 						colors::ConsoleIndexToTrueColor(Component) :
@@ -870,7 +870,7 @@ bool GetColorDialog(FarColor& Color, bool const bCentered, const FarColor* const
 		if (Color.IsFg4Bit())
 		{
 			const auto ColorPart = ConsoleColor & F_MASK;
-			for (size_t i = cd_fg_color_first; i <= cd_fg_color_last; ++i)
+			for (const auto& i: irange(cd_fg_color_first, cd_fg_color_last + 1))
 			{
 				if (((ColorIndex[i - cd_fg_color_first] & B_MASK) >> 4) == ColorPart)
 				{
@@ -884,7 +884,7 @@ bool GetColorDialog(FarColor& Color, bool const bCentered, const FarColor* const
 		if (Color.IsBg4Bit())
 		{
 			const auto ColorPart = ConsoleColor & B_MASK;
-			for (size_t i = cd_bg_color_first; i <= cd_bg_color_last; ++i)
+			for (const auto& i: irange(cd_bg_color_first, cd_bg_color_last + 1))
 			{
 				if ((ColorIndex[i - cd_bg_color_first] & B_MASK) == ColorPart)
 				{
@@ -911,7 +911,7 @@ bool GetColorDialog(FarColor& Color, bool const bCentered, const FarColor* const
 
 		if (colors::is_transparent(Color.ForegroundColor))
 		{
-			for (size_t i = cd_fg_color_first; i <= cd_fg_color_last; ++i)
+			for (const auto& i: irange(cd_fg_color_first, cd_fg_color_last + 1))
 			{
 				ColorDlg[i].Flags |= DIF_DISABLE;
 			}
@@ -926,7 +926,7 @@ bool GetColorDialog(FarColor& Color, bool const bCentered, const FarColor* const
 
 		if (colors::is_transparent(Color.BackgroundColor))
 		{
-			for (size_t i = cd_bg_color_first; i <= cd_bg_color_last; ++i)
+			for (const auto& i: irange(cd_bg_color_first, cd_bg_color_last + 1))
 			{
 				ColorDlg[i].Flags |= DIF_DISABLE;
 			}

@@ -69,7 +69,7 @@ namespace path
 			}
 
 			explicit append_arg(const wchar_t& Char):
-				string_view(&Char, contains(separators, Char)? 0 : 1)
+				string_view(&Char, ::contains(separators, Char)? 0 : 1)
 			{
 			}
 
@@ -168,7 +168,7 @@ bool HasPathPrefix(string_view Path);
 string_view ExtractPathPrefix(string_view Path);
 bool PathStartsWith(string_view Path, string_view Start);
 bool PathCanHoldRegularFile(string_view Path);
-bool IsPluginPrefixPath(string_view Path);
+std::optional<string_view> GetPluginPrefixPath(string_view Path);
 bool CutToSlash(string& Str, bool RemoveSlash = false); // BUGBUG, deprecated. Use CutToParent.
 bool CutToSlash(string_view& Str, bool RemoveSlash = false); // BUGBUG, deprecated. Use CutToParent.
 bool CutToParent(string_view& Str);

@@ -153,6 +153,12 @@ NTSTATUS NTAPI imports::stub_NtQueryInformationProcess(HANDLE ProcessHandle, PRO
 	return STATUS_NOT_IMPLEMENTED;
 }
 
+NTSTATUS NTAPI imports::stub_NtQuerySystemInformation(SYSTEM_INFORMATION_CLASS SystemInformationClass, PVOID SystemInformation, ULONG SystemInformationLength, PULONG ReturnLength)
+{
+	LOGWARNING(L"Stub call"sv);
+	return STATUS_NOT_IMPLEMENTED;
+}
+
 WORD NTAPI imports::stub_RtlCaptureStackBackTrace(DWORD FramesToSkip, DWORD FramesToCapture, PVOID* BackTrace, PDWORD BackTraceHash)
 {
 	LOGWARNING(L"Stub call"sv);
@@ -354,7 +360,13 @@ int WINAPI imports::stub_CompareStringOrdinal(LPCWCH String1, int Count1, LPCWCH
 
 HRESULT WINAPI imports::stub_SetThreadDescription(HANDLE Thread, PCWSTR ThreadDescription)
 {
-	// TODO: log
+	LOGWARNING(L"Stub call"sv);
+	return E_NOTIMPL;
+}
+
+HRESULT WINAPI imports::stub_GetThreadDescription(HANDLE Thread, PWSTR* ThreadDescription)
+{
+	LOGWARNING(L"Stub call"sv);
 	return E_NOTIMPL;
 }
 
@@ -531,6 +543,20 @@ PVOID WINAPI imports::stub_SymFunctionTableAccess64(HANDLE Process, DWORD64 Addr
 }
 
 DWORD64 WINAPI imports::stub_SymGetModuleBase64(HANDLE Process, DWORD64 Address)
+{
+	LOGWARNING(L"Stub call"sv);
+	SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+	return 0;
+}
+
+DWORD WINAPI imports::stub_UnDecorateSymbolName(PCSTR Name, PSTR OutputString, DWORD MaxStringLength, DWORD Flags)
+{
+	LOGWARNING(L"Stub call"sv);
+	SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
+	return 0;
+}
+
+DWORD WINAPI imports::stub_UnDecorateSymbolNameW(PCWSTR Name, PWSTR OutputString, DWORD MaxStringLength, DWORD Flags)
 {
 	LOGWARNING(L"Stub call"sv);
 	SetLastError(ERROR_CALL_NOT_IMPLEMENTED);

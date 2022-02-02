@@ -237,8 +237,8 @@ static FileFilterParams LoadHighlight(/*const*/ HierarchicalConfig& cfg, const H
 	unsigned long long MarkChar;
 	if (cfg.GetValue(key, names::MarkChar, MarkChar))
 	{
-		Colors.Mark.Char = LOWORD(MarkChar);
-		Colors.Mark.Transparent = LOBYTE(HIWORD(MarkChar)) == 0xff;
+		Colors.Mark.Char = extract_integer<WORD, 0>(MarkChar);
+		Colors.Mark.Transparent = extract_integer<BYTE, 0>(extract_integer<WORD, 1>(MarkChar)) == 0xff;
 	}
 	Item.SetColors(Colors);
 
@@ -443,16 +443,16 @@ void highlight::configuration::FillMenu(VMenu2 *HiMenu,int MenuPos) const
 
 void highlight::configuration::ProcessGroups()
 {
-	for (int i = 0; i<FirstCount; i++)
+	for (const auto& i: irange(FirstCount))
 		HiData[i].SetSortGroup(DEFAULT_SORT_GROUP);
 
-	for (int i=FirstCount; i<FirstCount+UpperCount; i++)
+	for (const auto& i: irange(FirstCount, FirstCount + UpperCount))
 		HiData[i].SetSortGroup(i-FirstCount);
 
-	for (int i=FirstCount+UpperCount; i<FirstCount+UpperCount+LowerCount; i++)
+	for (const auto& i: irange(FirstCount + UpperCount, FirstCount + UpperCount + LowerCount))
 		HiData[i].SetSortGroup(DEFAULT_SORT_GROUP+1+i-FirstCount-UpperCount);
 
-	for (int i=FirstCount+UpperCount+LowerCount; i<FirstCount+UpperCount+LowerCount+LastCount; i++)
+	for (const auto& i: irange(FirstCount + UpperCount + LowerCount, FirstCount + UpperCount + LowerCount + LastCount))
 		HiData[i].SetSortGroup(DEFAULT_SORT_GROUP);
 }
 
@@ -804,7 +804,7 @@ static void SaveHighlight(HierarchicalConfig& cfg, const HierarchicalConfig::key
 		cfg.SetValue(key, names::mark_color(Index), view_bytes(Color.MarkColor));
 	}
 
-	cfg.SetValue(key, names::MarkChar, MAKELONG(Colors.Mark.Char, MAKEWORD(Colors.Mark.Transparent? 0xff : 0, 0)));
+	cfg.SetValue(key, names::MarkChar, make_integer<uint32_t>(uint16_t{ Colors.Mark.Char }, make_integer<uint16_t, uint8_t>(Colors.Mark.Transparent? 0xff : 0, 0)));
 	cfg.SetValue(key, names::ContinueProcessing, Item.GetContinueProcessing());
 }
 
@@ -844,7 +844,7 @@ void highlight::configuration::Save(bool Always)
 	{
 		const auto root = cfg->CreateKey(cfg->root_key, i.KeyName);
 
-		for (int j = i.from; j != i.to; ++j)
+		for (const auto& j: irange(i.from, i.to))
 		{
 			SaveHighlight(*cfg, cfg->CreateKey(root, i.GroupName + str(j - i.from)), HiData[j]);
 		}

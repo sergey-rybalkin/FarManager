@@ -86,6 +86,7 @@ public:
 	void SetCheck(int Position=-1);
 	void SetCustomCheck(wchar_t Char, int Position = -1);
 	void ClearCheck(int Position = -1);
+	void FlipCheck(int Position = -1);
 	void UpdateItemFlags(int Pos, unsigned long long NewFlags);
 	void SetMaxHeight(int NewMaxHeight){MaxHeight=NewMaxHeight; Resize();}
 	/*
@@ -124,7 +125,7 @@ public:
 	void Pack();
 	MenuItemEx& at(size_t n);
 	MenuItemEx& current();
-	int GetShowItemCount();
+	int GetShowItemCount() const;
 
 private:
 	intptr_t VMenu2DlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2);

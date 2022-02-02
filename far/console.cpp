@@ -40,7 +40,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "imports.hpp"
 #include "colormix.hpp"
 #include "interf.hpp"
-#include "setcolor.hpp"
 #include "strmix.hpp"
 #include "exception.hpp"
 #include "palette.hpp"
@@ -112,39 +111,39 @@ wchar_t ReplaceControlCharacter(wchar_t const Char)
 
 	// C1
 	// These are considered control characters too now.
-	// Unlike C0, it is unclear what glyphs to use, so just remap to the private area for now.
-	case 0x80: return L'\xE080';
-	case 0x81: return L'\xE081';
-	case 0x82: return L'\xE082';
-	case 0x83: return L'\xE083';
-	case 0x84: return L'\xE084';
-	case 0x85: return L'\xE085';
-	case 0x86: return L'\xE086';
-	case 0x87: return L'\xE087';
-	case 0x88: return L'\xE088';
-	case 0x89: return L'\xE089';
-	case 0x8A: return L'\xE08A';
-	case 0x8B: return L'\xE08B';
-	case 0x8C: return L'\xE08C';
-	case 0x8D: return L'\xE08D';
-	case 0x8E: return L'\xE08E';
-	case 0x8F: return L'\xE08F';
-	case 0x90: return L'\xE090';
-	case 0x91: return L'\xE091';
-	case 0x92: return L'\xE092';
-	case 0x93: return L'\xE093';
-	case 0x94: return L'\xE094';
-	case 0x95: return L'\xE095';
-	case 0x96: return L'\xE096';
-	case 0x97: return L'\xE097';
-	case 0x98: return L'\xE098';
-	case 0x99: return L'\xE099';
-	case 0x9A: return L'\xE09A';
-	case 0x9B: return L'\xE09B';
-	case 0x9C: return L'\xE09C';
-	case 0x9D: return L'\xE09D';
-	case 0x9E: return L'\xE09E';
-	case 0x9F: return L'\xE09F';
+	// Unlike C0, it is unclear what glyphs to use, so just replace with FFFD for now.
+	case 0x80:
+	case 0x81:
+	case 0x82:
+	case 0x83:
+	case 0x84:
+	case 0x85:
+	case 0x86:
+	case 0x87:
+	case 0x88:
+	case 0x89:
+	case 0x8A:
+	case 0x8B:
+	case 0x8C:
+	case 0x8D:
+	case 0x8E:
+	case 0x8F:
+	case 0x90:
+	case 0x91:
+	case 0x92:
+	case 0x93:
+	case 0x94:
+	case 0x95:
+	case 0x96:
+	case 0x97:
+	case 0x98:
+	case 0x99:
+	case 0x9A:
+	case 0x9B:
+	case 0x9C:
+	case 0x9D:
+	case 0x9E:
+	case 0x9F: return L'�'; // replacement character
 
 	default:   return Char;
 	}
@@ -213,6 +212,29 @@ static bool sanitise_surrogate_pair(FAR_CHAR_INFO& First, FAR_CHAR_INFO& Second)
 void sanitise_pair(FAR_CHAR_INFO& First, FAR_CHAR_INFO& Second)
 {
 	sanitise_dbsc_pair(First, Second) || sanitise_surrogate_pair(First, Second);
+}
+
+bool get_console_screen_buffer_info(HANDLE ConsoleOutput, CONSOLE_SCREEN_BUFFER_INFO* ConsoleScreenBufferInfo)
+{
+	if (!GetConsoleScreenBufferInfo(ConsoleOutput, ConsoleScreenBufferInfo))
+		return false;
+
+	const auto& Window = ConsoleScreenBufferInfo->srWindow;
+
+	// Mantis#3919: Windows 10 is a PITA
+	if (Window.Left > Window.Right)
+	{
+		auto NewWindow = Window;
+		NewWindow.Left = 0;
+		NewWindow.Right = ConsoleScreenBufferInfo->dwSize.X - 1;
+
+		SetConsoleWindowInfo(ConsoleOutput, true, &NewWindow);
+
+		if (!GetConsoleScreenBufferInfo(ConsoleOutput, ConsoleScreenBufferInfo))
+			return false;
+	}
+
+	return true;
 }
 
 static COORD make_coord(point const& Point)
@@ -327,15 +349,17 @@ namespace console_detail
 	bool console::GetSize(point& Size) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &ConsoleScreenBufferInfo))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &ConsoleScreenBufferInfo))
 			return false;
 
 		if (sWindowMode)
 		{
+			const auto& Window = ConsoleScreenBufferInfo.srWindow;
+
 			Size =
 			{
-				ConsoleScreenBufferInfo.srWindow.Right - ConsoleScreenBufferInfo.srWindow.Left + 1,
-				ConsoleScreenBufferInfo.srWindow.Bottom - ConsoleScreenBufferInfo.srWindow.Top + 1
+				Window.Right - Window.Left + 1,
+				Window.Bottom - Window.Top + 1
 			};
 		}
 		else
@@ -352,12 +376,14 @@ namespace console_detail
 			return SetScreenBufferSize(Size);
 
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
+			return false;
+
 		csbi.srWindow.Left = 0;
 		csbi.srWindow.Right = Size.x - 1;
 		csbi.srWindow.Bottom = csbi.dwSize.Y - 1;
 		csbi.srWindow.Top = csbi.srWindow.Bottom - (Size.y - 1);
-		point WindowCoord = { csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1 };
+		point WindowCoord{ csbi.srWindow.Right - csbi.srWindow.Left + 1, csbi.srWindow.Bottom - csbi.srWindow.Top + 1 };
 		if (WindowCoord.x > csbi.dwSize.X || WindowCoord.y > csbi.dwSize.Y)
 		{
 			WindowCoord.x = std::max(WindowCoord.x, static_cast<int>(csbi.dwSize.X));
@@ -385,7 +411,7 @@ namespace console_detail
 		if (IsVtSupported())
 		{
 			CONSOLE_SCREEN_BUFFER_INFO Info;
-			if (GetConsoleScreenBufferInfo(Out, &Info))
+			if (get_console_screen_buffer_info(Out, &Info))
 			{
 				// Make sure the cursor is within the new buffer
 				if (!(Info.dwCursorPosition.X < Size.x && Info.dwCursorPosition.Y < Size.y))
@@ -420,7 +446,7 @@ namespace console_detail
 		if (IsVtSupported())
 		{
 			CONSOLE_SCREEN_BUFFER_INFO Info;
-			if (GetConsoleScreenBufferInfo(Out, &Info))
+			if (get_console_screen_buffer_info(Out, &Info))
 			{
 				SetWindowRect(Info.srWindow);
 			}
@@ -432,7 +458,7 @@ namespace console_detail
 	bool console::GetWindowRect(rectangle& ConsoleWindow) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &ConsoleScreenBufferInfo))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &ConsoleScreenBufferInfo))
 			return false;
 
 		ConsoleWindow = ConsoleScreenBufferInfo.srWindow;
@@ -448,7 +474,7 @@ namespace console_detail
 	bool console::GetWorkingRect(rectangle& WorkingRect) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
 			return false;
 
 		WorkingRect.bottom = csbi.dwSize.Y - 1;
@@ -588,7 +614,7 @@ namespace console_detail
 			return;
 
 		CONSOLE_SCREEN_BUFFER_INFO Csbi;
-		if (!GetConsoleScreenBufferInfo(OutputHandle, &Csbi))
+		if (!get_console_screen_buffer_info(OutputHandle, &Csbi))
 			return;
 
 		const auto Set = [&](auto Coord, auto Point, auto SmallRect)
@@ -602,18 +628,24 @@ namespace console_detail
 
 	static void AdjustMouseEvents(span<INPUT_RECORD> const Buffer, short Delta)
 	{
-		point Size;
-		::console.GetSize(Size);
+		std::optional<point> Size;
 
 		for (auto& i: Buffer)
 		{
 			if (i.EventType != MOUSE_EVENT)
 				continue;
 
+			if (!Size)
+			{
+				Size.emplace();
+				if (!::console.GetSize(*Size))
+					return;
+			}
+
 			fix_wheel_coordinates(i.Event.MouseEvent);
 
 			i.Event.MouseEvent.dwMousePosition.Y = std::max(0, i.Event.MouseEvent.dwMousePosition.Y - Delta);
-			i.Event.MouseEvent.dwMousePosition.X = std::min(i.Event.MouseEvent.dwMousePosition.X, static_cast<short>(Size.x - 1));
+			i.Event.MouseEvent.dwMousePosition.X = std::min(i.Event.MouseEvent.dwMousePosition.X, static_cast<short>(Size->x - 1));
 		}
 	}
 
@@ -692,7 +724,7 @@ namespace console_detail
 	{
 		if (ExternalConsole.Imports.pReadOutput)
 		{
-			const COORD BufferSize = { static_cast<short>(Buffer.width()), static_cast<short>(Buffer.height()) };
+			const COORD BufferSize{ static_cast<short>(Buffer.width()), static_cast<short>(Buffer.height()) };
 			auto ReadRegion = make_rect(ReadRegionRelative);
 			return ExternalConsole.Imports.pReadOutput(Buffer.data(), BufferSize, make_coord(BufferCoord), &ReadRegion) != FALSE;
 		}
@@ -712,11 +744,11 @@ namespace console_detail
 
 		std::vector<CHAR_INFO> ConsoleBuffer(SubRect.width() * SubRect.height());
 
-		point const BufferSize{ static_cast<int>(SubRect.width()), static_cast<int>(SubRect.height()) };
+		point const BufferSize{ SubRect.width(), SubRect.height() };
 
 		if (BufferSize.x * BufferSize.y * sizeof(CHAR_INFO) > MAXSIZE)
 		{
-			const auto HeightStep = std::max(MAXSIZE / (BufferSize.x * sizeof(CHAR_INFO)), size_t(1));
+			const auto HeightStep = std::max(MAXSIZE / (BufferSize.x * sizeof(CHAR_INFO)), size_t{ 1 });
 
 			const size_t Height = ReadRegion.bottom - ReadRegion.top + 1;
 
@@ -725,7 +757,7 @@ namespace console_detail
 				auto PartialReadRegion = ReadRegion;
 				PartialReadRegion.top += static_cast<int>(i);
 				PartialReadRegion.bottom = std::min(ReadRegion.bottom, static_cast<int>(PartialReadRegion.top + HeightStep - 1));
-				point const PartialBufferSize{ BufferSize.x, static_cast<int>(PartialReadRegion.height()) };
+				point const PartialBufferSize{ BufferSize.x, PartialReadRegion.height() };
 				if (!ReadOutputImpl(ConsoleBuffer.data() + i * PartialBufferSize.x, PartialBufferSize, PartialReadRegion))
 					return false;
 			}
@@ -780,7 +812,7 @@ namespace console_detail
 
 	static void make_vt_attributes(const FarColor& Attributes, string& Str, std::optional<FarColor> const& LastColor)
 	{
-		append(Str, L"\x9b"sv);
+		append(Str, L"\033["sv);
 
 		for (const auto& i: ColorsMapping)
 		{
@@ -906,7 +938,7 @@ namespace console_detail
 			const auto Out = ::console.GetOutputHandle();
 
 			CONSOLE_SCREEN_BUFFER_INFO csbi;
-			if (!GetConsoleScreenBufferInfo(Out, &csbi))
+			if (!get_console_screen_buffer_info(Out, &csbi))
 				return false;
 
 			point SavedCursorPosition;
@@ -961,15 +993,15 @@ namespace console_detail
 
 			std::optional<FarColor> LastColor;
 
-			for (short i = SubRect.top; i <= SubRect.bottom; ++i)
+			for (const auto& i: irange(SubRect.top + 0, SubRect.bottom + 1))
 			{
 				if (i != SubRect.top)
-					format_to(Str, FSTR(L"\x9b""{};{}H"sv), CursorPosition.y + 1 + (i - SubRect.top), CursorPosition.x + 1);
+					format_to(Str, FSTR(L"\033[{};{}H"sv), CursorPosition.y + 1 + (i - SubRect.top), CursorPosition.x + 1);
 
 				make_vt_sequence(Buffer[i].subspan(SubRect.left, SubRect.width()), Str, LastColor);
 			}
 
-			append(Str, L"\x9b""0m"sv);
+			append(Str, L"\033[0m"sv);
 
 			return ::console.Write(Str);
 		}
@@ -1038,7 +1070,7 @@ namespace console_detail
 				const auto invert_colors = [&]
 				{
 					for (auto& i: span(Buffer, BufferSize.x* BufferSize.y))
-						i.Attributes = (i.Attributes & FCF_RAWATTR_MASK) | LOBYTE(~i.Attributes);
+						i.Attributes = (i.Attributes & FCF_RAWATTR_MASK) | extract_integer<BYTE, 0>(~i.Attributes);
 				};
 
 				invert_colors();
@@ -1102,11 +1134,11 @@ namespace console_detail
 				});
 			}
 
-			point const BufferSize{ static_cast<int>(SubRect.width()), static_cast<int>(SubRect.height()) };
+			point const BufferSize{ SubRect.width(), SubRect.height() };
 
 			if (BufferSize.x * BufferSize.y * sizeof(CHAR_INFO) > MAXSIZE)
 			{
-				const auto HeightStep = std::max(MAXSIZE / (BufferSize.x * sizeof(CHAR_INFO)), size_t(1));
+				const auto HeightStep = std::max(MAXSIZE / (BufferSize.x * sizeof(CHAR_INFO)), size_t{ 1 });
 
 				for (size_t i = 0, Height = WriteRegion.height(); i < Height; i += HeightStep)
 				{
@@ -1121,7 +1153,7 @@ namespace console_detail
 					point const PartialBufferSize
 					{
 						BufferSize.x,
-						static_cast<int>(PartialWriteRegion.height())
+						PartialWriteRegion.height()
 					};
 
 					if (!WriteOutputNTImplDebug(ConsoleBuffer.data() + i * PartialBufferSize.x, PartialBufferSize, PartialWriteRegion))
@@ -1157,7 +1189,7 @@ namespace console_detail
 	{
 		if (ExternalConsole.Imports.pWriteOutput)
 		{
-			const COORD BufferSize = { static_cast<short>(Buffer.width()), static_cast<short>(Buffer.height()) };
+			const COORD BufferSize{ static_cast<short>(Buffer.width()), static_cast<short>(Buffer.height()) };
 			auto WriteRegion = make_rect(WriteRegionRelative);
 			return ExternalConsole.Imports.pWriteOutput(Buffer.data(), BufferSize, make_coord(BufferCoord), &WriteRegion) != FALSE;
 		}
@@ -1244,7 +1276,7 @@ namespace console_detail
 			return ExternalConsole.Imports.pGetTextAttributes(&Attributes) != FALSE;
 
 		CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &ConsoleScreenBufferInfo))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &ConsoleScreenBufferInfo))
 			return false;
 
 		Attributes = colors::ConsoleColorToFarColor(ConsoleScreenBufferInfo.wAttributes);
@@ -1284,10 +1316,10 @@ namespace console_detail
 	{
 		if (sWindowMode)
 		{
-			point Size = {};
+			point Size{};
 			GetSize(Size);
-			Position.x = std::min(Position.x, static_cast<int>(Size.x - 1));
-			Position.y = std::max(static_cast<int>(0), Position.y);
+			Position.x = std::min(Position.x, Size.x - 1);
+			Position.y = std::max(0, Position.y);
 			Position.y += GetDelta();
 		}
 		return SetCursorRealPosition(Position);
@@ -1336,20 +1368,30 @@ namespace console_detail
 		});
 	}
 
-	std::unordered_map<string, std::unordered_map<string, string>> console::GetAllAliases() const
-	{
-		FN_RETURN_TYPE(console::GetAllAliases) Result;
+	console::console_aliases::console_aliases() = default;
+	console::console_aliases::~console_aliases() = default;
 
+	struct console::console_aliases::data
+	{
+		// We only use it to bulk copy the aliases from one console to another,
+		// so no need to care about case insensitivity and fancy lookup.
+		std::vector<std::pair<string, std::vector<std::pair<string, string>>>> Aliases;
+	};
+
+	console::console_aliases console::GetAllAliases() const
+	{
 		const auto ExeLength = GetConsoleAliasExesLength();
 		if (!ExeLength)
-			return Result;
+			return {};
 
 		std::vector<wchar_t> ExeBuffer(ExeLength / sizeof(wchar_t) + 1); // +1 for double \0
 		if (!GetConsoleAliasExes(ExeBuffer.data(), ExeLength))
-			return Result;
+			return {};
+
+		auto Aliases = std::make_unique<console_aliases::data>();
 
 		std::vector<wchar_t> AliasesBuffer;
-		for (const auto& ExeToken : enum_substrings(ExeBuffer.data()))
+		for (const auto& ExeToken: enum_substrings(ExeBuffer))
 		{
 			// It's ok, ExeToken is guaranteed to be null-terminated
 			const auto ExeNamePtr = const_cast<wchar_t*>(ExeToken.data());
@@ -1358,19 +1400,28 @@ namespace console_detail
 			if (!GetConsoleAliases(AliasesBuffer.data(), AliasesLength, ExeNamePtr))
 				continue;
 
-			auto& ExeMap = Result[ExeNamePtr];
-			for (const auto& AliasToken : enum_substrings(AliasesBuffer.data()))
+			std::pair<string, std::vector<std::pair<string, string>>> ExeData;
+			ExeData.first = ExeNamePtr;
+			for (const auto& AliasToken: enum_substrings(AliasesBuffer))
 			{
-				ExeMap.emplace(split(AliasToken));
+				ExeData.second.emplace_back(split(AliasToken));
 			}
+
+			Aliases->Aliases.emplace_back(std::move(ExeData));
 		}
+
+		console_aliases Result;
+		Result.m_Data = std::move(Aliases);
 
 		return Result;
 	}
 
-	void console::SetAllAliases(const std::unordered_map<string, std::unordered_map<string, string>>& Aliases) const
+	void console::SetAllAliases(console_aliases&& Aliases) const
 	{
-		for (const auto& [ExeName, ExeAliases]: Aliases)
+		if (!Aliases.m_Data)
+			return;
+
+		for (const auto& [ExeName, ExeAliases]: Aliases.m_Data->Aliases)
 		{
 			for (const auto& [Alias, Value]: ExeAliases)
 			{
@@ -1392,8 +1443,7 @@ namespace console_detail
 	{
 		point Result = GetLargestConsoleWindowSize(GetOutputHandle());
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
-		if (csbi.dwSize.Y > Result.y)
+		if (get_console_screen_buffer_info(GetOutputHandle(), &csbi) && csbi.dwSize.Y > Result.y)
 		{
 			CONSOLE_FONT_INFO FontInfo;
 			if (get_current_console_font(GetOutputHandle(), FontInfo))
@@ -1424,14 +1474,16 @@ namespace console_detail
 			return ExternalConsole.Imports.pClearExtraRegions(&Color, Mode) != FALSE;
 
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
+			return false;
+
 		DWORD CharsWritten;
 		const auto ConColor = colors::FarColorToConsoleColor(Color);
 
 		if (Mode&CR_TOP)
 		{
 			const DWORD TopSize = csbi.dwSize.X * csbi.srWindow.Top;
-			const COORD TopCoord = {};
+			const COORD TopCoord{};
 			FillConsoleOutputCharacter(GetOutputHandle(), L' ', TopSize, TopCoord, &CharsWritten);
 			FillConsoleOutputAttribute(GetOutputHandle(), ConColor, TopSize, TopCoord, &CharsWritten);
 		}
@@ -1439,7 +1491,7 @@ namespace console_detail
 		if (Mode&CR_RIGHT)
 		{
 			const DWORD RightSize = csbi.dwSize.X - csbi.srWindow.Right;
-			COORD RightCoord = { csbi.srWindow.Right, ::GetDelta(csbi) };
+			COORD RightCoord{ csbi.srWindow.Right, ::GetDelta(csbi) };
 			for (; RightCoord.Y < csbi.dwSize.Y; RightCoord.Y++)
 			{
 				FillConsoleOutputCharacter(GetOutputHandle(), L' ', RightSize, RightCoord, &CharsWritten);
@@ -1453,7 +1505,8 @@ namespace console_detail
 	{
 		bool process = false;
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
+			return false;
 
 		if ((Lines < 0 && csbi.srWindow.Top) || (Lines > 0 && csbi.srWindow.Bottom != csbi.dwSize.Y - 1))
 		{
@@ -1499,31 +1552,28 @@ namespace console_detail
 	bool console::ScrollWindowToBegin() const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
+			return false;
 
-		if (csbi.srWindow.Top > 0)
-		{
-			csbi.srWindow.Bottom -= csbi.srWindow.Top;
-			csbi.srWindow.Top = 0;
-			return SetWindowRect(csbi.srWindow);
-		}
+		if (!csbi.srWindow.Top)
+			return false;
 
-		return false;
+		csbi.srWindow.Bottom -= csbi.srWindow.Top;
+		csbi.srWindow.Top = 0;
+		return SetWindowRect(csbi.srWindow);
 	}
 
 	bool console::ScrollWindowToEnd() const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
 
-		if (csbi.srWindow.Bottom < csbi.dwSize.Y - 1)
-		{
-			csbi.srWindow.Top += csbi.dwSize.Y - 1 - csbi.srWindow.Bottom;
-			csbi.srWindow.Bottom = csbi.dwSize.Y - 1;
-			return SetWindowRect(csbi.srWindow);
-		}
+		if (csbi.srWindow.Bottom == csbi.dwSize.Y - 1)
+			return false;
 
-		return false;
+		csbi.srWindow.Top += csbi.dwSize.Y - 1 - csbi.srWindow.Bottom;
+		csbi.srWindow.Bottom = csbi.dwSize.Y - 1;
+		return SetWindowRect(csbi.srWindow);
 	}
 
 	bool console::IsFullscreenSupported() const
@@ -1539,19 +1589,20 @@ namespace console_detail
 #endif
 	}
 
-	bool console::ResetPosition() const
+	void console::ResetPosition() const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
-		if (csbi.srWindow.Left || csbi.srWindow.Bottom != csbi.dwSize.Y - 1)
-		{
-			csbi.srWindow.Right -= csbi.srWindow.Left;
-			csbi.srWindow.Left = 0;
-			csbi.srWindow.Top += csbi.dwSize.Y - 1 - csbi.srWindow.Bottom;
-			csbi.srWindow.Bottom = csbi.dwSize.Y - 1;
-			SetWindowRect(csbi.srWindow);
-		}
-		return true;
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
+			return;
+
+		if (!csbi.srWindow.Left && csbi.srWindow.Bottom == csbi.dwSize.Y - 1)
+			return;
+
+		csbi.srWindow.Right -= csbi.srWindow.Left;
+		csbi.srWindow.Left = 0;
+		csbi.srWindow.Top += csbi.dwSize.Y - 1 - csbi.srWindow.Bottom;
+		csbi.srWindow.Bottom = csbi.dwSize.Y - 1;
+		SetWindowRect(csbi.srWindow);
 	}
 
 	bool console::ResetViewportPosition() const
@@ -1560,13 +1611,15 @@ namespace console_detail
 		return
 			GetWindowRect(WindowRect) &&
 			SetCursorPosition({}) &&
-			SetCursorPosition({ 0, static_cast<int>(WindowRect.height() - 1) });
+			SetCursorPosition({ 0, WindowRect.height() - 1 });
 	}
 
 	short console::GetDelta() const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi);
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
+			return 0;
+
 		return ::GetDelta(csbi);
 	}
 
@@ -1580,7 +1633,7 @@ namespace console_detail
 	bool console::ScrollNonClientArea(size_t NumLines, const FAR_CHAR_INFO& Fill) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
 			return false;
 
 		const auto Scroll = [&](rectangle const& Rect)
@@ -1623,7 +1676,7 @@ namespace console_detail
 	bool console::IsViewportVisible() const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
 			return false;
 
 		const auto Height = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
@@ -1638,7 +1691,7 @@ namespace console_detail
 			return false;
 
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
 			return false;
 
 		return csbi.srWindow.Left || csbi.srWindow.Bottom + 1 != csbi.dwSize.Y;
@@ -1647,7 +1700,7 @@ namespace console_detail
 	bool console::IsPositionVisible(point const Position) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &csbi))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &csbi))
 			return false;
 
 		if (!in_closed_range(csbi.srWindow.Left, Position.x, csbi.srWindow.Right))
@@ -1694,12 +1747,12 @@ namespace console_detail
 
 		DWORD Written;
 		const auto Pair = encoding::utf16::to_surrogate(Codepoint);
-		std::array Chars = { Pair.first, Pair.second };
+		const std::array Chars{ Pair.first, Pair.second };
 		if (!WriteConsole(m_WidthTestScreen.native_handle(), Chars.data(), Pair.second? 2 : 1, &Written, {}))
 			return false;
 
 		CONSOLE_SCREEN_BUFFER_INFO Info;
-		if (!GetConsoleScreenBufferInfo(m_WidthTestScreen.native_handle(), &Info))
+		if (!get_console_screen_buffer_info(m_WidthTestScreen.native_handle(), &Info))
 			return false;
 
 		return Info.dwCursorPosition.X > 1;
@@ -1732,7 +1785,7 @@ namespace console_detail
 	bool console::GetCursorRealPosition(point& Position) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
-		if (!GetConsoleScreenBufferInfo(GetOutputHandle(), &ConsoleScreenBufferInfo))
+		if (!get_console_screen_buffer_info(GetOutputHandle(), &ConsoleScreenBufferInfo))
 			return false;
 
 		Position = ConsoleScreenBufferInfo.dwCursorPosition;

@@ -59,13 +59,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarDlgBuilder.hpp"
 
 // Platform:
+#include "platform.debug.hpp"
 #include "platform.fs.hpp"
-#include "platform.reg.hpp"
+#include "platform.process.hpp"
 #include "platform.version.hpp"
 
 // Common:
 #include "common/scope_exit.hpp"
-#include "common/view/zip.hpp"
 
 // External:
 #include "format.hpp"
@@ -126,10 +126,10 @@ void disable_exception_handling()
 	LOGWARNING(L"Exception handling disabled"sv);
 }
 
-static std::atomic_size_t s_ExceptionHandlingInprogress;
+static std::atomic_bool s_ExceptionHandlingInprogress{};
 bool exception_handling_in_progress()
 {
-	return s_ExceptionHandlingInprogress != 0;
+	return s_ExceptionHandlingInprogress;
 }
 
 void force_stderr_exception_ui(bool const Force)
@@ -139,28 +139,33 @@ void force_stderr_exception_ui(bool const Force)
 
 void CreatePluginStartupInfo(PluginStartupInfo *PSI, FarStandardFunctions *FSF);
 
-constexpr NTSTATUS
+static constexpr NTSTATUS
 	EXCEPTION_MICROSOFT_CPLUSPLUS = 0xE06D7363, // EH_EXCEPTION_NUMBER
 	EXCEPTION_TERMINATE           = 0xE074726D; // 'trm'
 
-static void get_backtrace(string_view const Module, span<uintptr_t const> const Stack, span<uintptr_t const> const NestedStack, function_ref<void(string&&)> const Consumer)
-{
-	const auto Separator = [&](string&& Message)
-	{
-		Consumer(string(40, L'-'));
-		Consumer(std::move(Message));
-		Consumer(string(40, L'-'));
-	};
+static const auto Separator = L"----------------------------------------------------------------------"sv;
 
+static void make_header(string_view const Message, function_ref<void(string_view)> const Consumer)
+{
+	Consumer({});
+
+	Consumer(Separator);
+	Consumer(Message);
+	Consumer(Separator);
+}
+
+static void get_backtrace(string_view const Module, span<uintptr_t const> const Stack, span<uintptr_t const> const NestedStack, function_ref<void(string_view)> const Consumer)
+{
+	make_header(L"Exception stack"sv, Consumer);
 	if (!NestedStack.empty())
 	{
 		tracer.get_symbols(Module, NestedStack, Consumer);
-		Separator(L"Rethrow:"s);
+		make_header(L"Rethrow stack"sv, Consumer);
 	}
 
 	tracer.get_symbols(Module, Stack, Consumer);
 
-	Separator(L"Current stack:"s);
+	make_header(L"Exception handler stack"sv, Consumer);
 	tracer.get_symbols(Module, os::debug::current_stack(), Consumer);
 }
 
@@ -172,7 +177,7 @@ static string get_report_location()
 
 	const auto SubDir = format(L"Far.{}_{}_{}"sv, Date, Time, GetCurrentProcessId());
 
-	if (const auto CrashLogs = path::join(Global->Opt->LocalProfilePath, L"CrashLogs"); os::fs::is_directory(CrashLogs) || os::fs::create_directory(CrashLogs))
+	if (const auto CrashLogs = path::join(Global? Global->Opt->LocalProfilePath : L"."sv, L"CrashLogs"); os::fs::is_directory(CrashLogs) || os::fs::create_directory(CrashLogs))
 	{
 		if (const auto Path = path::join(CrashLogs, SubDir); os::fs::create_directory(Path))
 		{
@@ -192,6 +197,33 @@ static string get_report_location()
 		return SubDir;
 
 	return L"."s;
+}
+
+static bool write_readme(string_view const FullPath)
+{
+	os::fs::file const File(FullPath, GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS);
+	if (!File)
+		return false;
+
+#define EOL "\r\n"
+
+	const auto Data = L"\xFEFF"
+		"Please send bug_report.txt and far.mdmp to the developers:" EOL
+		EOL
+		"  https://bugs.farmanager.com" EOL
+		"  https://github.com/FarGroup/FarManager/issues" EOL
+		"  https://forum.farmanager.com/viewforum.php?f=9" EOL
+		"  https://forum.farmanager.com/viewforum.php?f=37" EOL
+		EOL
+		"------------------------------------------------------------" EOL
+		"DO NOT SHARE far_full.mdmp UNLESS EXPLICITLY ASKED TO DO SO." EOL
+		"It could contain sensitive data." EOL
+		"------------------------------------------------------------" EOL
+		""sv;
+
+#undef EOL
+
+	return File.Write(Data.data(), Data.size() * sizeof(decltype(Data)::value_type));
 }
 
 static bool write_report(string_view const Data, string_view const FullPath)
@@ -214,7 +246,7 @@ static bool write_minidump(const exception_context& Context, string_view const F
 	auto ExceptionRecord = Context.exception_record();
 	auto ContextRecord = Context.context_record();
 	EXCEPTION_POINTERS Pointers{ &ExceptionRecord, &ContextRecord };
-	MINIDUMP_EXCEPTION_INFORMATION Mei = { Context.thread_id(), &Pointers };
+	MINIDUMP_EXCEPTION_INFORMATION Mei{ Context.thread_id(), &Pointers };
 
 	return imports.MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), DumpFile.get().native_handle(), Type, &Mei, nullptr, nullptr) != FALSE;
 }
@@ -330,49 +362,91 @@ static string collect_information(
 	string Strings;
 	Strings.reserve(1024);
 
+	Strings.push_back(L'\xFEFF');
+
 	const auto Eol = eol::system.str();
+
+	const auto append_line = [&](string_view const Line = {})
+	{
+		append(Strings, Line, Eol);
+	};
 
 	for (const auto& [Label, Value]: BasicInfo)
 	{
 		format_to(Strings, FSTR(L"{} {}{}"sv), Label, Value, Eol);
 	}
 
-	append(Strings, Eol);
-
+	make_header(L"Registers"sv, append_line);
 	read_registers(Strings, Context.context_record(), Eol);
-	append(Strings, Eol);
 
-	get_backtrace(Module, tracer.get(Module, Context.context_record(), Context.thread_handle()), NestedStack, [&](string_view const Line)
+	get_backtrace(Module, tracer.get(Module, Context.context_record(), Context.thread_handle()), NestedStack, append_line);
+
 	{
-		append(Strings, Line, Eol);
-	});
-	append(Strings, Eol);
+		os::process::enum_processes const Enum;
+		const auto CurrentPid = GetCurrentProcessId();
+		const auto ContextThreadId = Context.thread_id();
+		const auto CurrentEntry = std::find_if(ALL_CONST_RANGE(Enum), [&](os::process::enum_process_entry const& Entry){ return Entry.Pid == CurrentPid; });
+		if (CurrentEntry != Enum.cend())
+		{
+			for (const auto& i: CurrentEntry->Threads)
+			{
+				const auto Tid = reinterpret_cast<uintptr_t>(i.ClientId.UniqueThread);
+				if (Tid == ContextThreadId)
+					continue;
 
+				os::handle const Thread(OpenThread(THREAD_QUERY_INFORMATION | THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT, false, Tid));
+				if (!Thread)
+					continue;
+
+				SuspendThread(Thread.native_handle());
+				SCOPE_EXIT{ ResumeThread(Thread.native_handle()); };
+
+				auto ThreadTitle = concat(L"Thread "sv, str(Tid));
+				if (const auto ThreadName = os::debug::get_thread_name(Thread.native_handle()); !ThreadName.empty())
+					append(ThreadTitle, L" ("sv, ThreadName, L')');
+				append(ThreadTitle, L" stack"sv);
+
+				make_header(ThreadTitle, append_line);
+
+				CONTEXT ThreadContext{};
+				ThreadContext.ContextFlags = CONTEXT_ALL;
+				if (!GetThreadContext(Thread.native_handle(), &ThreadContext))
+					continue;
+
+				tracer.get_symbols(Module, tracer.get(Module, ThreadContext, Thread.native_handle()), append_line);
+			}
+		}
+	}
+
+	make_header(L" Modules"sv, append_line);
 	read_modules(Strings, Eol);
 
 	return Strings;
 }
 
-static bool ExcDialog(string const& ReportLocation, bool const CanUnload)
+static bool ExcDialog(string const& ReportLocation, string const& PluginInformation)
 {
 	// TODO: Far Dialog is not the best choice for exception reporting
 	// replace with something trivial
 
 	DialogBuilder Builder(lng::MExceptionDialogTitle);
+	if (!PluginInformation.empty())
+	{
+		Builder.AddText(PluginInformation).Flags |= DIF_SHOWAMPERSAND;
+		Builder.AddSeparator();
+	}
 	Builder.AddText(lng::MExceptionDialogMessage1);
 	Builder.AddText(lng::MExceptionDialogMessage2);
 	Builder.AddConstEditField(ReportLocation, 70);
 	Builder.AddSeparator();
 
-	if (CanUnload)
+	if (!PluginInformation.empty())
 	{
-		lng const MsgIDs[]{ lng::MExcTerminate, lng::MExcUnload, lng::MIgnore };
-		Builder.AddButtons(MsgIDs, 0, std::size(MsgIDs) - 1);
+		Builder.AddButtons({ lng::MExcTerminate, lng::MExcUnload, lng::MIgnore });
 	}
 	else
 	{
-		lng const MsgIDs[]{ lng::MExcTerminate, lng::MIgnore };
-		Builder.AddButtons(MsgIDs, 0, std::size(MsgIDs) - 1);
+		Builder.AddButtons({ lng::MExcTerminate, lng::MIgnore });
 	}
 
 	Builder.SetDialogMode(DMODE_WARNINGSTYLE | DMODE_NOPLUGINS);
@@ -385,18 +459,18 @@ static bool ExcDialog(string const& ReportLocation, bool const CanUnload)
 		return true;
 
 	case 1: // Unload / Ignore
-		return CanUnload;
+		return !PluginInformation.empty();
 
 	default:
 		return false;
 	}
 }
 
-static bool ExcConsole(string const& ReportLocation, bool)
+static void print_exception_message(string const& ReportLocation, string const& PluginInformation)
 {
 	const auto Eol = eol::std.str();
 
-	std::array Msgs
+	std::array LngMsgs
 	{
 		L"Oops"sv,
 		L"Something went wrong."sv,
@@ -405,7 +479,7 @@ static bool ExcConsole(string const& ReportLocation, bool)
 
 	if (far_language::instance().is_loaded())
 	{
-		Msgs =
+		LngMsgs =
 		{
 			msg(lng::MExceptionDialogTitle),
 			msg(lng::MExceptionDialogMessage1),
@@ -413,14 +487,30 @@ static bool ExcConsole(string const& ReportLocation, bool)
 		};
 	}
 
-	std::wcerr << Eol << Eol;
+	std::wcerr <<
+		Eol <<
+		Eol <<
+		LngMsgs[0] << Eol <<
+		Separator << Eol;
 
-	for (const auto& i: Msgs)
-		std::wcerr << i << Eol;
+	if (!PluginInformation.empty())
+	{
+		std::wcerr <<
+			PluginInformation << Eol <<
+			Separator << Eol;
+	}
 
-	std::wcerr << ReportLocation << Eol;
+	std::wcerr <<
+		LngMsgs[1] << Eol <<
+		LngMsgs[2] << Eol <<
+		Separator << Eol <<
+		ReportLocation << Eol <<
+		Separator << Eol;
+}
 
-	if (!ConsoleYesNo(L"Terminate the process"sv, true))
+static bool ExcConsole(string const& ReportLocation, string const& PluginInformation)
+{
+	if (!ConsoleYesNo(L"Terminate the process"sv, true, [&]{ print_exception_message(ReportLocation, PluginInformation); }))
 		return false;
 
 	UseTerminateHandler = true;
@@ -436,7 +526,7 @@ static bool ShowExceptionUI(
 	string_view const Function,
 	string_view const Location,
 	string_view const ModuleName,
-	string_view const PluginInfo,
+	string const& PluginInfo,
 	Plugin const* const PluginModule,
 	span<uintptr_t const> const NestedStack
 )
@@ -493,14 +583,14 @@ static bool ShowExceptionUI(
 
 	LOG(PluginModule? logging::level::error : logging::level::fatal, L"\n{}\n"sv, log_message());
 
-	const auto CanUnload = PluginModule != nullptr;
 	const auto ReportLocation = get_report_location();
+	const auto MinidumpNormal = write_minidump(Context, path::join(ReportLocation, L"far.mdmp"sv), MiniDumpNormal);
+	const auto MinidumpFull = write_minidump(Context, path::join(ReportLocation, L"far_full.mdmp"sv), MiniDumpWithFullMemory);
 	const auto BugReport = collect_information(Context, NestedStack, ModuleName, BasicInfo);
 	const auto ReportOnDisk = write_report(BugReport, path::join(ReportLocation, L"bug_report.txt"sv));
 	const auto ReportInClipboard = !ReportOnDisk && SetClipboardText(BugReport);
-	const auto MinidumpNormal = write_minidump(Context, path::join(ReportLocation, L"far.mdmp"sv), MiniDumpNormal);
-	const auto MinidumpFull = write_minidump(Context, path::join(ReportLocation, L"far_full.mdmp"sv), MiniDumpWithFullMemory);
-	const auto AnythingOnDisk = ReportOnDisk || MinidumpNormal || MinidumpFull;
+	const auto ReadmeOnDisk = write_readme(path::join(ReportLocation, L"README.txt"sv));
+	const auto AnythingOnDisk = ReportOnDisk || MinidumpNormal || MinidumpFull || ReadmeOnDisk;
 
 	if (AnythingOnDisk)
 		OpenFolderInShell(ReportLocation);
@@ -508,11 +598,11 @@ static bool ShowExceptionUI(
 	if (AnythingOnDisk || ReportInClipboard)
 		return (UseDialog? ExcDialog : ExcConsole)(
 			AnythingOnDisk? ReportLocation : msg(lng::MExceptionDialogClipboard),
-			CanUnload
+			PluginInfo
 		);
 
 	// Should never happen - neither the filesystem nor clipboard are writable, so just dump it to the screen:
-	return ExcConsole(BugReport, CanUnload);
+	return ExcConsole(BugReport, PluginInfo);
 }
 
 
@@ -591,8 +681,8 @@ public:
 			return;
 
 		m_BaseAddress = Record.NumberParameters == 4? Record.ExceptionInformation[3] : 0;
-		const auto& ThrowInfoRef = *reinterpret_cast<detail::ThrowInfo const*>(Record.ExceptionInformation[2]);
-		const auto& CatchableTypeArrayRef = *reinterpret_cast<detail::CatchableTypeArray const*>(m_BaseAddress + ThrowInfoRef.pCatchableTypeArray);
+		const auto& ThrowInfoRef = *view_as<detail::ThrowInfo const*>(Record.ExceptionInformation[2]);
+		const auto& CatchableTypeArrayRef = *view_as<detail::CatchableTypeArray const*>(m_BaseAddress + ThrowInfoRef.pCatchableTypeArray);
 		m_CatchableTypesRVAs = { &CatchableTypeArrayRef.arrayOfCatchableTypes, static_cast<size_t>(CatchableTypeArrayRef.nCatchableTypes) };
 	}
 
@@ -606,8 +696,8 @@ private:
 		if (m_Index == m_CatchableTypesRVAs.size())
 			return false;
 
-		const auto& CatchableTypeRef = *reinterpret_cast<detail::CatchableType const*>(m_BaseAddress + m_CatchableTypesRVAs[m_Index++]);
-		const auto& TypeInfoRef = *reinterpret_cast<std::type_info const*>(m_BaseAddress + CatchableTypeRef.pType);
+		const auto& CatchableTypeRef = *view_as<detail::CatchableType const*>(m_BaseAddress + m_CatchableTypesRVAs[m_Index++]);
+		const auto& TypeInfoRef = *view_as<std::type_info const*>(m_BaseAddress + CatchableTypeRef.pType);
 
 		Name = TypeInfoRef.name();
 		return true;
@@ -626,52 +716,6 @@ static string ExtractObjectType(EXCEPTION_RECORD const& xr)
 		return {};
 
 	return encoding::utf8::get_chars(*Iterator);
-}
-
-static bool ProcessExternally(EXCEPTION_POINTERS const& Pointers, Plugin const* const PluginModule)
-{
-	if (!Global || !Global->Opt->ExceptUsed || Global->Opt->strExceptEventSvc.empty())
-		return false;
-
-	const os::rtdl::module Module(Global->Opt->strExceptEventSvc);
-	if (!Module)
-		return false;
-
-	struct PLUGINRECORD       // информация о плагине
-	{
-		DWORD TypeRec;          // Тип записи = RTYPE_PLUGIN
-		DWORD SizeRec;          // Размер
-		DWORD Reserved1[4];
-		// DWORD SysID; UUID
-		const wchar_t *ModuleName;
-		DWORD Reserved2[2];    // резерв :-)
-		DWORD SizeModuleName;
-	};
-
-	os::rtdl::function_pointer<BOOL(WINAPI*)(EXCEPTION_POINTERS*, const PLUGINRECORD*, const PluginStartupInfo*, DWORD*)> Function(Module, "ExceptionProc");
-	if (!Function)
-		return false;
-
-	static PluginStartupInfo LocalStartupInfo;
-	LocalStartupInfo = {};
-	static FarStandardFunctions LocalStandardFunctions;
-	LocalStandardFunctions = {};
-	CreatePluginStartupInfo(&LocalStartupInfo, &LocalStandardFunctions);
-	LocalStartupInfo.ModuleName = Global->Opt->strExceptEventSvc.c_str();
-	static PLUGINRECORD PlugRec;
-
-	if (PluginModule)
-	{
-		PlugRec = {};
-		PlugRec.TypeRec = RTYPE_PLUGIN;
-		PlugRec.SizeRec = sizeof(PlugRec);
-		PlugRec.ModuleName = PluginModule->ModuleName().c_str();
-	}
-
-	DWORD dummy;
-	auto PointersCopy = Pointers;
-
-	return Function(&PointersCopy, PluginModule ? &PlugRec : nullptr, &LocalStartupInfo, &dummy) != FALSE;
 }
 
 static string exception_name(EXCEPTION_RECORD const& ExceptionRecord, string_view const Type)
@@ -788,25 +832,11 @@ static bool handle_generic_exception(
 	if (ExceptionHandlingIgnored)
 		return false;
 
-	if (exception_handling_in_progress())
+	if (s_ExceptionHandlingInprogress)
 		return true;
 
-	++s_ExceptionHandlingInprogress;
-	SCOPE_EXIT{ --s_ExceptionHandlingInprogress; };
-
-	{
-		auto ExceptionRecord = Context.exception_record();
-		auto ContextRecord = Context.context_record();
-		EXCEPTION_POINTERS const Pointers{ &ExceptionRecord, &ContextRecord };
-
-		if (ProcessExternally(Pointers, PluginModule))
-		{
-			if (!PluginModule && Global)
-				Global->CriticalInternalError = true;
-
-			return true;
-		}
-	}
+	s_ExceptionHandlingInprogress = true;
+	SCOPE_EXIT{ s_ExceptionHandlingInprogress = false; };
 
 	string strFileName;
 
@@ -986,7 +1016,7 @@ class seh_exception final: public far_exception
 {
 public:
 	template<typename... args>
-	explicit seh_exception(EXCEPTION_POINTERS& Pointers, args&&... Args):
+	explicit seh_exception(EXCEPTION_POINTERS const& Pointers, args&&... Args):
 		far_exception(FWD(Args)...),
 		m_Context(std::make_shared<seh_exception_context>(Pointers))
 	{}
@@ -1051,7 +1081,7 @@ static bool handle_seh_exception(
 	for (const auto& i : enum_catchable_objects(Context.exception_record()))
 	{
 		if (strstr(i, "std::exception"))
-			return handle_std_exception(Context, *reinterpret_cast<std::exception const*>(Context.exception_record().ExceptionInformation[1]), Function, PluginModule);
+			return handle_std_exception(Context, *view_as<std::exception const*>(Context.exception_record().ExceptionInformation[1]), Function, PluginModule);
 	}
 
 	return handle_generic_exception(Context, Function, {}, PluginModule, {}, {});
@@ -1323,7 +1353,7 @@ namespace detail
 		return EXCEPTION_CONTINUE_SEARCH;
 	}
 
-	int seh_thread_filter(std::exception_ptr& Ptr, EXCEPTION_POINTERS* const Info)
+	int seh_thread_filter(std::exception_ptr& Ptr, EXCEPTION_POINTERS const* const Info)
 	{
 		// SEH transport between threads is currenly implemented in terms of C++ exceptions, so it requires both
 		if (!(HandleSehExceptions && HandleCppExceptions))

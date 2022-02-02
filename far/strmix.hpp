@@ -51,7 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 class RegExp;
 struct RegExpMatch;
-struct MatchHash;
+struct named_regex_match;
 
 namespace legacy
 {
@@ -187,13 +187,12 @@ bool IsCaseMixed(string_view Str);
 bool SearchString(
 	string_view Haystack,
 	string_view Needle,
-	string_view NeedleUpper,
-	string_view NeedleLower,
+	i_searcher const& NeedleSearcher,
 	const RegExp& re,
-	RegExpMatch* pm,
-	MatchHash* hm,
+	std::vector<RegExpMatch>& Match,
+	named_regex_match* NamedMatch,
 	int& CurPos,
-	bool Case,
+	search_case_fold CaseFold,
 	bool WholeWords,
 	bool Reverse,
 	bool Regexp,
@@ -205,14 +204,13 @@ bool SearchString(
 bool SearchAndReplaceString(
 	string_view Haystack,
 	string_view Needle,
-	string_view NeedleUpper,
-	string_view NeedleLower,
+	i_searcher const& NeedleSearcher,
 	const RegExp& re,
-	RegExpMatch* pm,
-	MatchHash* hm,
+	std::vector<RegExpMatch>& Match,
+	named_regex_match* NamedMatch,
 	string& ReplaceStr,
 	int& CurPos,
-	bool Case,
+	search_case_fold CaseFold,
 	bool WholeWords,
 	bool Reverse,
 	bool Regexp,

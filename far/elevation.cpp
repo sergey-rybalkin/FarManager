@@ -545,10 +545,10 @@ static intptr_t ElevationApproveDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 		{
 			if(Param1==AAD_EDIT_OBJECT)
 			{
-				const auto Color = colors::PaletteColorToFarColor(COL_DIALOGTEXT);
-				const auto Colors = static_cast<FarDialogItemColors*>(Param2);
-				Colors->Colors[0] = Color;
-				Colors->Colors[2] = Color;
+				const auto& Color = colors::PaletteColorToFarColor(COL_DIALOGTEXT);
+				const auto& Colors = *static_cast<FarDialogItemColors const*>(Param2);
+				Colors.Colors[0] = Color;
+				Colors.Colors[2] = Color;
 			}
 		}
 		break;
@@ -1004,13 +1004,12 @@ bool ElevationRequired(ELEVATION_MODE Mode, bool UseNtStatus)
 	if (!Global || !Global->Opt || !(Global->Opt->ElevationMode & Mode))
 		return false;
 
-	if(UseNtStatus && imports.RtlGetLastNtStatus)
+	if(UseNtStatus)
 	{
 		const auto LastNtStatus = os::get_last_nt_status();
 		return LastNtStatus == STATUS_ACCESS_DENIED || LastNtStatus == STATUS_PRIVILEGE_NOT_HELD || LastNtStatus == STATUS_INVALID_OWNER;
 	}
 
-	// RtlGetLastNtStatus not implemented in w2k.
 	const auto LastWin32Error = GetLastError();
 	return LastWin32Error == ERROR_ACCESS_DENIED || LastWin32Error == ERROR_PRIVILEGE_NOT_HELD || LastWin32Error == ERROR_INVALID_OWNER;
 }
@@ -1071,10 +1070,8 @@ public:
 		for (;;)
 		{
 			if (!Process(Read<int>()))
-				break;
+				return EXIT_SUCCESS;
 		}
-
-		return EXIT_SUCCESS;
 	}
 
 private:

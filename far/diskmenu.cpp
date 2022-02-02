@@ -243,22 +243,22 @@ static void ConfigureChangeDriveMode()
 	DialogBuilder Builder(lng::MChangeDriveConfigure, L"ChangeDriveMode"sv);
 	Builder.SetId(ChangeDriveModeId);
 	Builder.AddCheckbox(lng::MChangeDriveShowDiskType, DriveMode, DRIVE_SHOW_TYPE);
-	const auto ShowLabel = Builder.AddCheckbox(lng::MChangeDriveShowLabel, DriveMode, DRIVE_SHOW_LABEL);
-	const auto ShowLabelUseShell = Builder.AddCheckbox(lng::MChangeDriveShowLabelUseShell, DriveMode, DRIVE_SHOW_LABEL_USE_SHELL);
-	ShowLabelUseShell->Indent(4);
+	auto& ShowLabel = Builder.AddCheckbox(lng::MChangeDriveShowLabel, DriveMode, DRIVE_SHOW_LABEL);
+	auto& ShowLabelUseShell = Builder.AddCheckbox(lng::MChangeDriveShowLabelUseShell, DriveMode, DRIVE_SHOW_LABEL_USE_SHELL);
+	ShowLabelUseShell.Indent(4);
 	Builder.LinkFlags(ShowLabel, ShowLabelUseShell, DIF_DISABLE);
 	Builder.AddCheckbox(lng::MChangeDriveShowFileSystem, DriveMode, DRIVE_SHOW_FILESYSTEM);
 
 	int ShowSizeAny = DriveMode & (DRIVE_SHOW_SIZE | DRIVE_SHOW_SIZE_FLOAT);
 
-	const auto ShowSize = Builder.AddCheckbox(lng::MChangeDriveShowSize, ShowSizeAny);
-	const auto ShowSizeFloat = Builder.AddCheckbox(lng::MChangeDriveShowSizeFloat, DriveMode, DRIVE_SHOW_SIZE_FLOAT);
-	ShowSizeFloat->Indent(4);
+	auto& ShowSize = Builder.AddCheckbox(lng::MChangeDriveShowSize, ShowSizeAny);
+	auto& ShowSizeFloat = Builder.AddCheckbox(lng::MChangeDriveShowSizeFloat, DriveMode, DRIVE_SHOW_SIZE_FLOAT);
+	ShowSizeFloat.Indent(4);
 	Builder.LinkFlags(ShowSize, ShowSizeFloat, DIF_DISABLE);
 
 	Builder.AddCheckbox(lng::MChangeDriveShowPath, DriveMode, DRIVE_SHOW_ASSOCIATED_PATH);
 	Builder.AddCheckbox(lng::MChangeDriveShowPlugins, DriveMode, DRIVE_SHOW_PLUGINS);
-	Builder.AddCheckbox(lng::MChangeDriveSortPluginsByHotkey, DriveMode, DRIVE_SORT_PLUGINS_BY_HOTKEY)->Indent(4);
+	Builder.AddCheckbox(lng::MChangeDriveSortPluginsByHotkey, DriveMode, DRIVE_SORT_PLUGINS_BY_HOTKEY).Indent(4);
 	Builder.AddCheckbox(lng::MChangeDriveShowRemovableDrive, DriveMode, DRIVE_SHOW_REMOVABLE);
 	Builder.AddCheckbox(lng::MChangeDriveShowCD, DriveMode, DRIVE_SHOW_CDROM);
 	Builder.AddCheckbox(lng::MChangeDriveShowNetworkDrive, DriveMode, DRIVE_SHOW_REMOTE);
@@ -744,9 +744,9 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 				{
 					if (NewItem.DriveType == DRIVE_CDROM)
 					{
-						static_assert(as_underlying_type(lng::MChangeDriveHDDVDRAM) - as_underlying_type(lng::MChangeDriveCDROM) == as_underlying_type(cd_type::hddvdram) - as_underlying_type(cd_type::cdrom));
+						static_assert(std::to_underlying(lng::MChangeDriveHDDVDRAM) - std::to_underlying(lng::MChangeDriveCDROM) == std::to_underlying(cd_type::hddvdram) - std::to_underlying(cd_type::cdrom));
 
-						NewItem.Type = msg(lng::MChangeDriveCDROM + ((DriveMode & DRIVE_SHOW_CDROM)? as_underlying_type(get_cdrom_type(RootDirectory)) - as_underlying_type(cd_type::cdrom) : 0));
+						NewItem.Type = msg(lng::MChangeDriveCDROM + ((DriveMode & DRIVE_SHOW_CDROM)? std::to_underlying(get_cdrom_type(RootDirectory)) - std::to_underlying(cd_type::cdrom) : 0));
 					}
 					else
 					{
@@ -963,13 +963,12 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 
 		ChDisk->Run([&](const Manager::Key& RawKey)
 		{
-			auto Key = RawKey();
 			const auto SelPos = ChDisk->GetSelectPos();
 			const auto MenuItem = ChDisk->GetComplexUserDataPtr<disk_menu_item>();
 
 			int KeyProcessed = 1;
 
-			switch (Key)
+			switch (const auto& Key = RawKey())
 			{
 			// Shift-Enter в меню выбора дисков вызывает проводник для данного диска
 			case KEY_SHIFTNUMENTER:
@@ -1329,11 +1328,8 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 
 		const auto IsDisk = is_disk(item.Path);
 
-		for (;;)
+		while (!(FarChDir(dos_drive_name(item.Path)) || (IsDisk && FarChDir(dos_drive_root_directory(item.Path)))))
 		{
-			if (FarChDir(dos_drive_name(item.Path)) || (IsDisk && FarChDir(dos_drive_root_directory(item.Path))))
-				break;
-
 			error_state_ex const ErrorState = last_error();
 
 			DialogBuilder Builder(lng::MError);
@@ -1342,7 +1338,7 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 			if (IsDisk)
 			{
 				DriveLetter = item.Path;
-				auto const DriveLetterEdit = Builder.AddFixEditField(DriveLetter, 1);
+				auto& DriveLetterEdit = Builder.AddFixEditField(DriveLetter, 1);
 				Builder.AddTextBefore(DriveLetterEdit, lng::MChangeDriveCannotReadDisk);
 				Builder.AddTextAfter(DriveLetterEdit, L":", 0);
 			}
@@ -1368,7 +1364,7 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 			}
 		}
 
-		const auto strNewCurDir = os::fs::GetCurrentDirectory();
+		const auto strNewCurDir = os::fs::get_current_directory();
 
 		if ((Owner->GetMode() == panel_mode::NORMAL_PANEL) &&
 			(Owner->GetType() == panel_type::FILE_PANEL) &&
@@ -1402,17 +1398,17 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 			item.Uuid,
 			0);
 
-		if (hPlugin)
-		{
-			const auto IsActive = Owner->IsFocused();
-			const auto NewPanel = Owner->Parent()->ChangePanel(Owner, panel_type::FILE_PANEL, TRUE, TRUE);
-			NewPanel->SetPluginMode(std::move(hPlugin), {}, IsActive || !NewPanel->Parent()->GetAnotherPanel(NewPanel)->IsVisible());
-			NewPanel->Update(0);
-			NewPanel->Show();
+		if (!hPlugin)
+			return -1;
 
-			if (!IsActive && NewPanel->Parent()->GetAnotherPanel(NewPanel)->GetType() == panel_type::INFO_PANEL)
-				NewPanel->Parent()->GetAnotherPanel(NewPanel)->UpdateKeyBar();
-		}
+		const auto IsActive = Owner->IsFocused();
+		const auto NewPanel = Owner->Parent()->ChangePanel(Owner, panel_type::FILE_PANEL, TRUE, TRUE);
+		NewPanel->SetPluginMode(std::move(hPlugin), {}, IsActive || !NewPanel->Parent()->GetAnotherPanel(NewPanel)->IsVisible());
+		NewPanel->Update(0);
+		NewPanel->Show();
+
+		if (!IsActive && NewPanel->Parent()->GetAnotherPanel(NewPanel)->GetType() == panel_type::INFO_PANEL)
+			NewPanel->Parent()->GetAnotherPanel(NewPanel)->UpdateKeyBar();
 	}
 
 	return -1;

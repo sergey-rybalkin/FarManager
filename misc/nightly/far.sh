@@ -88,14 +88,16 @@ unix2dos Far.exe.example.ini
 
 cd ..
 
-(buildfar2 32 $1 && buildfar2 64 $1) || return 1
+(buildfar2 32 $1 && buildfar2 64 $1 && buildfar2 ARM64 $1) || return 1
 
 return 0
 }
 
 rm -fR far
+rm -fR _build
 ( \
 	cp -R far.git/far ./ && \
+	cp -R far.git/_build ./ && \
 	buildfar far \
 ) || exit 1
 

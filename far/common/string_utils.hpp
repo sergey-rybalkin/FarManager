@@ -37,6 +37,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "type_traits.hpp"
 #include "utility.hpp"
 
+#include <numeric>
+#include <string>
+#include <string_view>
+#include <unordered_map>
+#include <unordered_set>
+#include <variant>
+
+#include <cwctype>
+
 //----------------------------------------------------------------------------
 
 template<typename string_type>
@@ -86,7 +95,8 @@ public:
 
 private:
 	using view_type = std::basic_string_view<T>;
-	using buffer_type = std::array<T, MAX_PATH>;
+	static constexpr auto StaticSize = 260; // MAX_PATH
+	using buffer_type = std::array<T, StaticSize>;
 	using string_type = std::basic_string<T>;
 
 	std::variant<view_type, buffer_type, string_type> m_Str;
@@ -200,9 +210,9 @@ template<typename raw_string_type, REQUIRES(detail::is_supported_type<raw_string
 bool contains(raw_string_type const& Str, raw_string_type const& What)
 {
 	if constexpr (std::is_same_v<detail::char_type<raw_string_type>, wchar_t>)
-		return wcsstr(Str, What) != nullptr;
+		return std::wcsstr(Str, What) != nullptr;
 	else
-		return strstr(Str, What) != nullptr;
+		return std::strstr(Str, What) != nullptr;
 }
 
 template<typename raw_string_type, REQUIRES(detail::is_supported_type<raw_string_type>)>
@@ -210,9 +220,9 @@ template<typename raw_string_type, REQUIRES(detail::is_supported_type<raw_string
 bool contains(raw_string_type const& Str, detail::char_type<raw_string_type> const What)
 {
 	if constexpr (std::is_same_v<detail::char_type<raw_string_type>, wchar_t>)
-		return wcschr(Str, What) != nullptr;
+		return std::wcschr(Str, What) != nullptr;
 	else
-		return strchr(Str, What) != nullptr;
+		return std::strchr(Str, What) != nullptr;
 }
 
 namespace detail
@@ -276,14 +286,9 @@ namespace inplace
 		Str.size() < Size? pad_left(Str, Size) : cut_right(Str, Size);
 	}
 
-	inline void erase_all(std::wstring& Str, wchar_t Char)
-	{
-		Str.erase(std::remove(ALL_RANGE(Str), Char), Str.end());
-	}
-
 	inline void unquote(std::wstring& Str)
 	{
-		erase_all(Str, L'"');
+		std::erase(Str, L'"');
 	}
 
 	inline void quote(std::wstring& Str)
@@ -417,13 +422,6 @@ inline auto fit_to_center(std::wstring Str, size_t Size)
 inline auto fit_to_right(std::wstring Str, size_t Size)
 {
 	inplace::fit_to_right(Str, Size);
-	return Str;
-}
-
-[[nodiscard]]
-inline auto erase_all(std::wstring Str, wchar_t Char)
-{
-	inplace::erase_all(Str, Char);
 	return Str;
 }
 
@@ -662,24 +660,56 @@ class lvalue_string_view
 public:
 	lvalue_string_view() = default;
 
-	lvalue_string_view(string_view const Str):
+	lvalue_string_view(std::wstring_view const Str):
 		m_Str(Str)
 	{
 	}
 
-	lvalue_string_view(string const& Str):
+	lvalue_string_view(std::wstring const& Str):
 		m_Str(Str)
 	{}
 
-	lvalue_string_view(string&& Str) = delete;
+	lvalue_string_view(std::wstring&& Str) = delete;
 
-	operator string_view() const
+	operator std::wstring_view() const
 	{
 		return m_Str;
 	}
 
 private:
-	string_view m_Str;
+	std::wstring_view m_Str;
 };
+
+struct string_comparer
+{
+#ifdef __cpp_lib_generic_unordered_lookup
+	using is_transparent = void;
+	using transparent_key_equal = std::equal_to<>;
+	using generic_key = std::wstring_view;
+#else
+	using generic_key = string;
+#endif
+
+	[[nodiscard]]
+	size_t operator()(const std::wstring_view Str) const
+	{
+		return make_hash(Str);
+	}
+
+	[[nodiscard]]
+	bool operator()(const std::wstring_view Str1, const std::wstring_view Str2) const
+	{
+		return Str1 == Str2;
+	}
+};
+
+using unordered_string_set = std::unordered_set<std::wstring, string_comparer, string_comparer>;
+using unordered_string_multiset = std::unordered_multiset<std::wstring, string_comparer, string_comparer>;
+
+template<typename T>
+using unordered_string_map = std::unordered_map<std::wstring, T, string_comparer, string_comparer>;
+
+template<typename T>
+using unordered_string_multimap = std::unordered_multimap<std::wstring, T, string_comparer, string_comparer>;
 
 #endif // STRING_UTILS_HPP_DE39ECEB_2377_44CB_AF4B_FA5BEA09C8C8

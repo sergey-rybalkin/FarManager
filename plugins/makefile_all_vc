@@ -19,10 +19,7 @@
 #############################################################################
 
 ALLDIRS = align arclite autowrap brackets compare drawline editcase emenu farcmds \
-          filecase hlfviewer network proclist tmppanel samefolder \
-!if "$(BUILD_PLATFORM)" != "IA64"
-          luamacro \
-!endif
+          filecase hlfviewer network proclist tmppanel samefolder luamacro \
 #ftp multiarc
 
 #############################################################################
@@ -33,7 +30,6 @@ ALLDIRS = align arclite autowrap brackets compare drawline editcase emenu farcmd
 INSTALL=$(DEFINSTALL)
 !endif
 
-!include ./makefile_vc_base
 !include ./makefile_vc_getmode
 
 ##########################
@@ -57,15 +53,13 @@ libcrt: $(FICTIVE)
 #######
 !ifndef DEBUG
 _ODF_=Release
-_ODN_=final
+_ODN_=Release
 !else
 _ODF_=Debug
-_ODN_=debug
+_ODN_=Debug
 !endif
 !if "$(BUILD_PLATFORM)" == "AMD64"
 _ODB_=64
-!elseif "$(BUILD_PLATFORM)" == "IA64"
-_ODB_=IA64
 !else
 _ODB_=32
 !endif
@@ -93,12 +87,10 @@ $(ALLDIRS): $(FICTIVE) $(OUTPATH)
 	@cd ..
 
 fdir=..\far\$(_ODF_).$(DIRBIT).vc
-adir=%d\$(_ODN_).$(DIRBIT).vc
-wdir=%d\$(_ODN_).$(DIRBIT)W.vc
-pdir=multiarc\libpcre\obj.$(DIRBIT).vc
+pdir=%d\$(_ODN_).$(DIRBIT).vc
+pcredir=multiarc\libpcre\obj.$(DIRBIT).vc
 
 clean:
 	@if exist $(fdir)\lua*.* echo del $(fdir)\lua*.*& del /q $(fdir)\lua*.* 1>nul
-	@for %d in (ftp multiarc multiarc\libpcre) do @if exist $(adir)\ echo del $(adir)\& rd /q /s $(adir) 1>nul
-	@if exist $(pdir)\ echo del $(pdir)\& rd /q /s $(pdir) 1>nul
-	@for %d in ($(ALLDIRS)) do @if not "%d" == "ftp" if not "%d" == "multiarc" @if exist $(wdir)\ echo del $(wdir)\& rd /q /s $(wdir) 1>nul
+	@if exist $(pcredir)\ echo del $(pcredir)\& rd /q /s $(pcredir) 1>nul
+	@for %d in ($(ALLDIRS)) do @if exist $(pdir)\ echo del $(pdir)\& rd /q /s $(pdir) 1>nul

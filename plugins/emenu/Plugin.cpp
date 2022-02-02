@@ -1,5 +1,6 @@
 ﻿#include <cstdio>
 #include <cassert>
+#include <utility>
 
 #include <shlobj.h>
 #include <comdef.h>
@@ -728,13 +729,10 @@ bool CPlugin::GetFilesFromPanel(LPCWSTR** ppFiles, unsigned* pnFiles, unsigned* 
     if(const size_t Size = PanelControl(PANEL_ACTIVE, FCTL_GETSELECTEDPANELITEM, 0, {}))
     {
       const auto PPI=reinterpret_cast<PluginPanelItem*>(new char[Size]);
-      if(PPI)
-      {
-        FarGetPluginPanelItem gpi={sizeof(FarGetPluginPanelItem), Size, PPI};
-        PanelControl(PANEL_ACTIVE,FCTL_GETSELECTEDPANELITEM,0,&gpi);
-        Root=(pi.SelectedItemsNumber==1 && !lstrcmp(PPI->FileName,L".."));
-        delete[]reinterpret_cast<char*>(PPI);
-      }
+      FarGetPluginPanelItem gpi={sizeof(FarGetPluginPanelItem), Size, PPI};
+      PanelControl(PANEL_ACTIVE,FCTL_GETSELECTEDPANELITEM,0,&gpi);
+      Root=(pi.SelectedItemsNumber==1 && !lstrcmp(PPI->FileName,L".."));
+      delete[]reinterpret_cast<char*>(PPI);
     }
   }
   if(Root)
@@ -1065,7 +1063,7 @@ static INT_PTR CALLBACK MenuDlgProc(HWND hDlg, UINT nMsg, WPARAM wParam, LPARAM 
       {
         //assert(0);
       }
-      if (res) return res != 0;
+      if (res) return res;
     }
     break;
   }
@@ -1220,22 +1218,6 @@ bool CPlugin::ShowTextMenu(HMENU hMenu, LPCONTEXTMENU pPreferredMenu, LPCONTEXTM
         {
           szItem=L"{";
 
-          wchar_t *Buf = new wchar_t[szSub.Len() + 1]();
-          //Получаем из shell32.dll шаблон, по которому формируются эти подсказки,
-          //(строковый ресурс #5380, "Opens the document with %s."),
-          //и убираем его из сабжевых строк. Для XP/2003.
-          LoadString(GetModuleHandle(L"shell32.dll"),5380,Buf,int(szSub.Len()+1));
-          int j=0;
-          while(Buf[j] && Buf[j]!=L'%')
-            j++;
-          if (Buf[j] == L'%' && !wcsncmp(Buf,szSub,j))
-          {
-            lstrcpy(Buf,szSub);
-            m_fsf.Unquote(Buf+j);
-            szSub=Buf+j;
-          }
-          delete[] Buf;
-
           //На практике выходит что иногда выходят VERB'ы вида
           //AboutA&bout и т.п., вот тут немного AI чтоб это убрать.
           if (szSub.Len() > 3) //а просто так
@@ -1250,7 +1232,7 @@ bool CPlugin::ShowTextMenu(HMENU hMenu, LPCONTEXTMENU pPreferredMenu, LPCONTEXTM
               //if (szLeft.Len() > szRight.Len())
                 //szSub = szLeft;
               //else
-                szSub = szRight;
+                szSub = std::move(szRight);
             }
           }
 

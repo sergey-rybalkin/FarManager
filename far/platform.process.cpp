@@ -43,11 +43,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Platform:
 #include "platform.hpp"
 #include "platform.fs.hpp"
+#include "platform.version.hpp"
 
 // Common:
 #include "common/algorithm.hpp"
 #include "common/bytes_view.hpp"
 #include "common/io.hpp"
+#include "common/scope_exit.hpp"
 #include "common/string_utils.hpp"
 
 // External:
@@ -249,24 +251,27 @@ namespace os::process
 
 	static string get_process_name(DWORD const Pid, chrono::nt_clock::time_point const StartTime)
 	{
-		const auto Process = handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, Pid));
+		const handle Process(OpenProcess(imports.QueryFullProcessImageNameW? PROCESS_QUERY_LIMITED_INFORMATION : PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, false, Pid));
 		if (!Process)
 		{
 			LOGWARNING(L"OpenProcess({}): {}"sv, Pid, last_error());
 			return {};
 		}
 
-		chrono::time_point CreationTime;
-		if (!get_process_creation_time(Process.native_handle(), CreationTime))
+		if (StartTime.time_since_epoch().count())
 		{
-			LOGWARNING(L"get_process_creation_time({}): {}"sv, Pid, last_error());
-			return {};
-		}
+			chrono::time_point CreationTime;
+			if (!get_process_creation_time(Process.native_handle(), CreationTime))
+			{
+				LOGWARNING(L"get_process_creation_time({}): {}"sv, Pid, last_error());
+				return {};
+			}
 
-		if (StartTime != CreationTime)
-		{
-			LOGWARNING(L"Process creation time mismatch"sv);
-			return {};
+			if (StartTime != CreationTime)
+			{
+				LOGWARNING(L"Process creation time mismatch"sv);
+				return {};
+			}
 		}
 
 		string Name;
@@ -279,13 +284,18 @@ namespace os::process
 		return Name;
 	}
 
-	size_t enumerate_rm_processes(const string& Filename, DWORD& Reasons, function_ref<bool(string&&)> const Handler)
+	string get_process_name(const DWORD Pid)
+	{
+		return get_process_name(Pid, {});
+	}
+
+	size_t enumerate_locking_processes_rm(const string& Filename, DWORD& Reasons, enumerate_callback const Handler)
 	{
 		if (!imports.RmStartSession)
 			return 0;
 
 		DWORD Session;
-		wchar_t SessionKey[CCH_RM_SESSION_KEY + 1] = {};
+		wchar_t SessionKey[CCH_RM_SESSION_KEY + 1]{};
 		if (const auto Result = imports.RmStartSession(&Session, 0, SessionKey); Result != ERROR_SUCCESS)
 		{
 			LOGWARNING(L"RmStartSession(): {}"sv, format_error(Result));
@@ -335,23 +345,95 @@ namespace os::process
 
 		for (const auto& Info: ProcessInfos)
 		{
-			auto Str = *Info.strAppName? Info.strAppName : L"Unknown"s;
-
-			if (*Info.strServiceShortName)
-				append(Str, L" ["sv, Info.strServiceShortName, L']');
-
-			append(Str, L" (PID: "sv, str(Info.Process.dwProcessId));
-
-			if (const auto Name = get_process_name(Info.Process.dwProcessId, chrono::nt_clock::from_filetime(Info.Process.ProcessStartTime)); !Name.empty())
-				append(Str, L", "sv, Name);
-
-			Str += L')';
-
-			if (!Handler(std::move(Str)))
+			if (!Handler(Info.Process.dwProcessId, Info.strAppName, Info.strServiceShortName))
 				break;
 		}
 
 		return ProcessInfos.size();
 
+	}
+
+	size_t enumerate_locking_processes_nt(const string_view Filename, enumerate_callback const Handler)
+	{
+		const fs::file File(Filename, FILE_READ_ATTRIBUTES, fs::file_share_all, nullptr, OPEN_EXISTING);
+		if (!File)
+			return 0;
+
+		const auto ReasonableSize = 1024;
+		block_ptr<FILE_PROCESS_IDS_USING_FILE_INFORMATION, ReasonableSize> Info(ReasonableSize);
+
+		NTSTATUS Result = STATUS_SEVERITY_ERROR;
+
+		while (
+			!File.NtQueryInformationFile(Info.data(), Info.size(), FileProcessIdsUsingFileInformation, &Result) &&
+			any_of(Result, STATUS_INFO_LENGTH_MISMATCH, STATUS_BUFFER_OVERFLOW, STATUS_BUFFER_TOO_SMALL)
+		)
+		{
+			Info.reset(Info.size() * 2);
+		}
+
+		if (Result != STATUS_SUCCESS)
+			return 0;
+
+		for (const auto& i: span(Info->ProcessIdList, Info->NumberOfProcessIdsInList))
+		{
+			const auto Name = get_process_name(i);
+			version::file_version Version;
+			const auto Description = !Name.empty() && Version.read(Name)? Version.get_string(L"FileDescription") : nullptr;
+
+			if (!Handler(i, Description, {}))
+				break;
+		}
+
+		return Info->NumberOfProcessIdsInList;
+	}
+
+	enum_processes::enum_processes()
+	{
+		// Should never happen, but just in case
+		if (!imports.NtQuerySystemInformation)
+			return;
+
+		m_Info.reset(sizeof(*m_Info));
+
+		for (;;)
+		{
+			ULONG ReturnSize{};
+			const auto Result = imports.NtQuerySystemInformation(SystemProcessInformation, m_Info.data(), static_cast<ULONG>(m_Info.size()), &ReturnSize);
+			if (Result == STATUS_SUCCESS)
+				break;
+
+			if (any_of(Result, STATUS_INFO_LENGTH_MISMATCH, STATUS_BUFFER_OVERFLOW, STATUS_BUFFER_TOO_SMALL))
+			{
+				m_Info.reset(ReturnSize? ReturnSize : grow_exp_noshrink(m_Info.size(), {}));
+				continue;
+			}
+
+			LOGWARNING(L"NtQuerySystemInformation(): {}"sv, format_ntstatus(Result));
+
+			m_Info.reset();
+			return;
+		}
+	}
+
+	bool enum_processes::get(bool Reset, enum_process_entry& Value) const
+	{
+		if (m_Info.empty())
+			return false;
+
+		if (Reset)
+			m_Offset = 0;
+
+		const auto& Info = view_as<SYSTEM_PROCESS_INFORMATION>(m_Info.data(), m_Offset);
+
+		if (!Info.NextEntryOffset)
+			return false;
+
+		Value.Pid = static_cast<DWORD>(reinterpret_cast<uintptr_t>(Info.UniqueProcessId));
+		Value.Name = { Info.ImageName.Buffer, Info.ImageName.Length / sizeof(wchar_t) };
+		Value.Threads = { view_as<SYSTEM_THREAD_INFORMATION const*>(&Info, sizeof(Info)), Info.NumberOfThreads };
+		m_Offset += Info.NextEntryOffset;
+
+		return true;
 	}
 }

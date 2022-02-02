@@ -60,6 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Platform:
 #include "platform.concurrency.hpp"
+#include "platform.debug.hpp"
 #include "platform.security.hpp"
 
 // Common:
@@ -397,7 +398,7 @@ void CloseConsole()
 	console.SetTitle(Global->strInitTitle);
 	console.SetSize(InitialSize);
 
-	point CursorPos = {};
+	point CursorPos{};
 	console.GetCursorPosition(CursorPos);
 
 	const auto Height = InitWindowRect.bottom - InitWindowRect.top;
@@ -462,7 +463,7 @@ void SetFarConsoleMode(bool SetsActiveBuffer)
 		if (const auto Buffer = console.GetActiveScreenBuffer(); (Buffer && Buffer != console.GetOutputHandle()) ||
 			(
 				Global->Opt->WindowMode &&
-				GetConsoleScreenBufferInfo(console.GetOutputHandle(), &csbi) &&
+				get_console_screen_buffer_info(console.GetOutputHandle(), &csbi) &&
 				(csbi.srWindow.Bottom != csbi.dwSize.Y - 1 || csbi.srWindow.Left)
 			)
 		)
@@ -573,7 +574,7 @@ void ChangeVideoMode(int NumLines,int NumColumns)
 	srWindowRect.bottom = ySize - 1;
 	srWindowRect.left = srWindowRect.top = 0;
 
-	point const coordScreen = { xSize, ySize };
+	point const coordScreen{ xSize, ySize };
 
 	if (xSize > Size.x || ySize > Size.y)
 	{
@@ -1516,7 +1517,7 @@ string make_progressbar(size_t Size, size_t Percent, bool ShowPercent, bool Prop
 		Size = Size > StrPercent.size()? Size - StrPercent.size(): 0;
 	}
 	string Str(Size, BoxSymbols[BS_X_B0]);
-	const auto Pos = std::min(Percent, size_t(100)) * Size / 100;
+	const auto Pos = std::min(Percent, size_t{ 100 })* Size / 100;
 	std::fill_n(Str.begin(), Pos, BoxSymbols[BS_X_DB]);
 	if (ShowPercent)
 	{
@@ -1585,10 +1586,10 @@ bool IsConsoleFullscreen()
 
 void fix_coordinates(rectangle& Where)
 {
-	Where.left = std::clamp(Where.left, 0, static_cast<int>(ScrX));
-	Where.top = std::clamp(Where.top, 0, static_cast<int>(ScrY));
-	Where.right = std::clamp(Where.right, 0, static_cast<int>(ScrX));
-	Where.bottom = std::clamp(Where.bottom, 0, static_cast<int>(ScrY));
+	Where.left = std::clamp(Where.left, 0, ScrX);
+	Where.top = std::clamp(Where.top, 0, ScrY);
+	Where.right = std::clamp(Where.right, 0, ScrX);
+	Where.bottom = std::clamp(Where.bottom, 0, ScrY);
 }
 
 void AdjustConsoleScreenBufferSize()
@@ -1605,7 +1606,7 @@ void AdjustConsoleScreenBufferSize()
 		// TODO: Do not use console functions directly
 		// Add a way to bypass console buffer abstraction layer
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (GetConsoleScreenBufferInfo(console.GetOutputHandle(), &csbi))
+		if (get_console_screen_buffer_info(console.GetOutputHandle(), &csbi))
 		{
 			if (!Global->Opt->WindowModeStickyX)
 			{
@@ -1642,7 +1643,7 @@ point GetNonMaximisedBufferSize()
 	return NonMaximisedBufferSize();
 }
 
-size_t ConsoleChoice(string_view const Message, string_view const Choices, size_t const Default)
+size_t ConsoleChoice(string_view const Message, string_view const Choices, size_t const Default, function_ref<void()> const MessagePrinter)
 {
 	{
 		// The output can be redirected
@@ -1660,6 +1661,8 @@ size_t ConsoleChoice(string_view const Message, string_view const Choices, size_
 
 	console.SetCursorInfo(InitialCursorInfo);
 
+	MessagePrinter();
+
 	for (;;)
 	{
 		std::wcout << format(FSTR(L"\n{} ({})? "sv), Message, join(Choices, L"/"sv)) << std::flush;
@@ -1673,9 +1676,9 @@ size_t ConsoleChoice(string_view const Message, string_view const Choices, size_
 	}
 }
 
-bool ConsoleYesNo(string_view const Message, bool const Default)
+bool ConsoleYesNo(string_view const Message, bool const Default, function_ref<void()> const MessagePrinter)
 {
-	return ConsoleChoice(Message, L"YN"sv, Default? 0 : 1) == 0;
+	return ConsoleChoice(Message, L"YN"sv, Default? 0 : 1, MessagePrinter) == 0;
 }
 
 #ifdef ENABLE_TESTS

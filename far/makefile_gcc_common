@@ -119,12 +119,13 @@ CPPFLAGS = $(CFLAGS)\
 	-Wsuggest-override \
 	-Wzero-as-null-pointer-constant \
 
-LNKFLAGS = \
+LNKFLAGS += \
 	-ladvapi32 \
 	-lnetapi32 \
 	-lmpr \
 	-lwinspool \
 	-lole32 \
+	-loleaut32 \
 	-lsecur32 \
 	-lsetupapi \
 	-lpsapi \

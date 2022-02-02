@@ -468,7 +468,46 @@ active panel. The following sort modes are available:
  Use group sorting                                        #Shift+F11#
  Show selected files first                                #Shift+F12#
 
+ You can ~fine-tune~@PanelSortCriteria@ sort modes by pressing #F4#.
+
  See also: common ~menu~@MenuCmd@ keyboard commands.
+
+
+@PanelSortCriteria
+$ #Sort criteria#
+ When files are considered equivalent using the selected sort mode, additional sort criteria are taken into account.
+ For example, if files are sorted by size and both "a.txt" and "b.txt" have the same size, "a.txt" will come first, as if they were sorted by name.
+ In this menu you can adjust the set of criteria associated with the selected sort mode.
+
+ #Ins#
+ Add a criterion to the set.
+
+ #Del#
+ Remove the selected criterion.
+
+ #F4#
+ Replace the selected criterion.
+
+ #+#
+ Use ascending order.
+
+ #-#
+ Use descending order.
+
+ #*#
+ Change the order.
+
+ #=#
+ Inherit the order from the corresponding sort mode.
+
+ #Ctrl+Up#
+ Move the criterion up.
+
+ #Ctrl+Down#
+ Move the criterion down.
+
+ #Ctrl+R#
+ Reset the set of criteria to detault.
 
 
 @FastFind
@@ -2415,12 +2454,6 @@ wenn sie während des Kopiervorgangs gleichzeitig modifiziert wird.
  Scan ~symbolic links~@HardSymLink@ along with normal sub-folders when building the folder tree,
 determining the total file size in the sub-folders.
 
- #Update panels only when Far is active#
- If enabled, file panels will be monitored only when Far is active, i.e. panels will not be updated until Far window is focused.
-This allows to avoid blocking the directories opened on panels.
-However, sometimes the update is not triggered after receiving focus,
-so this option is disabled by default and directories are always monitored.
-
  #Befehls-History sichern#
  Aktiviert das Sichern der ~Befehls-History~@History@ beim Beenden und Wiederherstellen dieser beim erneuten Start von Far.
 
@@ -4183,9 +4216,15 @@ Dateibeschreibungen beim Kopieren, Verschieben oder Löschen von Dateien.
 Wenn ein Befehl jedoch Dateien in Unterverzeichnissen betrifft, werden
 die Dateibeschreibungen in diesen Unterverzeichnissen nicht aktualisiert.
 
- Use ANSI code page by default
+ #Use ANSI code page by default#
+ By default Far uses the OEM codepage for file descriptions, both for reading and writing.
+This option changes it to ANSI.
 
- Save in UTF8
+ #Save in UTF-8#
+ If set, the description file will be read as OEM or ANSI, depending on the option above,
+but saved in UTF-8 after you add, remove or update the descriptions.
+
+ #Note#: these options are irrelevant when the file has the UTF-8 signature. In this case it is always read and written in UTF-8.
 
 
 @PanelViewModes
@@ -4879,7 +4918,7 @@ $ #Regular expressions#
 
  #Options#:
  #i# - ignore character case;
- #s# - ^<wrap>consider the whole text as one line, ‘.’ matches any character;
+ #s# - ^<wrap>consider the whole text as one line, ‘#.#’ matches any character;
  #m# - ^<wrap>consider the whole text as multiple lines. ‘#^#’ and ‘#$#’ match the
 beginning and the end of any "inner" string;
  #x# - ^<wrap>ignore space characters (unescaped ones, i.e. without backslash before).
@@ -5180,7 +5219,7 @@ previously recorded macros.
 combinations. Because a macro command can be additionally
 configured there are two such combinations: #Ctrl+<.># (#Ctrl#
 and a period pressed together) and #Ctrl+Shift+<.># (#Ctrl#,
-Shift and a period pressed together). Pressing the first
+#Shift# and a period pressed together). Pressing the first
 combination will end the recording of the macro command
 and will use the default settings for its playback. Pressing
 the second combination will end the recording of the macro

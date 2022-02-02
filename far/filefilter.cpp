@@ -139,7 +139,7 @@ static auto& FilterData()
 
 static auto& TempFilterData()
 {
-	static std::unordered_map<string, FileFilterParams, hash_icase_t, equal_icase_t> sTempFilterData;
+	static unordered_string_map_icase<FileFilterParams> sTempFilterData;
 	return sTempFilterData;
 }
 
@@ -243,9 +243,8 @@ void filters::EditFilters(filter_area const Area, Panel* const HostPanel)
 		{
 			FoldersFilter->SetTitle(msg(lng::MFolderFileType));
 			MenuItemEx ListItem(MenuString(FoldersFilter,false,L'0'));
-			const auto Check = GetCheck(Area, *FoldersFilter);
 
-			if (Check)
+			if (const auto Check = GetCheck(Area, *FoldersFilter))
 				ListItem.SetCustomCheck(Check);
 
 			FilterList->AddItem(ListItem);
@@ -331,7 +330,7 @@ void filters::EditFilters(filter_area const Area, Panel* const HostPanel)
 			}
 			case KEY_SHIFTBS:
 			{
-				for (size_t i = 0, size = FilterList->size(); i != size; ++i)
+				for (const auto& i: irange(FilterList->size()))
 				{
 					FilterList->ClearCheck(static_cast<int>(i));
 				}
@@ -510,7 +509,7 @@ void filters::EditFilters(filter_area const Area, Panel* const HostPanel)
 
 static void ProcessSelection(VMenu2* const FilterList, filter_area const Area)
 {
-	for (size_t i = 0, size = FilterList->size(); i != size; ++i)
+	for (const auto& i: irange(FilterList->size()))
 	{
 		const auto Check = FilterList->GetCheck(static_cast<int>(i));
 		FileFilterParams* CurFilterData = nullptr;
@@ -532,7 +531,7 @@ static void ProcessSelection(VMenu2* const FilterList, filter_area const Area)
 				{
 					bool bCheckedNowhere = true;
 
-					for (size_t n = 0; n != static_cast<size_t>(filter_area::count); ++n)
+					for (const auto& n: irange(filter_area::count))
 					{
 						if (static_cast<filter_area>(n) != Area && Iterator->second.GetFlags(static_cast<filter_area>(n)))
 						{
@@ -556,7 +555,7 @@ static void ProcessSelection(VMenu2* const FilterList, filter_area const Area)
 				NewFilter.SetMask(true, Mask.find_first_of(L",;"sv, L"*."sv.size()) == string::npos? Mask : quote(Mask));
 				//Авто фильтры они только для файлов, папки не должны к ним подходить
 				NewFilter.SetAttr(true, 0, FILE_ATTRIBUTE_DIRECTORY);
-				auto NewIterator = TempFilterData().emplace(Mask, std::move(NewFilter)).first;
+				const auto NewIterator = TempFilterData().emplace(Mask, std::move(NewFilter)).first;
 				CurFilterData = &NewIterator->second;
 			}
 		}
@@ -586,7 +585,7 @@ void multifilter::UpdateCurrentTime()
 	CurrentTime = os::chrono::nt_clock::now();
 }
 
-filter_result multifilter::FileInFilterEx(const os::fs::find_data& fde, string_view const FullName)
+filter_result multifilter::FileInFilterEx(const os::fs::find_data& fde, string_view const FullName) const
 {
 	filter_result Result;
 
@@ -689,25 +688,25 @@ bool multifilter::should_include_folders_by_default(filter_result const& Result)
 		m_Area != filter_area::select;
 }
 
-bool multifilter::FileInFilter(const os::fs::find_data& fde, string_view const FullName)
+bool multifilter::FileInFilter(const os::fs::find_data& fde, string_view const FullName) const
 {
 	const auto Result = FileInFilterEx(fde, FullName);
 	return (fde.Attributes & FILE_ATTRIBUTE_DIRECTORY && should_include_folders_by_default(Result)) || Result;
 }
 
-bool multifilter::FileInFilter(const FileListItem& fli)
+bool multifilter::FileInFilter(const FileListItem& fli) const
 {
 	return FileInFilter(fli, fli.FileName);
 }
 
-bool multifilter::FileInFilter(const PluginPanelItem& fd)
+bool multifilter::FileInFilter(const PluginPanelItem& fd) const
 {
 	os::fs::find_data fde;
 	PluginPanelItemToFindDataEx(fd, fde);
 	return FileInFilter(fde, fde.FileName);
 }
 
-bool multifilter::IsEnabledOnPanel()
+bool multifilter::IsEnabledOnPanel() const
 {
 	if (m_Area != filter_area::panel_left && m_Area != filter_area::panel_right)
 		return false;
@@ -854,9 +853,9 @@ static void SaveFlags(HierarchicalConfig& Cfg, HierarchicalConfig::key const Fil
 {
 	const auto FlagsKey = Cfg.CreateKey(FilterKey, names::Flags);
 
-	for (size_t i = 0; i != std::size(FilterFlagNames); ++i)
+	for (const auto& [Flag, Index]: enumerate(FilterFlagNames))
 	{
-		Cfg.SetValue(FlagsKey, FilterFlagNames[i], Item.GetFlags(static_cast<filter_area>(i)));
+		Cfg.SetValue(FlagsKey, Flag, Item.GetFlags(static_cast<filter_area>(Index)));
 	}
 }
 
@@ -868,7 +867,7 @@ static bool LoadAreaFlags(const HierarchicalConfig& Cfg, HierarchicalConfig::key
 
 	auto AnyLoaded = false;
 
-	for (size_t i = 0; i != std::size(FilterFlagNames); ++i)
+	for (const auto& i: irange(std::size(FilterFlagNames)))
 	{
 		unsigned long long Value;
 		if (Cfg.GetValue(FlagsKey, FilterFlagNames[i], Value))
@@ -892,7 +891,7 @@ static bool LoadLegacyAreaFlags(HierarchicalConfig& Cfg, HierarchicalConfig::key
 	if (bytes Blob; !Cfg.GetValue(Key, Name, Blob) || !deserialise(Blob, LegacyFlags))
 		return false;
 
-	for (int i = 0; i != LegacyCount; ++i)
+	for (const auto& i: irange(LegacyCount))
 		Item.SetFlags(static_cast<filter_area>(i), LegacyFlags[i]);
 
 	return true;
@@ -971,7 +970,7 @@ void filters::InitFilters()
 
 void filters::SaveFilter(HierarchicalConfig& cfg, unsigned long long KeyId, const FileFilterParams& Item)
 {
-	HierarchicalConfig::key Key(KeyId);
+	const HierarchicalConfig::key Key(KeyId);
 
 	cfg.SetValue(Key, names::Title, Item.GetTitle());
 	cfg.SetValue(Key, names::UseMask, Item.IsMaskUsed());
@@ -1027,7 +1026,7 @@ void filters::Save(bool always)
 
 	const auto root = cfg->CreateKey(cfg->root_key, names::Filters);
 
-	for (size_t i=0; i<FilterData().size(); ++i)
+	for (const auto& i: irange(FilterData().size()))
 	{
 		const auto Key = cfg->CreateKey(root, names::Filter + str(i));
 		const auto& CurFilterData = FilterData()[i];

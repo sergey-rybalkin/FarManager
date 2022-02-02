@@ -60,6 +60,8 @@ other possible license with no implications from the above license on them.
 
 #undef DefDlgProc
 
+typedef GUID UUID;
+
 #ifdef FAR_USE_INTERNALS
 struct FAR_INPUT_RECORD
 {
@@ -2514,7 +2516,7 @@ static __inline BOOL CheckVersion(const struct VersionInfo* Current, const struc
 
 static __inline struct VersionInfo MAKEFARVERSION(DWORD Major, DWORD Minor, DWORD Revision, DWORD Build, enum VERSION_STAGE Stage)
 {
-	struct VersionInfo Info = {Major, Minor, Revision, Build, Stage};
+	const struct VersionInfo Info = {Major, Minor, Revision, Build, Stage};
 	return Info;
 }
 

@@ -50,6 +50,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Common:
 #include "common/algorithm.hpp"
+#include "common/from_string.hpp"
 #include "common/range.hpp"
 #include "common/string_utils.hpp"
 
@@ -131,7 +132,20 @@ namespace os
 
 NTSTATUS get_last_nt_status()
 {
-	return imports.RtlGetLastNtStatus? imports.RtlGetLastNtStatus() : STATUS_SUCCESS;
+	if (imports.RtlGetLastNtStatus)
+		return imports.RtlGetLastNtStatus();
+
+	const auto Teb = NtCurrentTeb();
+
+	constexpr auto Offset =
+#ifdef _WIN64
+		0x1250
+#else
+		0x0BF4
+#endif
+		;
+
+	return view_as<NTSTATUS>(Teb, Offset);
 }
 
 void set_last_nt_status(NTSTATUS const Status)
@@ -157,7 +171,7 @@ static string format_error_impl(unsigned const ErrorCode, bool const Nt)
 		(Nt? GetModuleHandle(L"ntdll.dll") : nullptr),
 		ErrorCode,
 		0,
-		reinterpret_cast<wchar_t*>(&ptr_setter(Buffer)),
+		edit_as<wchar_t*>(&ptr_setter(Buffer)),
 		0,
 		nullptr);
 
@@ -271,7 +285,7 @@ bool get_locale_value(LCID const LcId, LCTYPE const Id, string& Value)
 
 bool get_locale_value(LCID const LcId, LCTYPE const Id, int& Value)
 {
-	return GetLocaleInfo(LcId, Id | LOCALE_RETURN_NUMBER, reinterpret_cast<wchar_t*>(&Value), sizeof(Value) / sizeof(wchar_t)) != 0;
+	return GetLocaleInfo(LcId, Id | LOCALE_RETURN_NUMBER, edit_as<wchar_t*>(&Value), sizeof(Value) / sizeof(wchar_t)) != 0;
 }
 
 string GetPrivateProfileString(string_view const AppName, string_view const KeyName, string_view const Default, string_view const FileName)
@@ -431,7 +445,22 @@ handle OpenConsoleActiveScreenBuffer()
 	return handle(fs::low::create_file(L"CONOUT$", GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
 }
 
-	namespace rtdl
+HKL make_hkl(uint32_t const Layout)
+{
+	return reinterpret_cast<HKL>(static_cast<uintptr_t>(extract_integer<WORD, 1>(Layout)? Layout : make_integer<uint32_t, uint16_t>(Layout, Layout)));
+}
+
+HKL make_hkl(string_view const LayoutStr)
+{
+	if (uint32_t Layout; from_string(LayoutStr, Layout, nullptr, 16) && Layout)
+	{
+		return make_hkl(Layout);
+	}
+
+	return {};
+}
+
+namespace rtdl
 	{
 		void module::module_deleter::operator()(HMODULE Module) const
 		{
@@ -468,77 +497,6 @@ handle OpenConsoleActiveScreenBuffer()
 			return Uuid;
 		}
 	}
-
-	namespace debug
-	{
-		bool debugger_present()
-		{
-			return IsDebuggerPresent() != FALSE;
-		}
-
-		void breakpoint(bool const Always)
-		{
-			if (Always || debugger_present())
-				DebugBreak();
-		}
-
-		void print(const wchar_t* const Str)
-		{
-			OutputDebugString(Str);
-		}
-
-		void print(string const& Str)
-		{
-			print(Str.c_str());
-		}
-
-		void set_thread_name(const wchar_t* Name)
-		{
-			if (imports.SetThreadDescription)
-				imports.SetThreadDescription(GetCurrentThread(), Name);
-		}
-
-		std::vector<uintptr_t> current_stack(size_t const FramesToSkip, size_t const FramesToCapture)
-		{
-			if (!imports.RtlCaptureStackBackTrace)
-				return {};
-
-			std::vector<uintptr_t> Stack;
-			Stack.reserve(128);
-
-			// http://web.archive.org/web/20140815000000*/http://msdn.microsoft.com/en-us/library/windows/hardware/ff552119(v=vs.85).aspx
-			// In Windows XP and Windows Server 2003, the sum of the FramesToSkip and FramesToCapture parameters must be less than 63.
-			static const auto Limit = IsWindowsVistaOrGreater()? std::numeric_limits<size_t>::max() : 62;
-
-			const auto Skip = FramesToSkip + 1; // 1 for this frame
-			const auto Capture = std::min(FramesToCapture, Limit - Skip);
-
-			for (size_t i = 0; i != FramesToCapture;)
-			{
-				void* Pointers[128];
-
-				DWORD DummyHash;
-				const auto Size = imports.RtlCaptureStackBackTrace(
-					static_cast<DWORD>(Skip + i),
-					static_cast<DWORD>(std::min(std::size(Pointers), Capture - i)),
-					Pointers,
-					&DummyHash // MSDN says it's optional, but it's not true on Win2k
-				);
-
-				if (!Size)
-					break;
-
-				std::transform(Pointers, Pointers + Size, std::back_inserter(Stack), [](void* Ptr)
-				{
-					return reinterpret_cast<uintptr_t>(Ptr);
-				});
-
-				i += Size;
-			}
-
-			return Stack;
-		}
-	}
 }
 
 #ifdef ENABLE_TESTS
@@ -563,7 +521,7 @@ TEST_CASE("platform.string.receiver")
 
 	const auto validate = [](string const& Data)
 	{
-		for (size_t i = 0, size = Data.size(); i != size; ++i)
+		for (const auto& i: irange(Data.size()))
 		{
 			if (Data[i] != i + 1)
 				return false;

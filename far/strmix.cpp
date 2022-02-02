@@ -100,7 +100,7 @@ string GroupDigits(unsigned long long Value)
 wchar_t* legacy::InsertQuotes(wchar_t *Str)
 {
 	const auto QuoteChar = L'"';
-	size_t l = wcslen(Str);
+	size_t l = std::wcslen(Str);
 
 	if (*Str != QuoteChar)
 	{
@@ -168,7 +168,7 @@ static auto legacy_operation(wchar_t* Str, int MaxLength, function_ref<void(span
 	if (!Str || !*Str)
 		return Str;
 
-	const auto Size = wcslen(Str);
+	const auto Size = std::wcslen(Str);
 
 	if (Size <= Max)
 		return Str;
@@ -355,7 +355,7 @@ static string& UnitStr(size_t Unit, bool Binary)
 
 void PrepareUnitStr()
 {
-	for (size_t i = 0; i != std::size(BytesInUnit); ++i)
+	for (const auto& i: irange(std::size(BytesInUnit)))
 	{
 		UnitStr(i, true) = upper(msg(lng::MListBytes + i));
 		UnitStr(i, false) = lower(msg(lng::MListBytes + i));
@@ -383,14 +383,14 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 	constexpr auto
 		binary_index = 0,
 		decimal_index = 1,
-		log2_of_2014 = 10,
+		log2_of_1024 = 10,
 		log10_of_1000 = 3;
 
 	constexpr std::pair
-		BinaryDivider(binary_index, log2_of_2014),
+		BinaryDivider(binary_index, log2_of_1024),
 		DecimalDivider(decimal_index, log10_of_1000);
 
-	const auto& Divider = ViewFlags & COLFLAGS_THOUSAND? DecimalDivider : BinaryDivider;
+	const auto& [BaseIndex, BasePower] = ViewFlags & COLFLAGS_THOUSAND? DecimalDivider : BinaryDivider;
 
 	const auto FormatSize = [&](string&& StrSize, size_t UnitIndex)
 	{
@@ -419,7 +419,7 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 	if (UseFloatSize)
 	{
 		const auto Numerator = FileSize? (ViewFlags & COLFLAGS_THOUSAND)? std::log10(FileSize) : std::log2(FileSize) : 0;
-		const size_t UnitIndex = Numerator / Divider.second;
+		const size_t UnitIndex = Numerator / BasePower;
 
 		string Str;
 
@@ -429,7 +429,7 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 		}
 		else
 		{
-			const auto Denominator = BytesInUnit[UnitIndex][Divider.first];
+			const auto Denominator = BytesInUnit[UnitIndex][BaseIndex];
 			const auto RawIntegral = FileSize / Denominator;
 			const auto RawFractional = static_cast<double>(FileSize % Denominator) / static_cast<double>(Denominator);
 
@@ -471,7 +471,7 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 
 	while ((UseUnit && UnitIndex < MinUnit) || (Width && Str.size() > MaxNumberWidth))
 	{
-		const auto Denominator = BytesInUnit[UnitIndex + 1][Divider.first];
+		const auto Denominator = BytesInUnit[UnitIndex + 1][BaseIndex];
 		const auto IntegralPart = FileSize / Denominator;
 		const auto FractionalPart = static_cast<double>(FileSize % Denominator) / static_cast<double>(Denominator);
 		const auto SizeInUnits = IntegralPart + static_cast<unsigned long long>(std::round(FractionalPart));
@@ -518,7 +518,7 @@ bool ReplaceStrings(string& strStr, const string_view FindStr, const string_view
 void remove_duplicates(string& Str, wchar_t const Char, bool const IgnoreCase)
 {
 	const auto NewEnd = IgnoreCase?
-		std::unique(ALL_RANGE(Str), [Char, Eq = equal_icase_t{}](wchar_t const First, wchar_t const Second){ return Eq(First, Char) && Eq(Second, Char); }) :
+		std::unique(ALL_RANGE(Str), [Char, Eq = string_comparer_icase{}](wchar_t const First, wchar_t const Second){ return Eq(First, Char) && Eq(Second, Char); }) :
 		std::unique(ALL_RANGE(Str), [Char](wchar_t const First, wchar_t const Second){ return First == Char && Second == Char; });
 
 	Str.resize(NewEnd - Str.begin());
@@ -675,9 +675,8 @@ namespace
 	string ReplaceBrackets(
 		const string_view SearchStr,
 		const string_view ReplaceStr,
-		const RegExpMatch* Match,
-		size_t Count,
-		const MatchHash* HMatch,
+		span<RegExpMatch const> Match,
+		const named_regex_match* NamedMatch,
 		int& CurPos,
 		int* SearchLength)
 	{
@@ -706,7 +705,7 @@ namespace
 					if (TokenEnd != TokenStart)
 					{
 						size_t index = 0;
-						while (TokenEnd != TokenStart && (index = from_string<unsigned long>(ReplaceStr.substr(TokenStart, TokenEnd - TokenStart))) >= Count)
+						while (TokenEnd != TokenStart && (index = from_string<unsigned long>(ReplaceStr.substr(TokenStart, TokenEnd - TokenStart))) >= Match.size())
 						{
 							--TokenEnd;
 						}
@@ -726,10 +725,10 @@ namespace
 						if (const auto Part = ReplaceStr.substr(TokenStart); std::regex_search(ALL_CONST_RANGE(Part), CMatch, re))
 						{
 							ShiftLength = CMatch[0].length();
-							if (HMatch)
+							if (NamedMatch)
 							{
-								const auto Iterator = HMatch->Matches.find(string(CMatch[1].first, CMatch[1].second));
-								if (Iterator != HMatch->Matches.cend())
+								const auto Iterator = NamedMatch->Matches.find(string_comparer::generic_key{ CMatch[1].first, CMatch[1].second });
+								if (Iterator != NamedMatch->Matches.cend())
 								{
 									Success = true;
 									start = Iterator->second.start;
@@ -758,60 +757,53 @@ namespace
 			}
 		}
 
-		*SearchLength = Match->end - Match->start;
-		CurPos = Match->start;
+		*SearchLength = Match[0].end - Match[0].start;
+		CurPos = Match[0].start;
 		return result;
 	}
 
 	bool SearchStringRegex(
 		string_view const Source,
 		const RegExp& re,
-		RegExpMatch* const pm,
-		MatchHash* const hm,
+		std::vector<RegExpMatch>& Match,
+		named_regex_match* const NamedMatch,
 		intptr_t Position,
 		int const Reverse,
 		string& ReplaceStr,
 		int& CurPos,
 		int* SearchLength)
 	{
-		intptr_t n = re.GetBracketsCount();
-
 		if (!Reverse)
 		{
-			if (re.SearchEx(Source, Position, pm, n, hm))
-			{
-				ReplaceStr = ReplaceBrackets(Source, ReplaceStr, pm, n, hm, CurPos, SearchLength);
-				return true;
-			}
+			if (!re.SearchEx(Source, Position, Match, NamedMatch))
+				return false;
 
-			ReMatchErrorMessage(re);
-			return false;
+			ReplaceStr = ReplaceBrackets(Source, ReplaceStr, Match, NamedMatch, CurPos, SearchLength);
+			return true;
 		}
 
 		bool found = false;
-		intptr_t half = 0;
 		intptr_t pos = 0;
 
-		for (;;)
+		std::vector<RegExpMatch> FoundMatch;
+		named_regex_match FoundNamedMatch;
+
+		while (re.SearchEx(Source, pos, Match, NamedMatch))
 		{
-			if (!re.SearchEx(Source, pos, pm + half, n, hm))
-			{
-				ReMatchErrorMessage(re);
-				break;
-			}
-			pos = pm[half].start;
+			pos = Match[0].start;
 			if (pos > Position)
 				break;
 
 			found = true;
+			FoundMatch = std::move(Match);
+			if (NamedMatch)
+				FoundNamedMatch.Matches = std::move(NamedMatch)->Matches;
 			++pos;
-			half = n - half;
 		}
 
 		if (found)
 		{
-			half = n - half;
-			ReplaceStr = ReplaceBrackets(Source, ReplaceStr, pm + half, n, hm, CurPos, SearchLength);
+			ReplaceStr = ReplaceBrackets(Source, ReplaceStr, FoundMatch, NamedMatch? &FoundNamedMatch : nullptr, CurPos, SearchLength);
 		}
 
 		return found;
@@ -837,13 +829,12 @@ static bool CanContainWholeWord(string_view const Haystack, size_t const Offset,
 bool SearchString(
 	string_view const Haystack,
 	string_view const Needle,
-	string_view const NeedleUpper,
-	string_view const NeedleLower,
+	i_searcher const& NeedleSearcher,
 	const RegExp& re,
-	RegExpMatch* const pm,
-	MatchHash* const hm,
+	std::vector<RegExpMatch>& Match,
+	named_regex_match* const NamedMatch,
 	int& CurPos,
-	bool const Case,
+	search_case_fold const CaseFold,
 	bool const WholeWords,
 	bool const Reverse,
 	bool const Regexp,
@@ -854,14 +845,13 @@ bool SearchString(
 	return SearchAndReplaceString(
 		Haystack,
 		Needle,
-		NeedleUpper,
-		NeedleLower,
+		NeedleSearcher,
 		re,
-		pm,
-		hm,
+		Match,
+		NamedMatch,
 		Dummy,
 		CurPos,
-		Case,
+		CaseFold,
 		WholeWords,
 		Reverse,
 		Regexp,
@@ -874,14 +864,13 @@ bool SearchString(
 bool SearchAndReplaceString(
 	string_view const Haystack,
 	string_view const Needle,
-	string_view const NeedleUpper,
-	string_view const NeedleLower,
+	i_searcher const& NeedleSearcher,
 	const RegExp& re,
-	RegExpMatch* const pm,
-	MatchHash* const hm,
+	std::vector<RegExpMatch>& Match,
+	named_regex_match* const NamedMatch,
 	string& ReplaceStr,
 	int& CurPos,
-	bool const Case,
+	search_case_fold const CaseFold,
 	bool const WholeWords,
 	bool const Reverse,
 	bool const Regexp,
@@ -894,7 +883,7 @@ bool SearchAndReplaceString(
 	if (WordDiv.empty())
 		WordDiv = Global->Opt->strWordDiv;
 
-	if (!Regexp && PreserveStyle && PreserveStyleReplaceString(Haystack, Needle, ReplaceStr, CurPos, Case, WholeWords, WordDiv, Reverse, *SearchLength))
+	if (!Regexp && PreserveStyle && PreserveStyleReplaceString(Haystack, Needle, ReplaceStr, CurPos, CaseFold, WholeWords, WordDiv, Reverse, *SearchLength))
 		return true;
 
 	if (Needle.empty())
@@ -918,54 +907,53 @@ bool SearchAndReplaceString(
 		if ((Position || HaystackSize) && Position >= HaystackSize)
 			return false;
 
-		return SearchStringRegex(Haystack, re, pm, hm, Position, Reverse, ReplaceStr, CurPos, SearchLength);
+		return SearchStringRegex(Haystack, re, Match, NamedMatch, Position, Reverse, ReplaceStr, CurPos, SearchLength);
 	}
 
 	if (Position >= HaystackSize)
 		return false;
 
-	const auto NeedleSize = *SearchLength = static_cast<int>(Needle.size());
+	auto Where = Reverse?
+		Haystack.substr(0, Position + 1) :
+		Haystack.substr(Position);
 
-	for (int HaystackIndex = Position; HaystackIndex != -1 && HaystackIndex != HaystackSize; Reverse? --HaystackIndex : ++HaystackIndex)
+	const auto Next = [&](size_t const Offset, size_t const Size)
 	{
-		if (WholeWords && !CanContainWholeWord(Haystack, HaystackIndex, NeedleSize, WordDiv))
-			continue;
+		Where = Reverse?
+			Where.substr(0, Offset - Size + 1) :
+			Where.substr(Offset + Size);
+	};
 
-		for (size_t NeedleIndex = 0; ; ++NeedleIndex)
+	while (!Where.empty())
+	{
+		const auto FoundPosition = NeedleSearcher.find_in(Where, Reverse);
+		if (!FoundPosition)
+			return false;
+
+		const auto [FoundOffset, FoundSize] = *FoundPosition;
+
+		const auto AbsoluteOffset = Reverse? FoundOffset : Haystack.size() - Where.size() + FoundOffset;
+
+		if (WholeWords && !CanContainWholeWord(Haystack, AbsoluteOffset, FoundSize, WordDiv))
 		{
-			if (NeedleIndex == Needle.size())
-			{
-				CurPos = HaystackIndex;
-
-				// В случае PreserveStyle: если не получилось сделать замену c помощью PreserveStyleReplaceString,
-				// то хотя бы сохранить регистр первой буквы.
-				if (PreserveStyle && !ReplaceStr.empty() && is_alpha(ReplaceStr.front()) && is_alpha(Haystack[HaystackIndex]))
-				{
-					if (is_upper(Haystack[HaystackIndex]))
-						ReplaceStr.front() = upper(ReplaceStr.front());
-					else if (is_lower(Haystack[HaystackIndex]))
-						ReplaceStr.front() = lower(ReplaceStr.front());
-				}
-
-				return true;
-			}
-
-			if (HaystackIndex + NeedleIndex == Haystack.size())
-				break;
-
-			const auto Ch = Haystack[HaystackIndex + NeedleIndex];
-
-			if (Case)
-			{
-				if (Ch != Needle[NeedleIndex])
-					break;
-			}
-			else
-			{
-				if (Ch != NeedleUpper[NeedleIndex] && Ch != NeedleLower[NeedleIndex])
-					break;
-			}
+			Next(FoundOffset, FoundSize);
+			continue;
 		}
+
+		CurPos = static_cast<int>(AbsoluteOffset);
+		*SearchLength = static_cast<int>(FoundSize);
+
+		// В случае PreserveStyle: если не получилось сделать замену c помощью PreserveStyleReplaceString,
+		// то хотя бы сохранить регистр первой буквы.
+		if (PreserveStyle && !ReplaceStr.empty() && is_alpha(ReplaceStr.front()) && is_alpha(Haystack[CurPos]))
+		{
+			if (is_upper(Haystack[CurPos]))
+				inplace::upper(ReplaceStr.front());
+			else if (is_lower(Haystack[CurPos]))
+				inplace::lower(ReplaceStr.front());
+		}
+
+		return true;
 	}
 
 	return false;
@@ -1035,7 +1023,7 @@ bytes HexStringToBlob(const string_view Hex, const wchar_t Separator)
 	Blob.reserve(BlobSize);
 	for (size_t i = 0; i != AlignedSize; i += StepSize)
 	{
-		Blob.push_back(std::byte(HexToInt(Hex[i]) << 4 | HexToInt(Hex[i + 1])));
+		Blob.push_back(static_cast<std::byte>(HexToInt(Hex[i]) << 4 | HexToInt(Hex[i + 1])));
 	}
 
 	return Blob;
@@ -1103,13 +1091,13 @@ void xwcsncpy(wchar_t* dest, const wchar_t* src, size_t DestSize)
 TEST_CASE("ConvertFileSizeString")
 {
 	constexpr auto
-		B = 1ull,
-		K = B * 1024,
-		M = K * 1024,
-		G = M * 1024,
-		T = G * 1024,
-		P = T * 1024,
-		E = P * 1024;
+		B =  0_bit,
+		K = 10_bit,
+		M = 20_bit,
+		G = 30_bit,
+		T = 40_bit,
+		P = 50_bit,
+		E = 60_bit;
 
 	static const struct
 	{
@@ -1453,7 +1441,7 @@ TEST_CASE("xwcsncpy")
 
 	const auto MaxBufferSize = std::max_element(ALL_CONST_RANGE(Tests), [](const auto& a, const auto& b){ return a.Src.size() < b.Src.size(); })->Src.size() + 1;
 
-	for (size_t BufferSize = 0; BufferSize != MaxBufferSize + 1; ++BufferSize)
+	for (const auto& BufferSize: irange(MaxBufferSize + 1))
 	{
 		for (const auto& i: Tests)
 		{

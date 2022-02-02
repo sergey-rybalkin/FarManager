@@ -41,41 +41,38 @@ DEP_FILTER := $(MAKEFILE_DIR)dep_filter.awk
 
 include $(MAKEFILE_DIR)../far/makefile_gcc_common
 
-DIRSURF = W
-
 ifdef ANSI
-DIRSURF =
 WIDE = -U UNICODE -U _UNICODE
 endif
 
 ifndef DEBUG
-DIRNAME := final
+DIRNAME := Release
 C_DEBUG := -O3 -fomit-frame-pointer -DNDEBUG
 ifndef USE_OBJDUMP_MAPS
 L_DEBUG := -s
 endif
 else
-DIRNAME := debug
+DIRNAME := Debug
 C_DEBUG := -g -D_DEBUG
 L_DEBUG :=
 endif
 
-BASEDIR = ./$(DIRNAME).$(DIRBIT)$(DIRSURF).gcc
+BASEDIR = ./$(DIRNAME).$(DIRBIT).gcc
 OBJDIR := $(BASEDIR)/obj
-REOBJDIR = \.\/$(DIRNAME)\.$(DIRBIT)$(DIRSURF)\.gcc\/obj\/
+REOBJDIR = \.\/$(DIRNAME)\.$(DIRBIT)\.gcc\/obj\/
 DLLDIR ?= $(BASEDIR)$(ADDOUTDIR)
-COMMON ?= ../common
+COMMON ?= $(MAKEFILE_DIR)/common
 COMINC = $(COMMON)/$(if $(ANSI),ascii,unicode)
 EXT ?= dll
 DLLNAME = $(NAME).$(EXT)
 DLLFULLNAME = $(DLLDIR)/$(DLLNAME)
 
 ifeq ($(DIRBIT),32)
-DEF_DEF = $(NAME)$(DIRSURF).gcc
+DEF_DEF = $(NAME).gcc
 DLLTOOL_M = i386
 else
 #for x64 vc.def is good enough
-DEF_DEF = $(NAME)$(DIRSURF).vc
+DEF_DEF = $(NAME).vc
 DLLTOOL_M = i386:x86-64
 endif
 
@@ -109,7 +106,7 @@ endif
 CFLAGS  += -I $(COMMON) -I $(COMINC) $(WIDE) $(USERC)
 CPPFLAGS += -Wno-old-style-cast $(USERCPP)
 LNKFLAGS += $(USERLIBS)
-RCFLAGS  += -I $(COMINC) $(WIDE) $(USERRC)
+RCFLAGS  += -I $(COMMON) -I $(COMINC) $(WIDE) $(USERRC)
 
 C_OBJS = $(patsubst %.c,$(OBJDIR)/%.o,$(filter %.c,$(SRCS)))
 CPP_OBJS = $(patsubst %.cpp,$(OBJDIR)/%.o,$(filter %.cpp,$(SRCS)))

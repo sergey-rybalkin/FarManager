@@ -70,16 +70,16 @@ static int GetPreserveCaseStyleMask(const string_view Str)
 	std::bitset<PreserveStyleType::COUNT> Result;
 	Result.set();
 
-	for (size_t i = 0; i != Str.size(); ++i)
+	for (const auto& i: Str)
 	{
-		const auto Upper = is_upper(Str[i]);
-		const auto Lower = !Upper && is_lower(Str[i]);
+		const auto Upper = is_upper(i);
+		const auto Lower = !Upper && is_lower(i);
 
 		if (!Upper)
 		{
 			Result[UPPERCASE_ALL] = false;
 
-			if (!i)
+			if (&i == &Str.front())
 				Result[UPPERCASE_FIRST] = false;
 		}
 
@@ -87,7 +87,7 @@ static int GetPreserveCaseStyleMask(const string_view Str)
 		{
 			Result[LOWERCASE_ALL] = false;
 
-			if (i > 0)
+			if (&i != &Str.front())
 				Result[UPPERCASE_FIRST] = false;
 		}
 	}
@@ -204,7 +204,7 @@ static auto ChoosePreserveStyleType(unsigned Mask)
 
 	for (int Style = COUNT; Style != UNKNOWN; --Style)
 		if (Mask & bit(Style))
-			return PreserveStyleType(Style);
+			return static_cast<PreserveStyleType>(Style);
 
 	return UNKNOWN;
 }
@@ -263,7 +263,7 @@ bool PreserveStyleReplaceString(
 	string_view const Str,
 	string& ReplaceStr,
 	int& CurPos,
-	bool Case,
+	search_case_fold CaseFold,
 	bool WholeWords,
 	string_view const WordDiv,
 	bool Reverse,
@@ -306,7 +306,7 @@ bool PreserveStyleReplaceString(
 		--LastItem;
 		while (((j != LastItem) || (j == LastItem && T < j->Token.size())) && Source[Idx])
 		{
-			bool Sep = (static_cast<size_t>(I) < Idx && static_cast<size_t>(I + 1) != Source.size() && IsPreserveStyleTokenSeparator(Source[Idx])
+			bool Sep = (static_cast<size_t>(I) < Idx && static_cast<size_t>(I) + 1 != Source.size() && IsPreserveStyleTokenSeparator(Source[Idx])
 					&& !IsPreserveStyleTokenSeparator(Source[Idx-1])
 					&& !IsPreserveStyleTokenSeparator(Source[Idx+1]));
 
@@ -351,13 +351,13 @@ bool PreserveStyleReplaceString(
 				break;
 			}
 
-			if (Case && Source[Idx] != j->Token[T])
+			if (CaseFold == search_case_fold::exact && Source[Idx] != j->Token[T])
 			{
 				Matched = false;
 				break;
 			}
 
-			if (!Case && upper(Source[Idx]) != upper(j->Token[T]))
+			if (CaseFold != search_case_fold::exact && upper(Source[Idx]) != upper(j->Token[T]))
 			{
 				Matched = false;
 				break;
@@ -544,7 +544,7 @@ TEST_CASE("PreserveStyleReplaceString")
 		int Position = 0;
 		int Size;
 		ResultStr = Patterns[i.PatternIndex].Replace;
-		REQUIRE(i.Result == PreserveStyleReplaceString(i.Src, Patterns[i.PatternIndex].Find, ResultStr, Position, false, false, {}, false, Size));
+		REQUIRE(i.Result == PreserveStyleReplaceString(i.Src, Patterns[i.PatternIndex].Find, ResultStr, Position, search_case_fold::icase, false, {}, false, Size));
 		if (i.Result)
 		{
 			REQUIRE(i.ResultStr == ResultStr);

@@ -1,12 +1,17 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
-  <ImportGroup Label="PropertySheets">
-  </ImportGroup>
-
   <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug_ASAN|x64">
+      <Configuration>Debug_ASAN</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug_ASAN|Win32">
+      <Configuration>Debug_ASAN</Configuration>
       <Platform>Win32</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|x64">
@@ -22,6 +27,10 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
     <!--
+    <ProjectConfiguration Include="Debug_ASAN|ARM">
+      <Configuration>Debug_ASAN</Configuration>
+      <Platform>ARM</Platform>
+    </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|ARM">
       <Configuration>Debug</Configuration>
       <Platform>ARM</Platform>
@@ -29,6 +38,11 @@
     <ProjectConfiguration Include="Release|ARM">
       <Configuration>Release</Configuration>
       <Platform>ARM</Platform>
+    </ProjectConfiguration>
+    -->
+    <ProjectConfiguration Include="Debug_ASAN|ARM64">
+      <Configuration>Debug_ASAN</Configuration>
+      <Platform>ARM64</Platform>
     </ProjectConfiguration>
     <ProjectConfiguration Include="Debug|ARM64">
       <Configuration>Debug</Configuration>
@@ -38,7 +52,6 @@
       <Configuration>Release</Configuration>
       <Platform>ARM64</Platform>
     </ProjectConfiguration>
-    -->
   </ItemGroup>
 
   <PropertyGroup Label="Globals">
@@ -52,8 +65,7 @@
     <ConfigSpecificDirectoryName>$(Configuration).$(Platform)</ConfigSpecificDirectoryName>
     <ProjectSpecificOutDirName Condition="'$(ProjectSpecificOutDirName)'==''">$(ProjectName)</ProjectSpecificOutDirName>
     <ProjectSpecificIntDirName Condition="'$(ProjectSpecificIntDirName)'==''">$(ProjectName)</ProjectSpecificIntDirName>
-    <TargetOsVersion Condition="'$(Platform)'=='Win32'">5.0</TargetOsVersion>
-    <TargetOsVersion Condition="'$(Platform)'=='x64'">5.2</TargetOsVersion>
+    <TargetOsVersion>5.0</TargetOsVersion>
     <NewOptions></NewOptions>
   </PropertyGroup>
 
@@ -61,9 +73,10 @@
     <ReadOnlyProject>true</ReadOnlyProject>
     <RootNamespace>$(ProjectName)</RootNamespace>
     <Keyword>Win32Proj</Keyword>
-    <CharacterSet>Unicode</CharacterSet>
+    <CharacterSet Condition="'$(CharacterSet)' == ''">Unicode</CharacterSet>
     <PlatformToolset Condition="'$(VisualStudioVersion)' == '15.0'">v141</PlatformToolset>
-    <PlatformToolset Condition="'$(VisualStudioVersion)' &gt;= '16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)' == '16.0'">v142</PlatformToolset>
+    <PlatformToolset Condition="'$(VisualStudioVersion)' &gt;= '17.0'">v143</PlatformToolset>
     <OutDir>$(OutputsRoot)product\$(ConfigSpecificDirectoryName)\$(ProjectSpecificOutDirName)\</OutDir>
     <IntDir>$(OutputsRoot)intermediate\$(ConfigSpecificDirectoryName)\$(ProjectSpecificIntDirName)\</IntDir>
     <GenerateManifest>false</GenerateManifest>
@@ -75,6 +88,10 @@
     <WholeProgramOptimization>true</WholeProgramOptimization>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(Configuration)'=='Debug_ASAN'">
+    <EnableASAN>true</EnableASAN>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(Configuration)'=='Debug'">
     <LinkIncremental>true</LinkIncremental>
   </PropertyGroup>
@@ -83,17 +100,19 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.props" />
   <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  <Import Project="$(MSBuildThisFileDirectory)user.props" Condition="exists('$(MSBuildThisFileDirectory)user.props')" />
 
   <ItemDefinitionGroup>
     <ClCompile>
-      <AdditionalOptions>/J /Zc:__cplusplus,externConstexpr,inline,throwingNew /volatile:iso /utf-8 $(NewOptions) %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>NOMINMAX;_ENABLE_EXTENDED_ALIGNED_STORAGE;_HAS_AUTO_PTR_ETC=0;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/J /Zc:__cplusplus,externConstexpr,inline,throwingNew /volatile:iso /utf-8 /Gw $(NewOptions) %(AdditionalOptions)</AdditionalOptions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32_LEAN_AND_MEAN;VC_EXTRALEAN;PSAPI_VERSION=1;_CRT_SECURE_NO_WARNINGS;_HAS_AUTO_PTR_ETC=0;_ENABLE_EXTENDED_ALIGNED_STORAGE;_CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ExceptionHandling>Sync</ExceptionHandling>
       <WarningLevel>EnableAllWarnings</WarningLevel>
       <ExternalWarningLevel>Level4</ExternalWarningLevel>
+      <TreatSpecificWarningsAsErrors>4013</TreatSpecificWarningsAsErrors>
       <StringPooling>true</StringPooling>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <DisableSpecificDiagnostics>869,3280</DisableSpecificDiagnostics>
+      <DisableSpecificDiagnostics>869,3280,4668</DisableSpecificDiagnostics>
       <ForcedIncludeFiles>$(SrcRoot)far\disabled_warnings.hpp</ForcedIncludeFiles>
       <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
       <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
@@ -117,15 +136,21 @@
     </Link>
   </ItemDefinitionGroup>
 
-  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+  <ItemDefinitionGroup Condition="'$(PrecompiledHeaders)' != ''">
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>$(PrecompiledHeaders).hpp</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(IntDir)$(PrecompiledHeaders).pch</PrecompiledHeaderOutputFile>
+      <ForcedIncludeFiles>%(ForcedIncludeFiles);$(PrecompiledHeaders).hpp</ForcedIncludeFiles>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug' or '$(Configuration)'=='Debug_ASAN'">
     <ClCompile>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
-      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <SupportJustMyCode>true</SupportJustMyCode>
       <SDLCheck>true</SDLCheck>
-      <DebugInformationFormat>EditAndContinue</DebugInformationFormat>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -134,6 +159,22 @@
       <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
       <LinkTimeCodeGeneration></LinkTimeCodeGeneration>
     </Link>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug_ASAN'">
+    <ClCompile>
+      <RuntimeLibrary>MultiThreadedDebugDll</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
+      <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+      <DebugInformationFormat Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64'">EditAndContinue</DebugInformationFormat>
+      <DebugInformationFormat Condition="'$(Platform)'!='Win32' and '$(Platform)'!='x64'">ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
@@ -154,7 +195,7 @@
       <SetChecksum>true</SetChecksum>
       <Profile>true</Profile>
     </Link>
-    <PostBuildEvent Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64'">
+    <PostBuildEvent Condition="'$(TargetExt)' == '.exe'">
       <Command>editbin /nologo /subsystem:console,$(TargetOsVersion) /osversion:$(TargetOsVersion) $(OutDir)$(TargetName)$(TargetExt) &gt; nul</Command>
       <Message>Fixing subsystem version</Message>
     </PostBuildEvent>
@@ -164,20 +205,9 @@
     <ClCompile>
       <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
-    <PostBuildEvent>
-      <Message>Fixing subsystem version</Message>
-      <Command>editbin /nologo /subsystem:console,5.0 /osversion:5.0 $(OutDir)$(TargetName)$(TargetExt) &gt; nul</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">
-    <PostBuildEvent>
-      <Message>Fixing subsystem version</Message>
-      <Command>editbin /nologo /subsystem:console,5.2 /osversion:5.2 $(OutDir)$(TargetName)$(TargetExt) &gt; nul</Command>
-    </PostBuildEvent>
   </ItemDefinitionGroup>
-
-  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Import Project="$(VCTargetsPath)\BuildCustomizations\masm.targets" />
 
 </Project>

@@ -1,105 +1,36 @@
-!include ../../makefile_vc_base
+ROOTDIR = ..\..\..
 
-!include project.ini
+NAME = example
 
-TOOLSDIR = ..\tools
+PRECOMPILED_HEADER=headers
 
-CPPFLAGS = -nologo -W3 -Gy -GR -EHsc -MP -c
-DEFINES = -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES=1 -D_WIN32_WINNT=0x0500 -DUNICODE -D_UNICODE
-LINKFLAGS = -nologo -incremental:no -map -manifest:no -dynamicbase -nxcompat -largeaddressaware -dll
-RCFLAGS = -nologo
-ASFLAGS = -nologo -c
+LINK_OBJS = \
+	$(INTDIR)\module.obj \
 
-!if $(VC) >= 11 && "$(BUILD_PLATFORM)" == "X86"
-CPPFLAGS=$(CPPFLAGS) /arch:IA32
-!endif
+!include $(ROOTDIR)\makefile_vc_def_inc
 
-!if $(VC) >= 14
-FIXCRT_CPPFLAGS = /Zc:threadSafeInit-
-!endif
+!ifndef BUILD
 
-!if "$(BUILD_PLATFORM)" == "AMD64"
-BITS = 64
-RCFLAGS = $(RCFLAGS) -Dx64
-!else
-BITS = 32
-LINKFLAGS = $(LINKFLAGS) -safeseh $(SUBSYSTEM)
-ASFLAGS = $(ASFLAGS) -safeseh
-!endif
+.PHONY: all
+all: depfile
+	$(MAKE) -nologo -f makefile_vc -$(MAKEFLAGS) all BUILD=1
 
-!ifdef DEBUG
-OUTDIR = debug
-DEFINES = $(DEFINES) -DDEBUG
-CPPFLAGS = $(CPPFLAGS) -Zi -Od -RTC1 -MTd
-LINKFLAGS = $(LINKFLAGS) -debug
-!else
-OUTDIR = final
-DEFINES = $(DEFINES) -DNDEBUG
-CPPFLAGS = $(CPPFLAGS) -O2 -GL -MT
-LINKFLAGS = $(LINKFLAGS) -opt:ref -opt:icf -LTCG
-!endif
-
-OUTDIR = $(OUTDIR).$(BITS).vc
-INCLUDES = -I.. -I..\7z\h
-CPPFLAGS = $(CPPFLAGS) -Fo$(OUTDIR)\ -Fd$(OUTDIR)\ $(INCLUDES) $(DEFINES)
-RCFLAGS = $(RCFLAGS) $(INCLUDES) $(DEFINES)
-ASFLAGS = $(ASFLAGS) -Fo$(OUTDIR)\ 
-
-OBJS = $(OUTDIR)\module.obj
-!if "$(BITS)" == "32"
-OBJS = $(OBJS) $(OUTDIR)\vc_crt_fix.obj $(OUTDIR)\vc_crt_fix_impl.obj
-!endif
-
-LIBS = ole32.lib oleaut32.lib
-
-project: depfile
-  $(MAKE) -nologo -f makefile_vc -$(MAKEFLAGS) build_project BUILD=1
-
-build_project: $(OUTDIR)\$(MODULE).dll
-
-$(OUTDIR)\$(MODULE).dll: $(OUTDIR)\module.def $(OBJS) $(OUTDIR)\headers.pch $(OUTDIR)\version.res project.ini
-  link $(LINKFLAGS) -def:$(OUTDIR)\module.def -out:$@ $(OBJS) $(OUTDIR)\headers.obj $(OUTDIR)\version.res $(LIBS)
-
-$(OBJS): $(OUTDIR)\headers.pch
-
-.cpp{$(OUTDIR)}.obj::
-  $(CPP) $(CPPFLAGS) -Yuheaders.hpp -FIheaders.hpp -Fp$(OUTDIR)\headers.pch $<
-
-$(OUTDIR)\headers.pch: headers.cpp headers.hpp
-  $(CPP) $(CPPFLAGS) headers.cpp -Ycheaders.hpp -Fp$(OUTDIR)\headers.pch
-
-$(OUTDIR)\vc_crt_fix.obj: ..\..\common\vc_crt_fix.asm
-  $(AS) $(ASFLAGS) ..\..\common\vc_crt_fix.asm
-
-$(OUTDIR)\vc_crt_fix_impl.obj: ..\..\common\vc_crt_fix_impl.cpp
-  $(CPP) $(CPPFLAGS) $(FIXCRT_CPPFLAGS) ..\..\common\vc_crt_fix_impl.cpp
-
-depfile: $(OUTDIR)
-  $(TOOLSDIR)\tool gendep $(INCLUDES) > $(OUTDIR)\dep.mak
-
-$(OUTDIR)\version.res: $(OUTDIR)\version.rc
-  $(RC) $(RCFLAGS) -fo$@ $**
-
-PREPROC = $(TOOLSDIR)\tool preproc $** $@
-
-$(OUTDIR)\version.rc: project.ini version.rc
-  $(PREPROC)
-
-$(OUTDIR)\module.def: project.ini module.def
-  $(PREPROC)
-
-COPY = copy /y $** $@
-
-$(OUTDIR):
-  if not exist $(OUTDIR) mkdir $(OUTDIR)
-
-!ifdef BUILD
-!include $(OUTDIR)\dep.mak
-!endif
-
+.PHONY: depfile
+depfile:
+	if not exist "$(INTDIR)\$(NULL)" mkdir "$(INTDIR)"
+	@echo Rebuilding dependencies
+	dir /b *.cpp *.hpp *.rc | "$(FARDIR)\tools\gawk" -f $(FARDIR)\scripts\mkdep.awk - > $(INTDIR)\$(NAME).dep
 
 clean:
-  if exist $(OUTDIR) rd /s /q $(OUTDIR)
+	$(MAKE) -nologo -f makefile_vc -$(MAKEFLAGS) clean BUILD=1
+
+!else
+
+!include $(INTDIR)\$(NAME).dep
 
 
-.PHONY: project build_project depfile clean
+CPPFLAGS = $(CPPFLAGS)
+
+!include $(ROOTDIR)\makefile_vc_target_inc
+
+!endif

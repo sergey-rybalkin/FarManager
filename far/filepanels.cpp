@@ -85,8 +85,8 @@ filepanels_ptr FilePanels::create(bool CreateRealPanels, int DirCount)
 
 	if (CreateRealPanels)
 	{
-		FilePanelsPtr->m_Panels[panel_left].m_Panel = FilePanelsPtr->CreatePanel(panel_type(Global->Opt->LeftPanel.m_Type.Get()));
-		FilePanelsPtr->m_Panels[panel_right].m_Panel = FilePanelsPtr->CreatePanel(panel_type(Global->Opt->RightPanel.m_Type.Get()));
+		FilePanelsPtr->m_Panels[panel_left].m_Panel = FilePanelsPtr->CreatePanel(static_cast<panel_type>(Global->Opt->LeftPanel.m_Type.Get()));
+		FilePanelsPtr->m_Panels[panel_right].m_Panel = FilePanelsPtr->CreatePanel(static_cast<panel_type>(Global->Opt->RightPanel.m_Type.Get()));
 		FilePanelsPtr->Init(DirCount);
 	}
 	else
@@ -98,7 +98,7 @@ filepanels_ptr FilePanels::create(bool CreateRealPanels, int DirCount)
 	return FilePanelsPtr;
 }
 
-static void PrepareOptFolder(string &strSrc, int IsLocalPath_FarPath)
+static void PrepareOptFolder(string &strSrc, bool IsLocalPath_FarPath)
 {
 	if (strSrc.empty())
 	{
@@ -149,7 +149,7 @@ void FilePanels::Init(int DirCount)
 		Params.first->SetViewMode(Params.second.ViewMode);
 
 		if (static_cast<panel_sort>(Params.second.SortMode.Get()) < panel_sort::COUNT)
-			Params.first->SetSortMode(panel_sort(Params.second.SortMode.Get()));
+			Params.first->SetSortMode(static_cast<panel_sort>(Params.second.SortMode.Get()));
 
 		Params.first->SetSortOrder(Params.second.ReverseSortOrder);
 		Params.first->SetSortGroups(Params.second.SortGroups);
@@ -166,7 +166,7 @@ void FilePanels::Init(int DirCount)
 	SetActivePanelInternal(ActivePanel());
 
 	// пытаемся избавится от зависания при запуске
-	int IsLocalPath_FarPath = ParsePath(Global->g_strFarPath)==root_type::drive_letter;
+	const auto IsLocalPath_FarPath = ParsePath(Global->g_strFarPath) == root_type::drive_letter;
 
 	const auto SetFolder = [&](const std::pair<panel_ptr, Options::PanelOptions&>& Params)
 	{
@@ -525,7 +525,7 @@ bool FilePanels::ProcessKey(const Manager::Key& Key)
 
 					if (ActivePanel() == AnotherPanel && (AnotherPanel->GetType() == panel_type::FILE_PANEL || AnotherPanel->GetType() == panel_type::TREE_PANEL))
 					{
-						os::fs::SetCurrentDirectory(AnotherPanel->GetCurDir());
+						os::fs::set_current_directory(AnotherPanel->GetCurDir());
 					}
 					AnotherPanel->Update(UPDATE_KEEP_SELECTION);
 

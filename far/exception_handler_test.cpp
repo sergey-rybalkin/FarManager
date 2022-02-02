@@ -46,9 +46,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Platform:
 #include "platform.concurrency.hpp"
+#include "platform.debug.hpp"
 
 // Common:
 #include "common/preprocessor.hpp"
+#include "common/scope_exit.hpp"
 #include "common/string_utils.hpp"
 
 // External:
@@ -403,12 +405,48 @@ namespace tests
 	{
 		RaiseException(-1, 0, 0, {});
 	}
+
+	static void debug_bounds_check()
+	{
+		[[maybe_unused]] std::vector<int> v(1);
+WARNING_PUSH()
+WARNING_DISABLE_GCC("-Warray-bounds")
+		v[1] = 42;
+WARNING_POP()
+	}
+
+	static void debug_bounds_check_as_stack()
+	{
+		[[maybe_unused]] int v[1];
+		const volatile size_t Index = 1;
+WARNING_PUSH()
+WARNING_DISABLE_GCC("-Warray-bounds")
+		v[Index] = 42;
+WARNING_POP()
+	}
+
+	static void debug_bounds_check_as_heap()
+	{
+		[[maybe_unused]] std::vector<int> v(1);
+WARNING_PUSH()
+WARNING_DISABLE_GCC("-Warray-bounds")
+		v.data()[1] = 42;
+WARNING_POP()
+	}
 }
 
 static bool ExceptionTestHook(Manager::Key const& key)
 {
 	if (none_of(key(), KEY_CTRLALTAPPS, KEY_RCTRLRALTAPPS, KEY_CTRLRALTAPPS, KEY_RCTRLALTAPPS))
 		return false;
+
+	static auto Processing = false;
+
+	if (Processing)
+		return false;
+
+	Processing = true;
+	SCOPE_EXIT{ Processing = false; };
 
 	static const std::pair<void(*)(), string_view> Tests[]
 	{
@@ -432,7 +470,7 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::seh_access_violation_execute, L"SEH access violation (execute)"sv },
 		{ tests::seh_divide_by_zero,           L"SEH divide by zero"sv },
 		{ tests::seh_divide_by_zero_thread,    L"SEH divide by zero (thread)"sv },
-		{ tests::seh_int_overflow,             L"SEH int owerflow"sv },
+		{ tests::seh_int_overflow,             L"SEH int overflow"sv },
 		{ tests::seh_stack_overflow,           L"SEH stack overflow"sv },
 		{ tests::seh_fp_divide_by_zero,        L"SEH floating-point divide by zero"sv },
 		{ tests::seh_fp_overflow,              L"SEH floating-point overflow"sv },
@@ -441,6 +479,9 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::seh_breakpoint,               L"SEH breakpoint"sv },
 		{ tests::seh_alignment_fault,          L"SEH alignment fault"sv },
 		{ tests::seh_unknown,                  L"SEH unknown"sv },
+		{ tests::debug_bounds_check,           L"Debug bounds check"sv },
+		{ tests::debug_bounds_check_as_stack,  L"Debug bounds check stack (ASAN)"sv },
+		{ tests::debug_bounds_check_as_heap,   L"Debug bounds check heap (ASAN)"sv },
 	};
 
 	const auto ModalMenu = VMenu2::create(L"Test Exceptions"s, {}, ScrY - 4);

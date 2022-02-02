@@ -1,5 +1,3 @@
-!include ../makefile_vc_base
-
 NAME=LuaMacro
 USERCPP=/Iluasdk/include /DEXPORT_OPEN /DEXPORT_CONFIGURE \
         /DEXPORT_PROCESSEDITOREVENT /DEXPORT_PROCESSVIEWEREVENT \
@@ -11,7 +9,7 @@ USERCPP=/Iluasdk/include /DEXPORT_OPEN /DEXPORT_CONFIGURE \
         /DRUN_LUAFAR_INIT
 LUA_VER=51
 
-LUALIB=$(FAR_WORKDIR)\luafar3.lib
+LUALIB=$(INTDIR)\luafar3.lib
 
 DOCS = luamacro.example.ini
 
@@ -23,34 +21,34 @@ FAR_DIRNAME=Release
 !else
 FAR_DIRNAME=Debug
 !endif
-FAR_WORKDIR=..\..\far\$(FAR_DIRNAME).$(DIRBIT).vc
+FAR_WORKDIR=$(FARDIR)\$(FAR_DIRNAME).$(DIRBIT).vc
 !endif
 
 ALL: lualib lualegacy
 
-LINK_OBJS = $(OBJDIR)\luaplug.obj
+LINK_OBJS = $(INTDIR)\luaplug.obj
 
-LIBS=$(LIBS) luasdk\$(DIRBIT)\lua$(LUA_VER).lib $(LUALIB)
+LINK_LIBS=$(LINK_LIBS) luasdk\$(DIRBIT)\lua$(LUA_VER).lib $(LUALIB)
 
 !include ..\makefile_vc_target_inc
 
 !ifndef __MAKE__
-{luafar}.c{$(OBJDIR)}.obj::
+{luafar}.c{$(INTDIR)}.obj::
 	$(CC) @<<
 	$(CPPFLAGS) $<
 <<
 !else
-{luafar}.c{$(OBJDIR)}.obj:
-	@$(CC) $(CPPFLAGS) /Fo$(OBJDIR)\ { $< }
+{luafar}.c{$(INTDIR)}.obj:
+	@$(CC) $(CPPFLAGS) /Fo$(INTDIR)\ { $< }
 !endif
-
-.PHONY: lualib lualegacy
 
 !include ../makefile_vc_getmode
 
+.PHONY: lualib
 lualib:
-	@$(MAKE) $(_MKHIDE) /f makefile_lib_vc INSTALL=$(FAR_WORKDIR) $(_MDEFS)
+	@$(MAKE) $(_MKHIDE) /f makefile_lib_vc INSTALL=$(FAR_WORKDIR) $(_MKDO_)INSTALL_TO_ROOT=1 $(_MDEFS)
 
+.PHONY: lualegacy
 lualegacy:
 !if "$(DIRBIT)" == "32"
 	@if not exist $(FAR_WORKDIR)\Legacy\$(NULL) mkdir $(FAR_WORKDIR)\Legacy

@@ -1,4 +1,4 @@
-﻿#include "msg.h"
+﻿#include "msg.hpp"
 #include "error.hpp"
 #include "utils.hpp"
 #include "farutils.hpp"
@@ -278,7 +278,9 @@ static PropInfo c_prop_info[] =
   { kpidStreamId, MSG_KPID_STREAMID, nullptr },
   { kpidReadOnly, MSG_KPID_READONLY, nullptr },
   { kpidOutName, MSG_KPID_OUTNAME, nullptr },
-  { kpidCopyLink, MSG_KPID_COPYLINK, nullptr }
+  { kpidCopyLink, MSG_KPID_COPYLINK, nullptr },
+  { kpidArcFileName, MSG_KPID_ARCFILENAME, nullptr },
+  { kpidIsHash, MSG_KPID_ISHASH, nullptr }
 };
 
 static const PropInfo* find_prop_info(PROPID prop_id) {
@@ -459,18 +461,18 @@ void Archive::load_update_props() {
 
     static const wchar_t *known_methods[] = { c_method_lzma, c_method_lzma2, c_method_ppmd };
 
-    for (std::list<std::wstring>::const_iterator m_str = m_list.begin(); m_str != m_list.end(); m_str++) {
-      if (_wcsicmp(m_str->c_str(), c_method_copy) == 0) {
+    for (const auto& m_str: m_list) {
+      if (_wcsicmp(m_str.c_str(), c_method_copy) == 0) {
         m_level = 0;
         m_method = c_method_lzma;
         break;
       }
       for (const auto known : known_methods) {
-        if (_wcsicmp(m_str->c_str(), known) == 0)
+        if (_wcsicmp(m_str.c_str(), known) == 0)
         { m_method = known; break; }
       }
       for (const auto& known : g_options.codecs) {
-        if (_wcsicmp(m_str->c_str(), known.name.c_str()) == 0)
+        if (_wcsicmp(m_str.c_str(), known.name.c_str()) == 0)
         { m_method = known.name; break; }
       }
       if (!m_method.empty())

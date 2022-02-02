@@ -129,7 +129,7 @@ Viewer::Viewer(window_ptr Owner, bool bQuickView, uintptr_t aCodePage):
 	ViOpt(Global->Opt->ViOpt),
 	Reader(ViewFile, (Global->Opt->ViOpt.MaxLineSize*2*64 > 64*1024 ? Global->Opt->ViOpt.MaxLineSize*2*64 : 64*1024)),
 	strLastSearchStr(Global->GetSearchString()),
-	LastSearchCase(Global->GlobalSearchCase),
+	LastSearchCaseFold(Global->GlobalSearchCaseFold),
 	LastSearchWholeWords(Global->GlobalSearchWholeWords),
 	LastSearchReverse(Global->GlobalSearchReverse),
 	LastSearchHex(Global->GetSearchHex()),
@@ -142,12 +142,12 @@ Viewer::Viewer(window_ptr Owner, bool bQuickView, uintptr_t aCodePage):
 	m_DisplayMode(VMT_TEXT),
 	ViewerID(::ViewerID++),
 	m_bQuickView(bQuickView),
-	vread_buffer(std::max(MaxViewLineBufferSize(), size_t(8192))),
+	vread_buffer(std::max(MaxViewLineBufferSize(), size_t{ 8192 })),
 	lcache_lines(16*1000),
 	// dirty magic numbers, fix them!
 	max_backward_size(std::min(Options::ViewerOptions::eMaxLineSize*3ll, std::max(Global->Opt->ViOpt.MaxLineSize*2, 1024ll) * 32)),
 	llengths(max_backward_size / 40),
-	Search_buffer(3 * std::max(MaxViewLineBufferSize(), size_t(8192))),
+	Search_buffer(3 * std::max(MaxViewLineBufferSize(), size_t{ 8192 })),
 	ReadBuffer(MaxViewLineBufferSize())
 {
 	if (m_DefCodepage != CP_DEFAULT)
@@ -193,7 +193,7 @@ Viewer::~Viewer()
 
 wchar_t Viewer::ZeroChar() const
 {
-	return ViOpt.Visible0x00 && ViOpt.ZeroChar > 0 ? static_cast<wchar_t>(ViOpt.ZeroChar) : L' ';
+	return ViOpt.Visible0x00 && ViOpt.ZeroChar > 0 ? static_cast<wchar_t>(ViOpt.ZeroChar) : 0;
 }
 
 int Viewer::CalculateMaxBytesPerLineByScreenWidth() const
@@ -261,7 +261,7 @@ void Viewer::SavePosition()
 void Viewer::KeepInitParameters() const
 {
 	Global->StoreSearchString(strLastSearchStr, LastSearchHex);
-	Global->GlobalSearchCase=LastSearchCase;
+	Global->GlobalSearchCaseFold = LastSearchCaseFold;
 	Global->GlobalSearchWholeWords=LastSearchWholeWords;
 	Global->GlobalSearchReverse=LastSearchReverse;
 	Global->Opt->ViOpt.ViewerIsWrap = m_Wrap;
@@ -287,7 +287,7 @@ bool Viewer::OpenFile(string_view const Name, bool const Warn)
 	if (Global->OnlyEditorViewerUsed && strFileName == L"-"sv)
 	{
 		const auto strTempName = MakeTemp();
-		if (!ViewFile.Open(strTempName,GENERIC_READ|GENERIC_WRITE,FILE_SHARE_READ|FILE_SHARE_WRITE,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_TEMPORARY|FILE_FLAG_DELETE_ON_CLOSE))
+		if (!ViewFile.Open(strTempName, GENERIC_READ | GENERIC_WRITE, os::fs::file_share_all, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE))
 		{
 			OpenFailed = true;
 			return false;
@@ -310,11 +310,8 @@ bool Viewer::OpenFile(string_view const Name, bool const Warn)
 	}
 	else
 	{
-		for (;;)
+		while (!ViewFile.Open(strFileName, FILE_READ_DATA, os::fs::file_share_all, nullptr, OPEN_EXISTING))
 		{
-			if (ViewFile.Open(strFileName, FILE_READ_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING))
-				break;
-
 			/* $ 04.07.2000 tran
 			   + 'warning' flag processing, in QuickView it is FALSE
 				 so don't show red message box */
@@ -442,7 +439,7 @@ bool Viewer::isBinaryFile(uintptr_t cp) // very approximate: looks for '\0' in f
 
 	if (IsUnicodeCodePage(cp))
 	{
-		return contains(span(reinterpret_cast<const wchar_t*>(Buffer), BytesRead / sizeof(wchar_t)), L'\0');
+		return contains(span(view_as<const wchar_t*>(Buffer), BytesRead / sizeof(wchar_t)), L'\0');
 	}
 	else
 	{
@@ -538,7 +535,7 @@ void Viewer::ShowPage(int nMode)
 
 				Strings.clear();
 
-				for (int Y = m_Where.top; Y <= m_Where.bottom; ++Y)
+				for (const auto& Y: irange(m_Where.top, m_Where.bottom + 1))
 				{
 					ViewerString NewString;
 					NewString.nFilePos = vtell();
@@ -711,7 +708,7 @@ int Viewer::txt_dump(std::string_view const Str, size_t ClientWidth, string& Out
 
 	if (IsUnicodeCodePage(m_Codepage))
 	{
-		OutStr.assign(reinterpret_cast<const wchar_t*>(Str.data()), Str.size() / sizeof(wchar_t));
+		OutStr.assign(view_as<const wchar_t*>(Str.data()), Str.size() / sizeof(wchar_t));
 		if (m_Codepage == CP_REVERSEBOM)
 		{
 			swap_bytes(OutStr.data(), OutStr.data(), OutStr.size() * sizeof(wchar_t));
@@ -737,7 +734,7 @@ int Viewer::txt_dump(std::string_view const Str, size_t ClientWidth, string& Out
 
 			OutStr.push_back(Buffer[iw] == encoding::bom_char? encoding::replace_char : Buffer[iw]); // BOM can be Zero Length
 			const auto clen = encoding::utf8::get_bytes_count({ Buffer.data() + iw, 1 });
-			const auto PaddingSize = std::min(clen - 1, static_cast<size_t>(ClientWidth) - OutStr.size());
+			const auto PaddingSize = std::min(clen - 1, ClientWidth - OutStr.size());
 			OutStr.append(PaddingSize, encoding::continue_char);
 			tail = static_cast<int>(clen - 1 - PaddingSize); // char continues on the next line?
 		}
@@ -796,7 +793,7 @@ void Viewer::ShowDump()
 	int tail = 0;
 	string OutStr;
 
-	for (auto Y = m_Where.top; Y <= m_Where.bottom; ++Y)
+	for (const auto& Y: irange(m_Where.top + 0, m_Where.bottom + 1))
 	{
 		SetColor(COL_VIEWERTEXT);
 		GotoXY(m_Where.left, Y);
@@ -851,7 +848,7 @@ void Viewer::ShowHex()
 		}
 	}
 
-	for (auto Y = m_Where.top; Y <= m_Where.bottom; ++Y)
+	for (const auto& Y: irange(m_Where.top + 0, m_Where.bottom + 1))
 	{
 		bool bSelStartFound = false;
 		bool bSelEndFound = false;
@@ -921,7 +918,7 @@ void Viewer::ShowHex()
 				}
 			}
 
-			for (size_t X = 0; X != m_BytesPerLine; ++X)
+			for (const auto& X: irange(m_BytesPerLine))
 			{
 				if (X < BytesRead)
 					format_to(OutStr, FSTR(L"{:02X} "sv), static_cast<int>(RawBuffer[X]));
@@ -975,7 +972,7 @@ void Viewer::DrawScrollbar()
 		{
 			total = static_cast<unsigned long long>(FileSize);
 			start = static_cast<unsigned long long>(FilePos);
-			auto& last_line = Strings.back();
+			const auto& last_line = Strings.back();
 			end = last_line.nFilePos + last_line.linesize;
 			if ( end == static_cast<unsigned long long>(FileSize) && last_line.linesize > 0 && last_line.eol_length != 0 )
 				++total;
@@ -1012,7 +1009,7 @@ void Viewer::SetStatusMode(int Mode)
 
 static bool is_word_div(const wchar_t ch)
 {
-	static const wchar_t extra_div[] = { encoding::bom_char, encoding::replace_char };
+	static const wchar_t extra_div[]{ encoding::bom_char, encoding::replace_char };
 	return !ch || std::iswspace(ch) || contains(Global->Opt->strWordDiv.Get(), ch) || contains(extra_div, ch);
 }
 
@@ -1170,7 +1167,6 @@ void Viewer::ReadString(ViewerString *pString, int MaxSize, bool update_cache)
 	}
 
 	pString->eol_length = eol_len;
-	ReadBuffer[OutPtr]=0;
 	pString->linesize = static_cast<int>(vtell() - pString->nFilePos);
 
 	if ( update_cache )
@@ -1197,7 +1193,7 @@ void Viewer::ReadString(ViewerString *pString, int MaxSize, bool update_cache)
 	if (!eol_char && veof())
 		LastPage = true;
 
-	pString->Data = ReadBuffer.data();
+	pString->Data.assign(ReadBuffer.data(), OutPtr);
 }
 
 
@@ -1215,10 +1211,8 @@ long long Viewer::EndOfScreen(int line)
 			int col = 0;
 			const auto rmargin = static_cast<int>(LeftPos) + Width;
 			wchar_t ch;
-			for (;;)
+			while (vgetc(&ch))
 			{
-				if ( !vgetc(&ch) )
-					break;
 				if (IsEol(ch))
 					break;
 				if ( ch == L'\t' )
@@ -1305,7 +1299,7 @@ long long Viewer::XYfilepos(int col, int row)
 		break;
 
 	case VMT_TEXT:
-		for (auto& i: Strings)
+		for (const auto& i: Strings)
 		{
 			if (i.linesize <= 0)
 			{
@@ -1406,6 +1400,13 @@ bool Viewer::process_key(const Manager::Key& Key)
 	if (!ViOpt.PersistentBlocks &&
 		none_of(LocalKey,
 			KEY_NONE,
+			KEY_SHIFT,
+			KEY_CTRL, KEY_RCTRL,
+			KEY_ALT, KEY_RALT,
+			KEY_CTRLSHIFT, KEY_RCTRLSHIFT,
+			KEY_ALTSHIFT, KEY_RALTSHIFT,
+			KEY_CTRLALT, KEY_RCTRLALT, KEY_CTRLRALT, KEY_RCTRLRALT,
+			KEY_CTRLALTSHIFT, KEY_CTRLRALTSHIFT, KEY_RCTRLALTSHIFT, KEY_RCTRLRALTSHIFT,
 			KEY_CTRLINS, KEY_RCTRLINS,
 			KEY_CTRLNUMPAD0, KEY_RCTRLNUMPAD0,
 			KEY_CTRLC, KEY_RCTRLC,
@@ -1685,10 +1686,7 @@ bool Viewer::process_key(const Manager::Key& Key)
 		case(KEY_MSWHEEL_UP | KEY_RALT):
 		{
 			const auto Roll = (LocalKey & (KEY_ALT | KEY_RALT))? 1 : static_cast<int>(Global->Opt->MsWheelDeltaView);
-
-			for (int i=0; i<Roll; i++)
-				ProcessKey(Manager::Key(KEY_UP));
-
+			repeat(Roll, [&]{ ProcessKey(Manager::Key(KEY_UP)); });
 			return true;
 		}
 		case KEY_MSWHEEL_DOWN:
@@ -1696,10 +1694,7 @@ bool Viewer::process_key(const Manager::Key& Key)
 		case(KEY_MSWHEEL_DOWN | KEY_RALT):
 		{
 			const auto Roll = (LocalKey & (KEY_ALT | KEY_RALT))? 1 : static_cast<int>(Global->Opt->MsWheelDeltaView);
-
-			for (int i=0; i<Roll; i++)
-				ProcessKey(Manager::Key(KEY_DOWN));
-
+			repeat(Roll, [&]{ ProcessKey(Manager::Key(KEY_DOWN)); });
 			return true;
 		}
 		case KEY_MSWHEEL_LEFT:
@@ -1707,10 +1702,7 @@ bool Viewer::process_key(const Manager::Key& Key)
 		case(KEY_MSWHEEL_LEFT | KEY_RALT):
 		{
 			const auto Roll = (LocalKey & (KEY_ALT | KEY_RALT))? 1 : static_cast<int>(Global->Opt->MsHWheelDeltaView);
-
-			for (int i=0; i<Roll; i++)
-				ProcessKey(Manager::Key(KEY_LEFT));
-
+			repeat(Roll, [&]{ ProcessKey(Manager::Key(KEY_LEFT)); });
 			return true;
 		}
 		case KEY_MSWHEEL_RIGHT:
@@ -1718,10 +1710,7 @@ bool Viewer::process_key(const Manager::Key& Key)
 		case(KEY_MSWHEEL_RIGHT | KEY_RALT):
 		{
 			const auto Roll = (LocalKey & (KEY_ALT | KEY_RALT))? 1 : static_cast<int>(Global->Opt->MsHWheelDeltaView);
-
-			for (int i=0; i<Roll; i++)
-				ProcessKey(Manager::Key(KEY_RIGHT));
-
+			repeat(Roll, [&]{ ProcessKey(Manager::Key(KEY_RIGHT)); });
 			return true;
 		}
 		case KEY_UP: case KEY_NUMPAD8: case KEY_SHIFTNUMPAD8:
@@ -1733,7 +1722,7 @@ bool Viewer::process_key(const Manager::Key& Key)
 				if (m_DisplayMode == VMT_TEXT)
 				{
 					ShowPage(SHOW_UP);
-					ViewerString& end = Strings.back();
+					const auto& end = Strings.back();
 					LastPage = end.nFilePos >= FileSize || (end.eol_length == 0 && end.nFilePos + end.linesize >= FileSize);
 				}
 				else
@@ -1782,11 +1771,11 @@ bool Viewer::process_key(const Manager::Key& Key)
 			if (any_of(LocalKey, KEY_CTRLDOWN, KEY_RCTRLDOWN))
 			{
 				vseek(vString.nFilePos = FilePos, FILE_BEGIN);
-				for (int i = m_Where.top; i <= m_Where.bottom; ++i)
+				repeat(m_Where.height(), [&]
 				{
 					ReadString(&vString,-1);
 					vString.nFilePos += vString.linesize;
-				}
+				});
 
 				if (LastPage)
 				{
@@ -1908,7 +1897,7 @@ bool Viewer::process_key(const Manager::Key& Key)
 			// Перейти на конец строк
 			if (ViewFile)
 			{
-				const size_t MaxLen = std::accumulate(ALL_CONST_RANGE(Strings), size_t(0), [](size_t Value, const ViewerString& i)
+				const size_t MaxLen = std::accumulate(ALL_CONST_RANGE(Strings), size_t{}, [](size_t Value, const ViewerString& i)
 				{
 					return std::max(Value, i.Data.size());
 				});
@@ -2073,29 +2062,6 @@ bool Viewer::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 		return true;
 	}
 
-	if (IntKeyState.MousePos.y == m_Where.top - 1 && (HostFileViewer && HostFileViewer->IsTitleBarVisible()))
-	{
-		while (IsMouseButtonPressed()) {}
-		if (IntKeyState.MousePos.y != m_Where.top - 1)
-			return true;
-
-		const auto NameLen = std::max(20, ObjWidth() - 40 - (Global->Opt->Clock && HostFileViewer && HostFileViewer->IsFullScreen()? 3 + static_cast<int>(Global->CurrentTime.size()) : 0));
-		const auto cp_len = static_cast<int>(str(m_Codepage).size());
-		//                           ViewMode     CopdePage             Goto
-		static const int keys[]   = {KEY_SHIFTF4, KEY_SHIFTF8,          KEY_ALTF8   };
-		int xpos[std::size(keys)] = {NameLen,     NameLen+3+(5-cp_len), NameLen+40-4};
-		int xlen[std::size(keys)] = {3,           cp_len,                          4};
-
-		for (int i = 0; i < static_cast<int>(std::size(keys)); ++i)
-		{
-			if (IntKeyState.MousePos.x >= xpos[i] && IntKeyState.MousePos.x < xpos[i]+xlen[i])
-			{
-				ProcessKey(Manager::Key(keys[i]));
-				return true;
-			}
-		}
-	}
-
 	if (!m_Where.contains(IntKeyState.MousePos))
 		return false;
 
@@ -2179,7 +2145,7 @@ void Viewer::CacheLine( long long start, int length, bool have_eol )
 		else
 		{
 			lcache_base = (lcache_base + 1) % lcache_lines.size(); // ++start
-			lcache_first = llabs(lcache_lines[lcache_base]);
+			lcache_first = std::abs(lcache_lines[lcache_base]);
 		}
 	}
 	else if (start+length == lcache_first)
@@ -2192,7 +2158,7 @@ void Viewer::CacheLine( long long start, int length, bool have_eol )
 		else
 		{
 			const auto i = (lcache_base + lcache_lines.size() - 1) % lcache_lines.size(); // i = start - 1
-			lcache_last = llabs(lcache_lines[i]);
+			lcache_last = std::abs(lcache_lines[i]);
 		}
 	}
 	else
@@ -2201,11 +2167,11 @@ void Viewer::CacheLine( long long start, int length, bool have_eol )
 		if ( reset )
 		{
 			const auto i = CacheFindUp(start+length);
-			reset = (i < 0 || llabs(lcache_lines[i]) != start);
+			reset = (i < 0 || std::abs(lcache_lines[i]) != start);
 			if ( !reset )
 			{
 				const auto j = (i + 1) % lcache_lines.size();
-				reset = (llabs(lcache_lines[j]) != start+length);
+				reset = std::abs(lcache_lines[j]) != start + length;
 			}
 		}
 #if defined(_DEBUG) && 0 // it is legal case if file changed...
@@ -2241,7 +2207,7 @@ int Viewer::CacheFindUp( long long start )
 
 		const auto i = (i1 + i2) / 2;
 		const auto j = (lcache_base + i) % lcache_lines.size();
-		if (llabs(lcache_lines[j]) < start)
+		if (std::abs(lcache_lines[j]) < start)
 			i1 = i;
 		else
 			i2 = i;
@@ -2278,7 +2244,7 @@ static int process_back(int BufferSize, int pos, long long& fpos, const F& Reade
 		}
 	}
 
-	const T crlf[] = { eol.cr<T>(), eol.lf<T>() };
+	const T crlf[]{ eol.cr<T>(), eol.lf<T>() };
 	const auto REnd = std::make_reverse_iterator(Buffer);
 	const auto RBegin = REnd - nr;
 	const auto Iterator = std::find_first_of(RBegin, REnd, ALL_CONST_RANGE(crlf));
@@ -2316,7 +2282,7 @@ void Viewer::Up(int nlines, bool adjust)
 	{
 		for (;;)
 		{
-			fpos = llabs(lcache_lines[i]);
+			fpos = std::abs(lcache_lines[i]);
 			if (--nlines == 0)
 			{
 				FilePos = fpos;
@@ -2344,7 +2310,7 @@ void Viewer::Up(int nlines, bool adjust)
 
 		// backward CR-LF search
 		//
-		for (int j = 0; j < max_backward_size/portion_size; ++j )
+		for (const auto& j: irange(max_backward_size / portion_size))
 		{
 			int buff_size = (fpos > static_cast<long long>(portion_size)? portion_size : static_cast<int>(fpos));
 			if ( buff_size <= 0 )
@@ -2526,16 +2492,16 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 		{
 			if (SD_EDIT_TEXT == Param1 || SD_EDIT_HEX == Param1)
 			{
-				const auto Data = reinterpret_cast<ViewerDialogData*>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
-				Data->hex_mode = (SD_EDIT_HEX == Param1);
+				auto& Data = edit_as<ViewerDialogData>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
+				Data.hex_mode = (SD_EDIT_HEX == Param1);
 			}
 			break;
 		}
 		case DN_BTNCLICK:
 		{
 			bool need_focus = false;
-			const auto Data = reinterpret_cast<ViewerDialogData*>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
-			const auto cradio = (Data->hex_mode ? SD_RADIO_HEX : SD_RADIO_TEXT);
+			auto& Data = edit_as<ViewerDialogData>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
+			const auto cradio = (Data.hex_mode? SD_RADIO_HEX : SD_RADIO_TEXT);
 
 			if ((Param1 == SD_RADIO_TEXT || Param1 == SD_RADIO_HEX) && Param2)
 			{
@@ -2548,12 +2514,12 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 					const auto sd_dst = new_hex? SD_EDIT_HEX : SD_EDIT_TEXT;
 					const auto sd_src = new_hex? SD_EDIT_TEXT : SD_EDIT_HEX;
 
-					EditorSetPosition esp={sizeof(EditorSetPosition)};
+					EditorSetPosition esp{ sizeof(esp) };
 					esp.CurPos = -1;
 					Dlg->SendMessage(DM_GETEDITPOSITION, sd_src, &esp);
-					FarDialogItemData item = {sizeof(FarDialogItemData)};
+					FarDialogItemData item{ sizeof(item) };
 					Dlg->SendMessage(DM_GETTEXT, sd_src, &item);
-					const string Src(reinterpret_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, sd_src, nullptr)), item.PtrLength);
+					const string Src(view_as<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, sd_src, nullptr)), item.PtrLength);
 					const auto strTo = ConvertHexString(Src, m_Codepage, !new_hex);
 					item.PtrLength = strTo.size();
 					item.PtrData = UNSAFE_CSTR(strTo);
@@ -2576,17 +2542,17 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 						Dlg->SendMessage(DM_EDITUNCHANGEDFLAG, sd_dst, ToPtr(changed));
 					}
 
-					Data->hex_mode = new_hex;
-					if (!Data->edit_autofocus)
+					Data.hex_mode = new_hex;
+					if (!Data.edit_autofocus)
 						return TRUE;
 				}
 			}
 			else if (Param1 == SD_CHECKBOX_REGEXP)
 			{
-				Dlg->SendMessage(DM_SDSETVISIBILITY, Data->hex_mode, nullptr);
+				Dlg->SendMessage(DM_SDSETVISIBILITY, Data.hex_mode, nullptr);
 			}
 
-			if (Data->edit_autofocus && !Data->recursive)
+			if (Data.edit_autofocus && !Data.recursive)
 			{
 				if ( need_focus
 				  || Param1 == SD_CHECKBOX_CASE
@@ -2594,9 +2560,9 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 				  || Param1 == SD_CHECKBOX_REVERSE
 				  || Param1 == SD_CHECKBOX_REGEXP
 				){
-					Data->recursive = true;
-					Dlg->SendMessage(DM_SETFOCUS, Data->hex_mode? SD_EDIT_HEX : SD_EDIT_TEXT, nullptr);
-					Data->recursive = false;
+					Data.recursive = true;
+					Dlg->SendMessage(DM_SETFOCUS, Data.hex_mode? SD_EDIT_HEX : SD_EDIT_TEXT, nullptr);
+					Data.recursive = false;
 				}
 			}
 
@@ -2609,7 +2575,7 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 		{
 			if (Param1==SD_TEXT_SEARCH)
 			{
-				const auto Data = reinterpret_cast<const ViewerDialogData*>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
+				const auto Data = view_as<const ViewerDialogData*>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
 				Dlg->SendMessage(DM_SETFOCUS, (Data->hex_mode? SD_EDIT_HEX : SD_EDIT_TEXT), nullptr);
 				return FALSE;
 			}
@@ -2617,8 +2583,7 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 		}
 		case DN_DRAWDIALOGDONE:
 		{
-			auto FirstChar = reinterpret_cast<const Manager::Key*>(Dlg->SendMessage(DM_SETDLGDATA, 0, nullptr));
-			if (FirstChar)
+			if (const auto FirstChar = view_as<const Manager::Key*>(Dlg->SendMessage(DM_SETDLGDATA, 0, nullptr)))
 				Global->WindowManager->CallbackWindow([Dlg, FirstChar]() { Dlg->ProcessKey(*FirstChar); });
 			break;
 		}
@@ -2645,15 +2610,8 @@ struct Viewer::search_data
 	int search_len{};
 	int  ch_size{};
 	bool first_Rex{true};
-	int RexMatchCount{0};
 	std::vector<RegExpMatch> RexMatch;
 	std::optional<RegExp> Rex;
-
-	int InitRegEx(string_view const str, int flags)
-	{
-		Rex.emplace();
-		return Rex->Compile(str, flags);
-	}
 };
 
 enum SEARCHER_RESULT: int
@@ -2673,7 +2631,7 @@ constexpr auto
 
 SEARCHER_RESULT Viewer::search_hex_forward(search_data* sd)
 {
-	const auto buff = reinterpret_cast<std::byte*>(Search_buffer.data());
+	const auto buff = edit_as<std::byte*>(Search_buffer.data());
 	const auto bsize = static_cast<int>(Search_buffer.size() * sizeof(wchar_t)), slen = sd->search_len;
 	long long to;
 	const auto cpos = sd->CurPos;
@@ -2741,7 +2699,7 @@ SEARCHER_RESULT Viewer::search_hex_forward(search_data* sd)
 
 SEARCHER_RESULT Viewer::search_hex_backward(search_data* sd)
 {
-	const auto buff = reinterpret_cast<std::byte*>(Search_buffer.data());
+	const auto buff = edit_as<std::byte*>(Search_buffer.data());
 	const auto bsize = static_cast<int>(Search_buffer.size() * sizeof(wchar_t)), slen = sd->search_len;
 	long long to, cpos = sd->CurPos;
 	const auto swrap = ViOpt.SearchWrapStop;
@@ -2842,10 +2800,10 @@ SEARCHER_RESULT Viewer::search_text_forward(search_data* sd)
 	}
 
 	const auto is_eof = (to1 >= FileSize ? 1 : 0), iLast = nw - slen - ww + ww*is_eof;
-	if ( !LastSearchCase )
-		CharUpperBuff(buff, nw);
+	if (LastSearchCaseFold != search_case_fold::exact)
+		inplace::upper({ buff, static_cast<size_t>(nw) });
 
-	for (int i = 0; i <= iLast; ++i)
+	for (const auto& i: irange(iLast + 1))
 	{
 		if (ww)
 		{
@@ -2924,8 +2882,8 @@ SEARCHER_RESULT Viewer::search_text_backward(search_data* sd)
 	cpos -= nb;
 	vseek(cpos, FILE_BEGIN);
 	const auto nw = vread(buff, nb, t_buff);
-	if (!LastSearchCase)
-		CharUpperBuff(buff, nw);
+	if (LastSearchCaseFold != search_case_fold::exact)
+		inplace::upper({ buff, static_cast<size_t>(nw) });
 
 	const auto is_eof = (veof() ? 1 : 0), iFirst = ww * (cpos > 0 ? 1 : 0), iLast = nw - slen - ww + ww*is_eof;
 	for (int i = iLast; i >= iFirst; --i)
@@ -3053,18 +3011,13 @@ SEARCHER_RESULT Viewer::search_regex_forward(search_data* sd)
 		if ( off > nw )
 			break;
 
-		intptr_t n = sd->RexMatchCount;
-		RegExpMatch *m = sd->RexMatch.data();
-		if (!sd->Rex->SearchEx({ line, static_cast<size_t>(nw) }, off, m, n))  // doesn't match
-		{
-			ReMatchErrorMessage(*sd->Rex);
+		if (!sd->Rex->SearchEx({ line, static_cast<size_t>(nw) }, off, sd->RexMatch))  // doesn't match
 			break;
-		}
 
-		const auto fpos = bpos + GetStrBytesNum({ t_line, static_cast<size_t>(m[0].start) });
+		const auto fpos = bpos + GetStrBytesNum({ t_line, static_cast<size_t>(sd->RexMatch[0].start) });
 		if ( fpos < cpos )
 		{
-			off = m[0].start + 1; // skip
+			off = sd->RexMatch[0].start + 1; // skip
 			continue;
 		}
 		else if (swrap == SearchWrap_CYCLE && !tail_part && fpos >= StartSearchPos)
@@ -3074,7 +3027,7 @@ SEARCHER_RESULT Viewer::search_regex_forward(search_data* sd)
 		else // found
 		{
 			sd->MatchPos = fpos;
-			sd->search_len = GetStrBytesNum({ t_line + off + m[0].start, static_cast<size_t>(m[0].end - m[0].start) });
+			sd->search_len = GetStrBytesNum({ t_line + off + sd->RexMatch[0].start, static_cast<size_t>(sd->RexMatch[0].end - sd->RexMatch[0].start) });
 			return Search_Found;
 		}
 	}
@@ -3122,16 +3075,11 @@ SEARCHER_RESULT Viewer::search_regex_backward(search_data* sd)
 		if (lsize <= 0 || off > nw)
 			break;
 
-		intptr_t n = sd->RexMatchCount;
-		RegExpMatch *m = sd->RexMatch.data();
-		if (!sd->Rex->SearchEx({ line, static_cast<size_t>(nw) }, off, m, n))
-		{
-			ReMatchErrorMessage(*sd->Rex);
+		if (!sd->Rex->SearchEx({ line, static_cast<size_t>(nw) }, off, sd->RexMatch))
 			break;
-		}
 
-		const auto fpos = bpos + GetStrBytesNum({ t_line, static_cast<size_t>(m[0].start) });
-		const auto flen = GetStrBytesNum({ t_line + m[0].start, static_cast<size_t>(m[0].end - m[0].start) });
+		const auto fpos = bpos + GetStrBytesNum({ t_line, static_cast<size_t>(sd->RexMatch[0].start) });
+		const auto flen = GetStrBytesNum({ t_line + sd->RexMatch[0].start, static_cast<size_t>(sd->RexMatch[0].end - sd->RexMatch[0].start) });
 		if (fpos+flen > cpos)
 			break;
 
@@ -3141,8 +3089,7 @@ SEARCHER_RESULT Viewer::search_regex_backward(search_data* sd)
 			prev_len = flen;
 		}
 
-		off = m[0].start + 1; // skip
-		continue;
+		off = sd->RexMatch[0].start + 1; // skip
 	}
 
 	if (prev_len >= 0)
@@ -3188,7 +3135,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		return;
 
 	auto SearchHex = LastSearchHex;
-	auto Case = LastSearchCase;
+	auto SearchCaseFold = LastSearchCaseFold;
 	auto WholeWords = LastSearchWholeWords;
 	auto ReverseSearch = LastSearchReverse;
 	auto SearchRegexp = LastSearchRegexp;
@@ -3223,7 +3170,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		SearchDlg[SD_EDIT_HEX].strMask = L"HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH "sv;
 		SearchDlg[SD_RADIO_TEXT].Selected=!LastSearchHex;
 		SearchDlg[SD_RADIO_HEX].Selected=LastSearchHex;
-		SearchDlg[SD_CHECKBOX_CASE].Selected=LastSearchCase;
+		SearchDlg[SD_CHECKBOX_CASE].Selected = LastSearchCaseFold == search_case_fold::exact;
 		SearchDlg[SD_CHECKBOX_WORDS].Selected=LastSearchWholeWords;
 		SearchDlg[SD_CHECKBOX_REVERSE].Selected=LastSearchReverse;
 		SearchDlg[SD_CHECKBOX_REGEXP].Selected=LastSearchRegexp;
@@ -3249,7 +3196,10 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 			return;
 
 		SearchHex=SearchDlg[SD_RADIO_HEX].Selected == BSTATE_CHECKED;
-		Case=SearchDlg[SD_CHECKBOX_CASE].Selected == BSTATE_CHECKED;
+		SearchCaseFold =
+			SearchDlg[SD_CHECKBOX_CASE].Selected == BSTATE_CHECKED? search_case_fold::exact :
+			SearchDlg[SD_CHECKBOX_CASE].Selected == BSTATE_UNCHECKED? search_case_fold::icase :
+			search_case_fold::fuzzy;
 		WholeWords=SearchDlg[SD_CHECKBOX_WORDS].Selected == BSTATE_CHECKED;
 		ReverseSearch=SearchDlg[SD_CHECKBOX_REVERSE].Selected == BSTATE_CHECKED;
 		SearchRegexp=SearchDlg[SD_CHECKBOX_REGEXP].Selected == BSTATE_CHECKED;
@@ -3264,7 +3214,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		}
 	}
 
-	LastSearchCase = Case;
+	LastSearchCaseFold = SearchCaseFold;
 	LastSearchWholeWords = WholeWords;
 	LastSearchReverse = ReverseSearch;
 	LastSearchRegexp = SearchRegexp;
@@ -3286,7 +3236,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		sd.search_len = static_cast<int>(search_bytes.size());
 		sd.search_bytes = search_bytes;
 		sd.ch_size = 1;
-		Case = true;
+		SearchCaseFold = search_case_fold::exact;
 		SearchRegexp = false;
 		searcher = (ReverseSearch ? &Viewer::search_hex_backward : &Viewer::search_hex_forward);
 	}
@@ -3303,13 +3253,19 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 
 			strMsgStr = strSlash;
 
-			if (!sd.InitRegEx(strSlash, OP_PERLSTYLE | OP_OPTIMIZE | (Case ? 0 : OP_IGNORECASE)))
+			sd.Rex.emplace();
+
+			try
 			{
-				ReCompileErrorMessage(*sd.Rex, strSlash);
-				return; // wrong regular expression...
+				sd.Rex->Compile(strSlash, OP_PERLSTYLE | OP_OPTIMIZE | (SearchCaseFold == search_case_fold::exact? 0 : OP_IGNORECASE));
 			}
-			sd.RexMatchCount = sd.Rex->GetBracketsCount();
-			sd.RexMatch.resize(sd.RexMatchCount);
+			catch (regex_exception const& e)
+			{
+				ReCompileErrorMessage(e, strSlash);
+				return;
+			}
+
+			sd.RexMatch.resize(sd.Rex->GetBracketsCount());
 		}
 		else
 		{
@@ -3318,7 +3274,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		}
 	}
 
-	if (!Case && !SearchRegexp)
+	if (SearchCaseFold != search_case_fold::exact && !SearchRegexp)
 	{
 		inplace::upper(strSearchStr);
 		sd.search_text = strSearchStr;
@@ -3449,7 +3405,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 						else
 							done = StartSearchPos + (FileSize - sd.CurPos);
 					}
-					percent = static_cast<int>(done*100/total);
+					percent = ToPercent(done, total);
 				}
 
 				if (!Progress)
@@ -3607,8 +3563,7 @@ int Viewer::vread(wchar_t *Buf, int Count, wchar_t *Buf2)
 			for (size_t i = 0; i < ConvertSize; )
 			{
 				bool EndOfData = false;
-				const auto clen = MB.GetChar({ TmpBuf + i, ConvertSize - i }, Buf[ReadSize], &EndOfData);
-				if (clen)
+				if (const auto clen = MB.GetChar({ TmpBuf + i, ConvertSize - i }, Buf[ReadSize], &EndOfData))
 				{
 					if (Buf2)
 						Buf2[ReadSize] = Buf[ReadSize];
@@ -3713,20 +3668,19 @@ bool Viewer::vgetc(wchar_t* pCh)
 	case CP_UNICODE:
 	case CP_REVERSEBOM:
 		{
-			auto First = VgetcCache.pop();
+			const auto First = VgetcCache.pop();
+
 			if (VgetcCache.empty())
 			{
 				*pCh = encoding::replace_char;
 			}
 			else
 			{
-				auto Second = VgetcCache.pop();
-				if (m_Codepage == CP_REVERSEBOM)
-				{
-					using std::swap;
-					swap(First, Second);
-				}
-				*pCh = MAKEWORD(First, Second);
+				const auto Second = VgetcCache.pop();
+
+				*pCh = m_Codepage == CP_UNICODE?
+					make_integer<wchar_t>(First, Second) :
+					make_integer<wchar_t>(Second, First);
 			}
 		}
 		break;
@@ -3736,7 +3690,8 @@ bool Viewer::vgetc(wchar_t* pCh)
 			wchar_t w[2];
 			std::string_view const View(VgetcCache.cbegin(), VgetcCache.size());
 			auto Iterator = View.cbegin();
-			const auto WideCharsNumber = Utf8::get_char(Iterator, View.cend(), w[0], w[1]);
+			auto FullyConsumedIterator = Iterator;
+			const auto WideCharsNumber = Utf8::get_char(Iterator, FullyConsumedIterator, View.cend(), w[0], w[1]);
 			VgetcCache.pop(Iterator - View.cbegin());
 			*pCh = w[0];
 			if (WideCharsNumber > 1)
@@ -3748,8 +3703,7 @@ bool Viewer::vgetc(wchar_t* pCh)
 		if (m_Codepage == MB.GetCP())
 		{
 			bool DataEnd = false;
-			const auto clen = MB.GetChar({ VgetcCache.cbegin(), VgetcCache.size() }, *pCh, &DataEnd);
-			if (clen)
+			if (const auto clen = MB.GetChar({ VgetcCache.cbegin(), VgetcCache.size() }, *pCh, &DataEnd))
 			{
 				VgetcCache.pop(clen);
 			}
@@ -3806,7 +3760,7 @@ wchar_t Viewer::vgetc_prev()
 	}
 
 	size_t BytesRead = 0;
-	char RawBuffer[4] = {};
+	char RawBuffer[4]{};
 	if (vseek(-static_cast<int>(BytesToRead), FILE_CURRENT))
 		Reader.Read(RawBuffer, BytesToRead, &BytesRead);
 
@@ -3818,11 +3772,11 @@ wchar_t Viewer::vgetc_prev()
 		switch (m_Codepage)
 		{
 		case CP_REVERSEBOM:
-			Result = MAKEWORD(RawBuffer[1], RawBuffer[0]);
+			Result = make_integer<wchar_t>(RawBuffer[1], RawBuffer[0]);
 			break;
 
 		case CP_UNICODE:
-			Result = MAKEWORD(RawBuffer[0], RawBuffer[1]);
+			Result = make_integer<wchar_t>(RawBuffer[0], RawBuffer[1]);
 			break;
 
 		case CP_UTF8:
@@ -3849,7 +3803,7 @@ wchar_t Viewer::vgetc_prev()
 			else
 			{
 				assert(MB.GetCP() == m_Codepage);
-				for (size_t i = 0; i < BytesRead; ++i)
+				for (const auto& i: irange(BytesRead))
 				{
 					wchar_t Char;
 					if (MB.GetChar({ RawBuffer + i, BytesRead - i }, Char) == BytesRead - i)

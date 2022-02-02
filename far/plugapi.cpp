@@ -90,6 +90,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "lockscrn.hpp"
 #include "exception_handler.hpp"
 #include "setcolor.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -301,7 +302,7 @@ wchar_t* WINAPI apiRemoveTrailingSpaces(wchar_t *Str) noexcept
 	[&]
 	{
 		const auto REnd = std::make_reverse_iterator(Str);
-		Str[REnd - std::find_if_not(REnd - wcslen(Str), REnd, std::iswspace)] = 0;
+		Str[REnd - std::find_if_not(REnd - std::wcslen(Str), REnd, std::iswspace)] = 0;
 		return Str;
 	},
 	[]
@@ -400,14 +401,14 @@ BOOL WINAPI apiShowHelp(const wchar_t *ModuleName, const wchar_t *HelpTopic, FAR
 		}
 		else if (ModuleName && (Flags&FHELP_GUID))
 		{
-			if (!*ModuleName || *reinterpret_cast<const UUID*>(ModuleName) == FarUuid)
+			if (!*ModuleName || view_as<UUID>(ModuleName) == FarUuid)
 			{
 				OFlags |= FHELP_FARHELP;
 				strTopic = HelpTopic + ((*HelpTopic == L':') ? 1 : 0);
 			}
 			else
 			{
-				if (const auto plugin = Global->CtrlObject->Plugins->FindPlugin(*reinterpret_cast<const UUID*>(ModuleName)))
+				if (const auto plugin = Global->CtrlObject->Plugins->FindPlugin(view_as<UUID>(ModuleName)))
 				{
 					OFlags |= FHELP_CUSTOMPATH;
 					strTopic = help::make_link(ExtractFilePath(plugin->ModuleName()), HelpTopic);
@@ -481,8 +482,7 @@ intptr_t WINAPI apiAdvControl(const UUID* PluginId, ADVANCED_CONTROL_COMMANDS Co
 			const auto info = static_cast<WindowType*>(Param2);
 			if (CheckStructSize(info))
 			{
-				const auto type = WindowTypeToPluginWindowType(Manager::GetCurrentWindowType());
-				switch(type)
+				switch(const auto type = WindowTypeToPluginWindowType(Manager::GetCurrentWindowType()))
 				{
 				case WTYPE_DESKTOP:
 				case WTYPE_PANELS:
@@ -867,10 +867,10 @@ intptr_t WINAPI apiMenuFn(
 
 			size_t Selected=0;
 
-			for (size_t i=0; i < ItemsNumber; i++)
+			for (const auto& i: span(Item, ItemsNumber))
 			{
 				MenuItemEx CurItem;
-				CurItem.Flags=Item[i].Flags;
+				CurItem.Flags = i.Flags;
 				CurItem.Name.clear();
 				// исключаем MultiSelected, т.к. у нас сейчас движок к этому не приспособлен, оставляем только первый
 				const auto SelCurItem = CurItem.Flags&LIF_SELECTED;
@@ -882,15 +882,15 @@ intptr_t WINAPI apiMenuFn(
 					Selected++;
 				}
 
-				CurItem.Name = NullToEmpty(Item[i].Text);
+				CurItem.Name = NullToEmpty(i.Text);
 				if(CurItem.Flags&LIF_SEPARATOR)
 				{
 					CurItem.AccelKey=0;
 				}
 				else
 				{
-					INPUT_RECORD input = {};
-					FarKeyToInputRecord(Item[i].AccelKey,&input);
+					INPUT_RECORD input{};
+					FarKeyToInputRecord(i.AccelKey,&input);
 					CurItem.AccelKey=InputRecordToKey(&input);
 				}
 				FarMenu->AddItem(CurItem);
@@ -1014,7 +1014,7 @@ HANDLE WINAPI apiDialogInit(const UUID* PluginId, const UUID* Id, intptr_t X1, i
 	return cpp_try(
 	[&]
 	{
-		HANDLE hDlg=INVALID_HANDLE_VALUE;
+		auto hDlg = INVALID_HANDLE_VALUE;
 
 		if (Global->WindowManager->ManagerIsDown())
 			return hDlg;
@@ -1249,7 +1249,7 @@ intptr_t WINAPI apiMessageFn(const UUID* PluginId, const UUID* Id, unsigned long
 		if (Flags & FMSG_ALLINONE)
 		{
 			std::vector<string> Strings;
-			for (const auto& i: enum_tokens(reinterpret_cast<const wchar_t*>(Items), L"\n"sv))
+			for (const auto& i: enum_tokens(view_as<const wchar_t*>(Items), L"\n"sv))
 			{
 				Strings.emplace_back(i);
 			}
@@ -1575,7 +1575,7 @@ namespace magic
 	template<typename T>
 	static auto CastRawDataToVector(span<T> const RawItems)
 	{
-		auto Items = reinterpret_cast<std::vector<T>*>(RawItems.data()[RawItems.size()].Reserved[0]);
+		const auto Items = edit_as<std::vector<T>*>(RawItems.data()[RawItems.size()].Reserved[0]);
 		Items->pop_back(); // not needed anymore
 		return std::unique_ptr<std::vector<T>>(Items);
 	}
@@ -1862,7 +1862,7 @@ intptr_t WINAPI apiEditor(const wchar_t* FileName, const wchar_t* Title, intptr_
 		}
 
 		auto ExitCode = EEC_OPEN_ERROR;
-		string strTitle(NullToEmpty(Title));
+		const string strTitle = NullToEmpty(Title);
 
 		if (Flags & EF_NONMODAL)
 		{
@@ -1942,10 +1942,8 @@ intptr_t WINAPI apiEditor(const wchar_t* FileName, const wchar_t* Title, intptr_
 				{ static_cast<int>(X1), static_cast<int>(Y1), static_cast<int>(X2), static_cast<int>(Y2) },
 				DeleteOnClose, nullptr, OpMode);
 
-			const auto editorExitCode = Editor->GetExitCode();
-
 			// выполним предпроверку (ошибки разные могут быть)
-			switch (editorExitCode)
+			switch (const auto editorExitCode = Editor->GetExitCode())
 			{
 				case XC_OPEN_ERROR:
 					return EEC_OPEN_ERROR;
@@ -2029,10 +2027,9 @@ static intptr_t apiTControl(intptr_t Id, command_type Command, intptr_t Param1, 
 	}
 	else
 	{
-		const size_t count = Global->WindowManager->GetWindowCount();
-		for (size_t ii = 0; ii < count; ++ii)
+		for (const auto& i: irange(Global->WindowManager->GetWindowCount()))
 		{
-			if (const auto CurrentWindow = std::dynamic_pointer_cast<window_type>(Global->WindowManager->GetWindow(ii)))
+			if (const auto CurrentWindow = std::dynamic_pointer_cast<window_type>(Global->WindowManager->GetWindow(i)))
 			{
 				if (const auto CurrentControlWindow = CurrentWindow->GetById(Id))
 				{
@@ -2607,7 +2604,7 @@ intptr_t WINAPI apiMacroControl(const UUID* PluginId, FAR_MACRO_CONTROL_COMMANDS
 
 				const auto ErrCode = Macro.GetMacroParseError(ErrPos, ErrSrc);
 
-				auto Size = static_cast<int>(aligned_sizeof<MacroParseResult>());
+				auto Size = static_cast<int>(aligned_sizeof<MacroParseResult, alignof(wchar_t)>);
 				const size_t stringOffset = Size;
 				Size += static_cast<int>((ErrSrc.size() + 1)*sizeof(wchar_t));
 
@@ -2618,7 +2615,8 @@ intptr_t WINAPI apiMacroControl(const UUID* PluginId, FAR_MACRO_CONTROL_COMMANDS
 					Result->StructSize = sizeof(MacroParseResult);
 					Result->ErrCode = ErrCode;
 					Result->ErrPos = { static_cast<short>(ErrPos.x), static_cast<short>(ErrPos.y) };
-					Result->ErrSrc = reinterpret_cast<const wchar_t*>(static_cast<char*>(Param2) + stringOffset);
+					Result->ErrSrc = view_as<const wchar_t*>(Param2, stringOffset);
+					assert(is_aligned(*Result->ErrSrc));
 					*copy_string(ErrSrc, const_cast<wchar_t*>(Result->ErrSrc)) = {};
 				}
 
@@ -2688,7 +2686,7 @@ intptr_t WINAPI apiPluginsControl(HANDLE Handle, FAR_PLUGINS_CONTROL_COMMANDS Co
 		case PCTL_GETPLUGININFORMATION:
 			{
 				const auto Info = static_cast<FarGetPluginInformation*>(Param2);
-				if (Handle && (!Info || (CheckStructSize(Info) && static_cast<size_t>(Param1) > sizeof(FarGetPluginInformation))))
+				if (Handle && (!Info || (CheckStructSize(Info) && static_cast<size_t>(Param1) > sizeof(*Info))))
 				{
 					return Global->CtrlObject->Plugins->GetPluginInformation(static_cast<Plugin*>(Handle), Info, Param1);
 				}
@@ -2799,7 +2797,16 @@ intptr_t WINAPI apiRegExpControl(HANDLE hHandle, FAR_REGEXP_CONTROL_COMMANDS Com
 			return true;
 
 		case RECTL_COMPILE:
-			return static_cast<RegExp*>(hHandle)->Compile(static_cast<const wchar_t*>(Param2), OP_PERLSTYLE);
+			try
+			{
+				static_cast<RegExp*>(hHandle)->Compile(static_cast<const wchar_t*>(Param2), OP_PERLSTYLE);
+				return true;
+			}
+			catch (regex_exception const& e)
+			{
+				LOGERROR(L"RECTL_COMPILE error: {}; position {}"sv, e.message(), e.position());
+				return false;
+			}
 
 		case RECTL_OPTIMIZE:
 			return static_cast<RegExp *>(hHandle)->Optimize();
@@ -2807,13 +2814,27 @@ intptr_t WINAPI apiRegExpControl(HANDLE hHandle, FAR_REGEXP_CONTROL_COMMANDS Com
 		case RECTL_MATCHEX:
 		{
 			const auto data = static_cast<RegExpSearch*>(Param2);
-			return static_cast<RegExp const*>(hHandle)->MatchEx({ data->Text, static_cast<size_t>(data->Length) }, data->Position, data->Match, data->Count);
+			std::vector<RegExpMatch> Match;
+			if (!static_cast<RegExp const*>(hHandle)->MatchEx({ data->Text, static_cast<size_t>(data->Length) }, data->Position, Match))
+				return false;
+
+			const auto MaxSize = std::min(static_cast<size_t>(data->Count), Match.size());
+			std::copy_n(Match.cbegin(), MaxSize, data->Match);
+			data->Count = MaxSize;
+			return true;
 		}
 
 		case RECTL_SEARCHEX:
 		{
 			const auto data = static_cast<RegExpSearch*>(Param2);
-			return static_cast<RegExp const*>(hHandle)->SearchEx({ data->Text, static_cast<size_t>(data->Length) }, data->Position, data->Match, data->Count);
+			std::vector<RegExpMatch> Match;
+			if (!static_cast<RegExp const*>(hHandle)->SearchEx({ data->Text, static_cast<size_t>(data->Length) }, data->Position, Match))
+				return false;
+
+			const auto MaxSize = std::min(static_cast<size_t>(data->Count), Match.size());
+			std::copy_n(Match.cbegin(), MaxSize, data->Match);
+			data->Count = MaxSize;
+			return true;
 		}
 
 		case RECTL_BRACKETSCOUNT:
@@ -2912,7 +2933,7 @@ size_t WINAPI apiGetCurrentDirectory(size_t Size, wchar_t* Buffer) noexcept
 	return cpp_try(
 	[&]
 	{
-		const auto strCurDir = os::fs::GetCurrentDirectory();
+		const auto strCurDir = os::fs::get_current_directory();
 
 		if (Buffer && Size)
 		{
@@ -3023,9 +3044,8 @@ size_t WINAPI apiProcessName(const wchar_t *param1, wchar_t *param2, size_t size
 		// 0xFFFFFFFFFF000000 - flags
 
 		const PROCESSNAME_FLAGS Flags = flags&0xFFFFFFFFFF000000;
-		const PROCESSNAME_FLAGS Mode = flags&0xFF0000;
 
-		switch(Mode)
+		switch(const PROCESSNAME_FLAGS Mode = flags & 0xFF0000)
 		{
 		case PN_CMPNAME:
 			return CmpName(param1, param2, (Flags&PN_SKIPPATH)!=0);

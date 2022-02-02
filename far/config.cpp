@@ -133,7 +133,6 @@ static const auto
 	NKeyXLat = L"XLat"sv,
 	NKeySystem = L"System"sv,
 	NKeySystemSort = L"System.Sort"sv,
-	NKeySystemException = L"System.Exception"sv,
 	NKeySystemKnownIDs = L"System.KnownIDs"sv,
 	NKeySystemExecutor = L"System.Executor"sv,
 	NKeySystemNowell = L"System.Nowell"sv,
@@ -184,7 +183,6 @@ void Options::SystemSettings()
 	Builder.AddCheckbox(lng::MConfigSystemCopy, CMOpt.UseSystemCopy);
 	Builder.AddCheckbox(lng::MConfigCopySharing, CMOpt.CopyOpened);
 	Builder.AddCheckbox(lng::MConfigScanJunction, ScanJunction);
-	Builder.AddCheckbox(lng::MConfigSmartFolderMonitor, SmartFolderMonitor);
 
 	Builder.AddCheckbox(lng::MConfigSaveHistory, SaveHistory);
 	Builder.AddCheckbox(lng::MConfigSaveFoldersHistory, SaveFoldersHistory);
@@ -192,21 +190,21 @@ void Options::SystemSettings()
 	Builder.AddCheckbox(lng::MConfigRegisteredTypes, UseRegisteredTypes);
 	Builder.AddCheckbox(lng::MConfigUpdateEnvironment, UpdateEnvironment);
 	Builder.AddText(lng::MConfigElevation);
-	Builder.AddCheckbox(lng::MConfigElevationModify, StoredElevationMode, ELEVATION_MODIFY_REQUEST)->Indent(4);
-	Builder.AddCheckbox(lng::MConfigElevationRead, StoredElevationMode, ELEVATION_READ_REQUEST)->Indent(4);
-	Builder.AddCheckbox(lng::MConfigElevationUsePrivileges, StoredElevationMode, ELEVATION_USE_PRIVILEGES)->Indent(4);
+	Builder.AddCheckbox(lng::MConfigElevationModify, StoredElevationMode, ELEVATION_MODIFY_REQUEST).Indent(4);
+	Builder.AddCheckbox(lng::MConfigElevationRead, StoredElevationMode, ELEVATION_READ_REQUEST).Indent(4);
+	Builder.AddCheckbox(lng::MConfigElevationUsePrivileges, StoredElevationMode, ELEVATION_USE_PRIVILEGES).Indent(4);
 
 	static const DialogBuilderListItem SortingMethods[] =
 	{
-		{ lng::MConfigSortingOrdinal, as_underlying_type(SortingOptions::collation::ordinal) },
-		{ lng::MConfigSortingInvariant, as_underlying_type(SortingOptions::collation::invariant) },
-		{ lng::MConfigSortingLinguistic, as_underlying_type(SortingOptions::collation::linguistic) },
+		{ lng::MConfigSortingOrdinal, std::to_underlying(SortingOptions::collation::ordinal) },
+		{ lng::MConfigSortingInvariant, std::to_underlying(SortingOptions::collation::invariant) },
+		{ lng::MConfigSortingLinguistic, std::to_underlying(SortingOptions::collation::linguistic) },
 	};
 
-	const auto SortingMethodsComboBox = Builder.AddComboBox(Sort.Collation, 20, SortingMethods);
+	auto& SortingMethodsComboBox = Builder.AddComboBox(Sort.Collation, 20, SortingMethods);
 	Builder.AddTextBefore(SortingMethodsComboBox, lng::MConfigSortingCollation);
-	Builder.AddCheckbox(lng::MConfigSortingDigitsAsNumbers, Sort.DigitsAsNumbers)->Indent(4);
-	Builder.AddCheckbox(lng::MConfigSortingCase, Sort.CaseSensitive)->Indent(4);
+	Builder.AddCheckbox(lng::MConfigSortingDigitsAsNumbers, Sort.DigitsAsNumbers).Indent(4);
+	Builder.AddCheckbox(lng::MConfigSortingCase, Sort.CaseSensitive).Indent(4);
 
 	Builder.AddCheckbox(lng::MConfigAutoSave, AutoSaveSetup);
 	Builder.AddOKCancel();
@@ -235,12 +233,11 @@ void Options::PanelSettings()
 	Builder.AddCheckbox(lng::MConfigSortFolderExt, SortFolderExt);
 	Builder.AddCheckbox(lng::MConfigAllowReverseSort, AllowReverseSort);
 
-	const auto AutoUpdateEnabled = Builder.AddCheckbox(lng::MConfigAutoUpdateLimit, AutoUpdate);
-	const auto AutoUpdateLimitItem = Builder.AddIntEditField(AutoUpdateLimit, 6);
+	auto& AutoUpdateEnabled = Builder.AddCheckbox(lng::MConfigAutoUpdateLimit, AutoUpdate);
+	auto& AutoUpdateLimitItem = Builder.AddIntEditField(AutoUpdateLimit, 6);
+	AutoUpdateLimitItem.Indent(4);
 	Builder.LinkFlags(AutoUpdateEnabled, AutoUpdateLimitItem, DIF_DISABLE, false);
-	const auto AutoUpdateTextItem = Builder.AddTextBefore(AutoUpdateLimitItem, lng::MConfigAutoUpdateLimit2);
-	AutoUpdateLimitItem->Indent(4);
-	AutoUpdateTextItem->Indent(4);
+	Builder.AddTextBefore(AutoUpdateLimitItem, lng::MConfigAutoUpdateLimit2).Indent(4);
 	Builder.AddCheckbox(lng::MConfigAutoUpdateRemoteDrive, AutoUpdateRemoteDrive);
 
 	Builder.AddSeparator();
@@ -272,7 +269,7 @@ void Options::TreeSettings()
 
 	Builder.AddCheckbox(lng::MConfigTreeAutoChange, Tree.AutoChangeFolder);
 
-	const auto TemplateEdit = Builder.AddIntEditField(Tree.MinTreeCount, 3);
+	auto& TemplateEdit = Builder.AddIntEditField(Tree.MinTreeCount, 3);
 	Builder.AddTextBefore(TemplateEdit, lng::MConfigTreeLabelMinFolder);
 
 #if defined(TREEFILE_PROJECT)
@@ -331,9 +328,9 @@ void Options::InterfaceSettings()
 	Builder.AddCheckbox(lng::MConfigMouse, Mouse);
 	Builder.AddCheckbox(lng::MConfigKeyBar, ShowKeyBar);
 	Builder.AddCheckbox(lng::MConfigMenuBar, ShowMenuBar);
-	const auto SaverCheckbox = Builder.AddCheckbox(lng::MConfigSaver, ScreenSaver);
-	const auto SaverEdit = Builder.AddIntEditField(ScreenSaverTime, 3);
-	SaverEdit->Indent(5);
+	auto& SaverCheckbox = Builder.AddCheckbox(lng::MConfigSaver, ScreenSaver);
+	auto& SaverEdit = Builder.AddIntEditField(ScreenSaverTime, 3);
+	SaverEdit.Indent(5);
 	Builder.AddTextAfter(SaverEdit, lng::MConfigSaverMinutes);
 	Builder.LinkFlags(SaverCheckbox, SaverEdit, DIF_DISABLE);
 
@@ -345,22 +342,22 @@ void Options::InterfaceSettings()
 	Builder.AddCheckbox(lng::MConfigFullWidthAwareRendering, FullWidthAwareRendering);
 	Builder.AddCheckbox(lng::MConfigClearType, ClearType);
 	Builder.StartColumns();
-	const auto SetIconCheck = Builder.AddCheckbox(lng::MConfigSetConsoleIcon, SetIcon);
+	auto& SetIconCheck = Builder.AddCheckbox(lng::MConfigSetConsoleIcon, SetIcon);
 	Builder.ColumnBreak();
 
 	std::vector<DialogBuilderListItem> IconIndices;
 	IconIndices.reserve(consoleicons::instance().size());
 
-	for (size_t i = 0, size = consoleicons::instance().size(); i != size; ++i)
+	for (const auto& i: irange(consoleicons::instance().size()))
 	{
 		IconIndices.emplace_back(str(i), static_cast<int>(i));
 	}
 
-	const auto IconIndexEdit = Builder.AddComboBox(IconIndex, 0, IconIndices);
+	auto& IconIndexEdit = Builder.AddComboBox(IconIndex, 0, IconIndices);
 	Builder.EndColumns();
 	Builder.LinkFlags(SetIconCheck, IconIndexEdit, DIF_DISABLE);
-	const auto SetAdminIconCheck = Builder.AddCheckbox(lng::MConfigSetAdminConsoleIcon, SetAdminIcon);
-	SetAdminIconCheck->Indent(4);
+	auto& SetAdminIconCheck = Builder.AddCheckbox(lng::MConfigSetAdminConsoleIcon, SetAdminIcon);
+	SetAdminIconCheck.Indent(4);
 	Builder.LinkFlags(SetIconCheck, SetAdminIconCheck, DIF_DISABLE);
 	Builder.AddText(lng::MConfigTitleAddons);
 	Builder.AddEditField(strTitleAddons, 47);
@@ -386,9 +383,9 @@ void Options::InterfaceSettings()
 void Options::AutoCompleteSettings()
 {
 	DialogBuilder Builder(lng::MConfigAutoCompleteTitle, L"AutoCompleteSettings"sv);
-	const auto ListCheck=Builder.AddCheckbox(lng::MConfigAutoCompleteShowList, AutoComplete.ShowList);
-	const auto ModalModeCheck=Builder.AddCheckbox(lng::MConfigAutoCompleteModalList, AutoComplete.ModalList);
-	ModalModeCheck->Indent(4);
+	auto& ListCheck=Builder.AddCheckbox(lng::MConfigAutoCompleteShowList, AutoComplete.ShowList);
+	auto& ModalModeCheck=Builder.AddCheckbox(lng::MConfigAutoCompleteModalList, AutoComplete.ModalList);
+	ModalModeCheck.Indent(4);
 	Builder.AddCheckbox(lng::MConfigAutoCompleteAutoAppend, AutoComplete.AppendCompletion);
 	Builder.LinkFlags(ListCheck, ModalModeCheck, DIF_DISABLE);
 	Builder.AddOKCancel();
@@ -504,7 +501,7 @@ void Options::MaskGroupsSettings()
 			if(Filter && any_of(Key, KEY_ESC, KEY_F10, KEY_ENTER, KEY_NUMENTER))
 			{
 				Filter = false;
-				for (size_t i = 0, size = MasksMenu->size(); i != size;  ++i)
+				for (const auto& i: irange(MasksMenu->size()))
 				{
 					MasksMenu->UpdateItemFlags(static_cast<int>(i), MasksMenu->at(i).Flags & ~MIF_HIDDEN);
 				}
@@ -551,6 +548,7 @@ void Options::MaskGroupsSettings()
 							Value = ConfigProvider().GeneralCfg()->GetValue<string>(L"Masks"sv, Name);
 						}
 						DialogBuilder Builder(lng::MMaskGroupTitle, L"MaskGroupsSettings"sv);
+						Builder.SetId(EditMaskGroupId);
 						Builder.AddText(lng::MMaskGroupName);
 						Builder.AddEditField(Name, 60);
 						Builder.AddText(lng::MMaskGroupMasks);
@@ -594,7 +592,7 @@ void Options::MaskGroupsSettings()
 					Builder.AddOKCancel();
 					if(Builder.ShowDialog())
 					{
-						for (size_t i = 0, size = MasksMenu->size(); i != size; ++i)
+						for (const auto& i: irange(MasksMenu->size()))
 						{
 							filemasks Masks;
 							Masks.assign(ConfigProvider().GeneralCfg()->GetValue<string>(L"Masks"sv, *MasksMenu->GetComplexUserDataPtr<string>(i)));
@@ -689,14 +687,14 @@ void Options::CmdlineSettings()
 	Builder.AddCheckbox(lng::MConfigCmdlineDelRemovesBlocks, CmdLine.DelRemovesBlocks);
 	Builder.AddCheckbox(lng::MConfigCmdlineAutoComplete, CmdLine.AutoComplete);
 
-	const auto UsePromptFormat = Builder.AddCheckbox(lng::MConfigCmdlineUsePromptFormat, CmdLine.UsePromptFormat);
-	const auto PromptFormat = Builder.AddEditField(CmdLine.strPromptFormat, 33);
-	PromptFormat->Indent(4);
+	auto& UsePromptFormat = Builder.AddCheckbox(lng::MConfigCmdlineUsePromptFormat, CmdLine.UsePromptFormat);
+	auto& PromptFormat = Builder.AddEditField(CmdLine.strPromptFormat, 33);
+	PromptFormat.Indent(4);
 	Builder.LinkFlags(UsePromptFormat, PromptFormat, DIF_DISABLE);
 
-	const auto UseHomeDir = Builder.AddCheckbox(lng::MConfigCmdlineUseHomeDir, Exec.UseHomeDir);
-	const auto HomeDir = Builder.AddEditField(Exec.strHomeDir, 33);
-	HomeDir->Indent(4);
+	auto& UseHomeDir = Builder.AddCheckbox(lng::MConfigCmdlineUseHomeDir, Exec.UseHomeDir);
+	auto& HomeDir = Builder.AddEditField(Exec.strHomeDir, 33);
+	HomeDir.Indent(4);
 	Builder.LinkFlags(UseHomeDir, HomeDir, DIF_DISABLE);
 
 	Builder.AddOKCancel();
@@ -741,11 +739,8 @@ void Options::PluginsManagerSettings()
 	Builder.AddCheckbox(lng::MPluginsManagerScanSymlinks, LoadPlug.ScanSymlinks);
 	Builder.AddSeparator(lng::MPluginConfirmationTitle);
 	Builder.AddCheckbox(lng::MPluginsManagerOFP, PluginConfirm.OpenFilePlugin);
-	const auto StandardAssoc = Builder.AddCheckbox(lng::MPluginsManagerStdAssoc, PluginConfirm.StandardAssociation);
-	const auto EvenIfOnlyOne = Builder.AddCheckbox(lng::MPluginsManagerEvenOne, PluginConfirm.EvenIfOnlyOnePlugin);
-	StandardAssoc->Indent(2);
-	EvenIfOnlyOne->Indent(4);
-
+	Builder.AddCheckbox(lng::MPluginsManagerStdAssoc, PluginConfirm.StandardAssociation).Indent(2);
+	Builder.AddCheckbox(lng::MPluginsManagerEvenOne, PluginConfirm.EvenIfOnlyOnePlugin).Indent(4);
 	Builder.AddCheckbox(lng::MPluginsManagerSFL, PluginConfirm.SetFindList);
 	Builder.AddCheckbox(lng::MPluginsManagerPF, PluginConfirm.Prefix);
 	Builder.AddOKCancel();
@@ -763,11 +758,11 @@ void Options::SetDizConfig()
 
 	Builder.AddCheckbox(lng::MCfgDizSetHidden, Diz.SetHidden);
 	Builder.AddCheckbox(lng::MCfgDizROUpdate, Diz.ROUpdate);
-	const auto StartPos = Builder.AddIntEditField(Diz.StartPos, 2);
+	const auto& StartPos = Builder.AddIntEditField(Diz.StartPos, 2);
 	Builder.AddTextAfter(StartPos, lng::MCfgDizStartPos);
 	Builder.AddSeparator();
 
-	static const lng DizOptions[] = { lng::MCfgDizNotUpdate, lng::MCfgDizUpdateIfDisplayed, lng::MCfgDizAlwaysUpdate };
+	static const lng DizOptions[]{ lng::MCfgDizNotUpdate, lng::MCfgDizUpdateIfDisplayed, lng::MCfgDizAlwaysUpdate };
 	Builder.AddRadioButtons(Diz.UpdateMode, DizOptions);
 	Builder.AddSeparator();
 
@@ -779,7 +774,7 @@ void Options::SetDizConfig()
 
 void Options::ViewerConfig(ViewerOptions &ViOptRef, bool Local)
 {
-	intptr_t save_pos = 0, save_cp = 0, id = 0;
+	intptr_t save_pos = 0, save_cp = 0;
 	bool prev_save_cp_value = ViOpt.SaveCodepage, inside = false;
 
 	DialogBuilder Builder(lng::MViewConfigTitle, L"ViewerSettings"sv, [&](Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2)
@@ -813,31 +808,33 @@ void Options::ViewerConfig(ViewerOptions &ViOptRef, bool Local)
 
 	if (!Local)
 	{
-		++id; Builder.AddCheckbox(lng::MViewConfigExternalF3, ViOpt.UseExternalViewer);
-		++id; Builder.AddText(lng::MViewConfigExternalCommand);
-		++id; Builder.AddEditField(strExternalViewer, 64, L"ExternalViewer"sv, DIF_EDITPATH|DIF_EDITPATHEXEC);
-		++id; Builder.AddSeparator(lng::MViewConfigInternal);
+		Builder.AddCheckbox(lng::MViewConfigExternalF3, ViOpt.UseExternalViewer);
+		Builder.AddText(lng::MViewConfigExternalCommand);
+		Builder.AddEditField(strExternalViewer, 64, L"ExternalViewer"sv, DIF_EDITPATH|DIF_EDITPATHEXEC);
+		Builder.AddSeparator(lng::MViewConfigInternal);
 	}
 
 	Builder.StartColumns();
-	++id; Builder.AddCheckbox(lng::MViewConfigPersistentSelection, ViOptRef.PersistentBlocks);
-	++id; Builder.AddCheckbox(lng::MViewConfigEditAutofocus, ViOptRef.SearchEditFocus);
-	++id; const auto TabSize = Builder.AddIntEditField(ViOptRef.TabSize, 3);
-	++id; Builder.AddTextAfter(TabSize, lng::MViewConfigTabSize);
+	Builder.AddCheckbox(lng::MViewConfigPersistentSelection, ViOptRef.PersistentBlocks);
+	Builder.AddCheckbox(lng::MViewConfigEditAutofocus, ViOptRef.SearchEditFocus);
+	const auto& TabSize = Builder.AddIntEditField(ViOptRef.TabSize, 3);
+	Builder.AddTextAfter(TabSize, lng::MViewConfigTabSize);
 	Builder.ColumnBreak();
-	++id; Builder.AddCheckbox(lng::MViewConfigArrows, ViOptRef.ShowArrows);
-	++id; Builder.AddCheckbox(lng::MViewConfigVisible0x00, ViOptRef.Visible0x00);
-	++id; Builder.AddCheckbox(lng::MViewConfigScrollbar, ViOptRef.ShowScrollbar);
+	Builder.AddCheckbox(lng::MViewConfigArrows, ViOptRef.ShowArrows);
+	Builder.AddCheckbox(lng::MViewConfigVisible0x00, ViOptRef.Visible0x00);
+	Builder.AddCheckbox(lng::MViewConfigScrollbar, ViOptRef.ShowScrollbar);
 	Builder.EndColumns();
 
 	if (!Local)
 	{
-		++id; Builder.AddSeparator();
+		Builder.AddSeparator();
 		Builder.StartColumns();
-		save_pos = ++id; Builder.AddCheckbox(lng::MViewConfigSavePos, ViOpt.SavePos);
-		save_cp = ++id; Builder.AddCheckbox(lng::MViewConfigSaveCodepage, ViOpt.SaveCodepage);
+		Builder.AddCheckbox(lng::MViewConfigSavePos, ViOpt.SavePos);
+		save_pos = Builder.GetLastID();
+		Builder.AddCheckbox(lng::MViewConfigSaveCodepage, ViOpt.SaveCodepage);
+		save_cp = Builder.GetLastID();
 		Builder.AddCheckbox(lng::MViewConfigSaveShortPos, ViOpt.SaveShortPos);
-		const auto MaxLineSize = Builder.AddIntEditField(ViOpt.MaxLineSize, 6);
+		const auto& MaxLineSize = Builder.AddIntEditField(ViOpt.MaxLineSize, 6);
 		Builder.AddTextAfter(MaxLineSize, lng::MViewConfigMaxLineSize);
 		Builder.ColumnBreak();
 		Builder.AddCheckbox(lng::MViewConfigSaveViewMode, ViOpt.SaveViewMode);
@@ -882,7 +879,7 @@ void Options::EditorConfig(EditorOptions &EdOptRef, bool Local)
 	Builder.AddCheckbox(lng::MEditConfigPersistentBlocks, EdOptRef.PersistentBlocks);
 	Builder.AddCheckbox(lng::MEditConfigDelRemovesBlocks, EdOptRef.DelRemovesBlocks);
 	Builder.AddCheckbox(lng::MEditConfigAutoIndent, EdOptRef.AutoIndent);
-	const auto TabSize = Builder.AddIntEditField(EdOptRef.TabSize, 3);
+	const auto& TabSize = Builder.AddIntEditField(EdOptRef.TabSize, 3);
 	Builder.AddTextAfter(TabSize, lng::MEditConfigTabSize);
 	Builder.AddCheckbox(lng::MEditShowWhiteSpace, EdOptRef.ShowWhiteSpace);
 	Builder.ColumnBreak();
@@ -1145,12 +1142,12 @@ void Options::SetFilePanelModes()
 		// +1 for separator
 		std::vector<menu_item> ModeListMenu(MenuCount > predefined_panel_modes_count? MenuCount + 1: MenuCount);
 
-		for (size_t i = 0; i < ViewSettings.size(); ++i)
+		for (const auto& i: irange(ViewSettings.size()))
 		{
 			ModeListMenu[RealModeToDisplay(i)].Name = ViewSettings[i].Name;
 		}
 
-		for (size_t i = 0; i < predefined_panel_modes_count; ++i)
+		for (const auto& i: irange(predefined_panel_modes_count))
 		{
 			if (ModeListMenu[i].Name.empty())
 				ModeListMenu[i].Name = msg(PredefinedNames[i]);
@@ -1177,8 +1174,7 @@ void Options::SetFilePanelModes()
 
 			ModeNumber=ModeList->Run([&](const Manager::Key& RawKey)
 			{
-				const auto Key=RawKey();
-				switch (Key)
+				switch (const auto Key = RawKey())
 				{
 				case KEY_CTRLENTER:
 				case KEY_CTRLNUMENTER:
@@ -1436,9 +1432,8 @@ struct FARConfigItem
 		int Result = 0;
 		if (!Value->Edit(Builder, Mode))
 		{
-			static const lng Buttons[] = { lng::MOk, lng::MReset, lng::MCancel };
 			Builder.AddSeparator();
-			Builder.AddButtons(Buttons, 0, 2);
+			Builder.AddButtons({ lng::MOk, lng::MReset, lng::MCancel });
 			Result = Builder.ShowDialogEx();
 		}
 		if(Result == 0 || Result == 1)
@@ -1518,7 +1513,7 @@ void detail::OptionImpl<base_type, derived>::StoreValue(GeneralConfig* Storage, 
 }
 
 
-bool BoolOption::TryParse(const string& value)
+bool BoolOption::TryParse(const string_view value)
 {
 	long long iValue;
 	if (!ParseIntValue(value, iValue))
@@ -1541,7 +1536,7 @@ void BoolOption::Export(FarSettingsItem& To) const
 }
 
 
-bool Bool3Option::TryParse(const string& value)
+bool Bool3Option::TryParse(const string_view value)
 {
 	long long iValue;
 	if (!ParseIntValue(value, iValue))
@@ -1569,7 +1564,7 @@ string IntOption::toString() const
 	return str(Get());
 }
 
-bool IntOption::TryParse(const string& value)
+bool IntOption::TryParse(const string_view value)
 {
 	long long iValue;
 	if (!ParseIntValue(value, iValue))
@@ -1600,15 +1595,15 @@ bool IntOption::Edit(DialogBuilder& Builder, int const Param)
 			High.reserve(BitCount);
 			Low.reserve(BitCount);
 
-			for (size_t i = 0; i != BitCount; ++i)
+			for (const auto& i: irange(BitCount))
 			{
 				const auto Num = BitCount - 1 - i;
 				High.push_back(static_cast<wchar_t>(L'0' + Num / 10));
 				Low.push_back(static_cast<wchar_t>(L'0' + Num % 10));
 			}
 
-			Builder.AddText(High)->Flags |= DIF_DISABLE;
-			Builder.AddText(Low)->Flags |= DIF_DISABLE;
+			Builder.AddText(High).Flags |= DIF_DISABLE;
+			Builder.AddText(Low).Flags |= DIF_DISABLE;
 		}
 		break;
 
@@ -1749,15 +1744,15 @@ Options::Options():
 		Global->ScrBuf->SetClearTypeFix(Value);
 	}));
 
-	Sort.Collation.SetCallback(option::notifier([](auto) { string_sort::adjust_comparer(); }));
-	Sort.DigitsAsNumbers.SetCallback(option::notifier([](auto) { string_sort::adjust_comparer(); }));
-	Sort.CaseSensitive.SetCallback(option::notifier([](auto) { string_sort::adjust_comparer(); }));
+	Sort.Collation.SetCallback(option::notifier([this](auto) { string_sort::adjust_comparer(Sort.Collation, Sort.CaseSensitive, Sort.DigitsAsNumbers); }));
+	Sort.DigitsAsNumbers.SetCallback(option::notifier([this](auto) { string_sort::adjust_comparer(Sort.Collation, Sort.CaseSensitive, Sort.DigitsAsNumbers); }));
+	Sort.CaseSensitive.SetCallback(option::notifier([this](auto) { string_sort::adjust_comparer(Sort.Collation, Sort.CaseSensitive, Sort.DigitsAsNumbers); }));
 
 	FormatNumberSeparators.SetCallback(option::notifier([](auto) { locale.invalidate(); }));
 
 	strBoxSymbols.SetCallback(option::notifier([](const string& Value)
 	{
-		std::copy_n(Value.begin(), std::min(size_t(BS_COUNT), Value.size()), BoxSymbols);
+			std::copy_n(Value.begin(), std::min(size_t{ BS_COUNT }, Value.size()), BoxSymbols);
 	}));
 
 	VirtualTerminalRendering.SetCallback(option::notifier([](bool const Value)
@@ -2052,7 +2047,6 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeySystem,                 L"SetAttrFolderRules"sv,            SetAttrFolderRules, true},
 		{FSSF_PRIVATE,           NKeySystem,                 L"ShowCheckingFile"sv,              ShowCheckingFile, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"ShowStatusInfo"sv,                InfoPanel.strShowStatusInfo, L""sv},
-		{FSSF_PRIVATE,           NKeySystem,                 L"SmartFolderMonitor"sv,            SmartFolderMonitor, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"SubstNameRule"sv,                 SubstNameRule, 2},
 		{FSSF_PRIVATE,           NKeySystem,                 L"SubstPluginPrefix"sv,             SubstPluginPrefix, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"UpdateEnvironment"sv,             UpdateEnvironment, false},
@@ -2064,7 +2058,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeySystem,                 L"WindowMode.StickyY"sv,            WindowModeStickyY, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"WipeSymbol"sv,                    WipeSymbol, 0},
 		{FSSF_SYSTEM,            NKeySystem,                 L"WordDiv"sv,                       strWordDiv, WordDiv0},
-		{FSSF_PRIVATE,           NKeySystemSort,             L"Collation"sv,                     Sort.Collation, as_underlying_type(SortingOptions::collation::linguistic)},
+		{FSSF_PRIVATE,           NKeySystemSort,             L"Collation"sv,                     Sort.Collation, std::to_underlying(SortingOptions::collation::linguistic)},
 		{FSSF_PRIVATE,           NKeySystemSort,             L"DigitsAsNumbers"sv,               Sort.DigitsAsNumbers, IsWindows7OrGreater()},
 		{FSSF_PRIVATE,           NKeySystemSort,             L"CaseSensitive"sv,                 Sort.CaseSensitive, false},
 		{FSSF_PRIVATE,           NKeySystemKnownIDs,         L"EMenu"sv,                         KnownIDs.Emenu.StrId, KnownIDs.Emenu.Default},
@@ -2073,8 +2067,6 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeySystemKnownIDs,         L"Luamacro"sv,                      KnownIDs.Luamacro.StrId, KnownIDs.Luamacro.Default},
 		{FSSF_PRIVATE,           NKeySystemKnownIDs,         L"Netbox"sv,                        KnownIDs.Netbox.StrId, KnownIDs.Netbox.Default},
 		{FSSF_PRIVATE,           NKeySystemNowell,           L"MoveRO"sv,                        Nowell.MoveRO, true},
-		{FSSF_PRIVATE,           NKeySystemException,        L"FarEventSvc"sv,                   strExceptEventSvc, L""sv},
-		{FSSF_PRIVATE,           NKeySystemException,        L"Used"sv,                          ExceptUsed, false},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"~"sv,                             Exec.strHomeDir, L"%FARHOME%"sv},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"ExcludeCmds"sv,                   Exec.strExcludeCmds, L""sv},
 		{FSSF_PRIVATE,           NKeySystemExecutor,         L"RestoreCP"sv,                     Exec.RestoreCPAfterExecute, true},
@@ -2487,7 +2479,7 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 	{
 		return Index == -1 ?
 			nullptr : // Everything is filtered out
-			reinterpret_cast<const FARConfigItem*>(Dlg->GetListItemSimpleUserData(0, Index));
+			view_as<const FARConfigItem*>(Dlg->GetListItemSimpleUserData(0, Index));
 	};
 
 	const auto EditItem = [&](edit_mode const EditMode)
@@ -2558,7 +2550,7 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 				{
 				case KEY_SHIFTF1:
 					{
-						FarListInfo ListInfo = {sizeof(ListInfo)};
+						FarListInfo ListInfo{ sizeof(ListInfo) };
 						Dlg->SendMessage(DM_LISTINFO, Param1, &ListInfo);
 
 						if (const auto CurrentItem = GetConfigItem(ListInfo.SelectPos))
@@ -2595,11 +2587,11 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 
 						static bool HideUnchanged = true;
 
-						FarListInfo ListInfo = {sizeof(ListInfo)};
+						FarListInfo ListInfo{ sizeof(ListInfo) };
 						Dlg->SendMessage(DM_LISTINFO, Param1, &ListInfo);
-						for(int i = 0; i < static_cast<int>(ListInfo.ItemsNumber); ++i)
+						for (const auto& i: irange(ListInfo.ItemsNumber))
 						{
-							FarListGetItem Item={sizeof(FarListGetItem), i};
+							FarListGetItem Item{ sizeof(Item), static_cast<intptr_t>(i) };
 
 							// BUGBUG(?) DM_LISTGETITEM will return false if everything is filtered out
 							if (!Dlg->SendMessage(DM_LISTGETITEM, Param1, &Item))
@@ -2624,7 +2616,7 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 							}
 							if(NeedUpdate)
 							{
-								FarListUpdate UpdatedItem={sizeof(FarListGetItem), i, Item.Item};
+								FarListUpdate UpdatedItem{ sizeof(UpdatedItem), static_cast<intptr_t>(i), Item.Item };
 								Dlg->SendMessage(DM_LISTUPDATE, Param1, &UpdatedItem);
 							}
 						}
@@ -2668,7 +2660,7 @@ bool Options::AdvancedConfig(config_type Mode)
 	const auto ConfigData = zip(CurrentConfig, Strings);
 	std::transform(ALL_CONST_RANGE(ConfigData), std::back_inserter(items), [](const auto& i) { return std::get<0>(i).MakeListItem(std::get<1>(i)); });
 
-	FarList Items={sizeof(FarList), items.size(), items.data()};
+	FarList Items{ sizeof(Items), items.size(), items.data() };
 
 	AdvancedConfigDlg[ac_item_listbox].ListItems = &Items;
 
@@ -2943,7 +2935,7 @@ void Options::ShellOptions(bool LastCommand, const MOUSE_EVENT_RECORD *MouseEven
 {
 	const auto ApplyViewModesNames = [this](menu_item* Menu)
 	{
-		for (size_t i = 0; i < predefined_panel_modes_count; ++i)
+		for (const auto& i: irange(predefined_panel_modes_count))
 		{
 			if (!ViewSettings[i].Name.empty())
 				Menu[RealModeToDisplay(i)].Name = ViewSettings[i].Name;

@@ -53,6 +53,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Platform:
 #include "platform.concurrency.hpp"
+#include "platform.debug.hpp"
 #include "platform.env.hpp"
 #include "platform.fs.hpp"
 #include "platform.version.hpp"
@@ -88,7 +89,7 @@ namespace
 
 		using level = logging::level;
 
-		static std::unordered_map<string_view, level, hash_icase_t, equal_icase_t> LevelMap
+		static std::unordered_map<string_view, level, string_comparer_icase, string_comparer_icase> LevelMap
 		{
 #define STRLEVEL(x) { WSTRVIEW(x), level::x }
 			STRLEVEL(off),
@@ -265,7 +266,7 @@ namespace
 					m_Buffer(Buffer)
 				{
 					CONSOLE_SCREEN_BUFFER_INFO csbi;
-					if (!GetConsoleScreenBufferInfo(Buffer, &csbi))
+					if (!get_console_screen_buffer_info(Buffer, &csbi))
 						return;
 
 					m_SavedAttributes = csbi.wAttributes;
@@ -359,21 +360,23 @@ namespace
 
 			try
 			{
-				m_Writer.write(L"["sv);
-				m_Writer.write(Message.m_Date);
-				m_Writer.write(L" "sv);
-				m_Writer.write(Message.m_Time);
-				m_Writer.write(L"]["sv);
-				m_Writer.write(Message.m_ThreadId);
-				m_Writer.write(L"]["sv);
-				m_Writer.write(Message.m_LevelString);
-				m_Writer.write(L"] "sv);
-				m_Writer.write(Message.m_Data);
-				m_Writer.write(L" "sv);
-				m_Writer.write(L"["sv);
-				m_Writer.write(Message.m_Location);
-				m_Writer.write(L"]"sv);
-				m_Writer.write(m_Eol);
+				m_Writer.write(
+					L"["sv,
+					Message.m_Date,
+					L" "sv,
+					Message.m_Time,
+					L"]["sv,
+					Message.m_ThreadId,
+					L"]["sv,
+					Message.m_LevelString,
+					L"] "sv,
+					Message.m_Data,
+					L" "sv,
+					L"["sv,
+					Message.m_Location,
+					L"]"sv,
+					m_Eol
+				);
 
 				m_Stream.flush();
 			}
@@ -501,9 +504,9 @@ namespace
 	protected:
 		template<typename... args>
 		explicit async_impl(bool const IsDiscardable):
-			m_IsDiscardable(IsDiscardable)
+			m_IsDiscardable(IsDiscardable),
+			m_Thread(os::thread::mode::join, &async_impl::poll, this)
 		{
-			m_Thread = os::thread(os::thread::mode::join, &async_impl::poll, this);
 		}
 
 		virtual ~async_impl()
@@ -662,7 +665,7 @@ namespace logging
 				configure_env();
 			}
 
-			for (auto& i: m_Sinks)
+			for (const auto& i: m_Sinks)
 			{
 				i->configure(Parameters);
 			}
@@ -825,7 +828,7 @@ namespace logging
 			(..., configure_sink<args>(SinkNames, AllowAdd));
 		}
 
-		void submit(message const& Message)
+		void submit(message const& Message) const
 		{
 			for (const auto& i: m_Sinks)
 				i->handle(Message);
@@ -890,9 +893,8 @@ namespace logging
 		while (!PipeFile.Open(PipeName, GENERIC_READ, 0, {}, OPEN_EXISTING))
 		{
 			const auto ErrorState = last_error();
-			std::wcerr << format(FSTR(L"Can't open pipe {}: {}"sv), PipeName, ErrorState.Win32ErrorStr()) << std::endl;
 
-			if (!ConsoleYesNo(L"Retry"sv, false))
+			if (!ConsoleYesNo(L"Retry"sv, false, [&]{ std::wcerr << format(FSTR(L"Can't open pipe {}: {}"sv), PipeName, ErrorState.Win32ErrorStr()) << std::endl; }))
 				return EXIT_FAILURE;
 		}
 

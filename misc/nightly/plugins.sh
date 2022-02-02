@@ -7,27 +7,6 @@ fi
 #include common
 . plugins.common
 
-function bpluginfe {
-PLUGIN=fexcept
-PLDIR=FExcept
-
-pushd $PLUGIN || return 1
-
-unix2dos changelog
-
-mkdir -p execdump/final.32.vc/obj/LibObj
-#mkdir -p execdump/final.64.vc/obj/LibObj
-
-MASKS_FEXCEPT="*.dll *.farconfig"
-
-( \
-	bplugin2 "$PLDIR" 32 1 1 "$MASKS_FEXCEPT" \
-#	bplugin2 "$PLDIR" 64 1 1 "$MASKS_FEXCEPT" \
-) || return 1
-
-popd
-}
-
 rm -fR plugins
 rm -fR misc
 
@@ -40,17 +19,22 @@ cp -f far/Include/*.hpp plugins/common/unicode/
 
 mkdir -p outfinalnew32/Plugins
 mkdir -p outfinalnew64/Plugins
+mkdir -p outfinalnewARM64/Plugins
 
-cd plugins/common/CRT || exit 1
+#cd plugins/common/CRT || exit 1
+#
+#mkdir -p obj.32.vc/wide
+#mkdir -p obj.64.vc/wide
+#mkdir -p obj.ARM64.vc/wide
+#wine cmd /c ../../../common.32.bat &> ../../../logs/CRT32
+#wine cmd /c ../../../common.64.bat &> ../../../logs/CRT64
+#wine cmd /c ../../../common.64.bat &> ../../../logs/CRTARM64
+#
+#cd ../../..
 
-mkdir -p obj.32.vc/wide
-mkdir -p obj.64.vc/wide
-wine cmd /c ../../../common.32.bat &> ../../../logs/CRT32
-wine cmd /c ../../../common.64.bat &> ../../../logs/CRT64
+cd plugins
 
-cd ../..
-
-MASKS="*.dll *.hlf *.lng *.farconfig *.lua *.map"
+MASKS="*.dll *.hlf *.lng *.farconfig *.lua *.map *.pdb"
 
 ( \
 bplugin "align"      "Align"      "$MASKS" && \
@@ -72,12 +56,4 @@ bplugin "luamacro"   "LuaMacro"   "$MASKS *.ini" \
 
 ) || exit 1
 
-( \
-	cd ../misc && \
-	bpluginfe && \
-	cd .. \
-) || exit 1
-
 cd ..
-
-rm -f outfinalnew32/luafar3.exp outfinalnew32/luafar3.lib outfinalnew32/luafar3.pdb outfinalnew64/luafar3.exp outfinalnew64/luafar3.lib outfinalnew64/luafar3.pdb

@@ -77,7 +77,7 @@ public:
 	size_t FillCodePagesList(Dialog* Dlg, size_t controlId, uintptr_t codePage, bool allowAuto, bool allowAll, bool allowDefault, bool allowChecked, bool bViewOnly);
 	void FillCodePagesList(std::vector<DialogBuilderListItem> &List, bool allowAuto, bool allowAll, bool allowDefault, bool allowChecked, bool bViewOnly);
 
-	static bool IsCodePageSupported(uintptr_t CodePage, size_t MaxCharSize = size_t(-1));
+	static bool IsCodePageSupported(uintptr_t CodePage, size_t MaxCharSize = static_cast<size_t>(-1));
 	static std::optional<cp_info> GetInfo(uintptr_t CodePage);
 	static string FormatName(uintptr_t CodePage);
 	static string UnsupportedCharacterMessage(wchar_t Char);
@@ -111,7 +111,7 @@ private:
 	void AddStandardCodePage(string_view codePageName, uintptr_t codePage, int position = -1, bool enabled = true) const;
 	void AddSeparator(const string& Label, size_t position = -1) const;
 	size_t size() const;
-	size_t GetCodePageInsertPosition(uintptr_t codePage, size_t start, size_t length);
+	size_t GetCodePageInsertPosition(uintptr_t codePage, size_t start, size_t length) const;
 	void AddCodePages(DWORD codePages);
 	void SetFavorite(bool State);
 	void FillCodePagesVMenu(bool bViewOnly, bool bShowAutoDetect);

@@ -1,5 +1,6 @@
 ﻿//---------------------------------------------------------------------------
 #include <windows.h>
+#include <stdlib.h>
 #include <signal.h>
 #include "luafar.h"
 
@@ -98,7 +99,7 @@ static void DestroyGlobal (Global *g)
 {
 	if (g->LS) lua_close(g->LS);
 
-	if (g->StartupInfo) free(g->StartupInfo);
+	free(g->StartupInfo);
 
 	DeleteCriticalSection(&g->CritSection);
 }

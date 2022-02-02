@@ -116,7 +116,7 @@ bool FarChDir(string_view const NewDir)
 	if (IsNetworkPath)
 		NoElevation.emplace();
 
-	if (os::fs::SetCurrentDirectory(Directory))
+	if (os::fs::set_current_directory(Directory))
 	{
 		set_drive_env_curdir(Directory);
 		return true;
@@ -138,7 +138,7 @@ bool FarChDir(string_view const NewDir)
 
 	ConnectToNetworkResource(Directory);
 
-	if (os::fs::SetCurrentDirectory(Directory))
+	if (os::fs::set_current_directory(Directory))
 	{
 		set_drive_env_curdir(Directory);
 		return true;
@@ -241,11 +241,8 @@ bool CheckShortcutFolder(string& TestPath, bool TryClosest, bool Silent)
 		{ lng::MHYes, lng::MHNo }) == message_result::first_button)
 	{
 		auto TestPathTemp = TestPath;
-		for (;;)
+		while (CutToParent(TestPathTemp))
 		{
-			if (!CutToParent(TestPathTemp))
-				break;
-
 			if (os::fs::exists(TestPathTemp))
 			{
 				TestPath = TestPathTemp;
@@ -264,7 +261,7 @@ bool CreatePath(string_view const InputPath, bool const AddToTreeCache)
 	size_t DirOffset = 0;
 	ParsePath(Path, &DirOffset);
 
-	for (size_t i = DirOffset; i <= Path.size(); ++i)
+	for (const auto& i: irange(DirOffset, Path.size() + 1))
 	{
 		if (i != Path.size() && !path::is_separator(Path[i]))
 			continue;

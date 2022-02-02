@@ -40,7 +40,7 @@ if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
     </Link>
   </ItemDefinitionGroup>
 
-  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug' or '$(Configuration)'=='Debug_ASAN'">
     <ClCompile>
       <PreprocessorDefinitions>ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
@@ -148,6 +148,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClCompile Include="macro.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="manager.cpp" />
+    <ClCompile Include="map_file.cpp" />
     <ClCompile Include="memcheck.cpp" />
     <ClCompile Include="menubar.cpp" />
     <ClCompile Include="message.cpp" />
@@ -168,6 +169,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClCompile Include="platform.com.cpp" />
     <ClCompile Include="platform.concurrency.cpp" />
     <ClCompile Include="platform.cpp" />
+    <ClCompile Include="platform.debug.cpp" />
     <ClCompile Include="platform.env.cpp" />
     <ClCompile Include="platform.fs.cpp" />
     <ClCompile Include="platform.memory.cpp" />
@@ -249,6 +251,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="common\bytes_view.hpp" />
     <ClInclude Include="common\chrono.hpp" />
     <ClInclude Include="common\compiler.hpp" />
+    <ClInclude Include="common\cpp.hpp" />
     <ClInclude Include="common\enum_substrings.hpp" />
     <ClInclude Include="common\enum_tokens.hpp" />
     <ClInclude Include="common\enumerator.hpp" />
@@ -283,7 +286,6 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="constitle.hpp" />
     <ClInclude Include="copy.hpp" />
     <ClInclude Include="copy_progress.hpp" />
-    <ClInclude Include="cpp.hpp" />
     <ClInclude Include="ctrlobj.hpp" />
     <ClInclude Include="cvtname.hpp" />
     <ClInclude Include="datetime.hpp" />
@@ -355,6 +357,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="macro.hpp" />
     <ClInclude Include="macroopcode.hpp" />
     <ClInclude Include="manager.hpp" />
+    <ClInclude Include="map_file.hpp" />
     <ClInclude Include="memcheck.hpp" />
     <ClInclude Include="menubar.hpp" />
     <ClInclude Include="message.hpp" />
@@ -376,6 +379,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="platform.chrono.hpp" />
     <ClInclude Include="platform.com.hpp" />
     <ClInclude Include="platform.concurrency.hpp" />
+    <ClInclude Include="platform.debug.hpp" />
     <ClInclude Include="platform.env.hpp" />
     <ClInclude Include="platform.fs.hpp" />
     <ClInclude Include="platform.fwd.hpp" />
@@ -405,6 +409,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
     <ClInclude Include="refreshwindowmanager.hpp" />
     <ClInclude Include="regex_helpers.hpp" />
     <ClInclude Include="RegExp.hpp" />
+    <ClInclude Include="reparse_tags.hpp" />
     <ClInclude Include="res.hpp" />
     <ClInclude Include="savescr.hpp" />
     <ClInclude Include="scantree.hpp" />
@@ -453,9 +458,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
       <AdditionalInputs>headers.m4;farversion.m4;vbuild.m4;%(AdditionalInputs)</AdditionalInputs>
       <Outputs>Include\%(Identity);%(Outputs)</Outputs>
     </CustomBuild>
-    <CopyFileToFolders Include="Far.exe.example.ini">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
+    <CopyFileToFolders Include="Far.exe.example.ini" />
     <CustomBuild Include="copyright.inc.m4">
       <FileType>Document</FileType>
       <Message>Compiling %(Identity)...</Message>
@@ -565,9 +568,7 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
       <PreprocessorDefinitions>$(Platform)</PreprocessorDefinitions>
       <ExcludedFromBuild Condition="'$(Platform)'!='Win32' and '$(Platform)'!='x64'">true</ExcludedFromBuild>
     </MASM>
-    <CopyFileToFolders Include="changelog">
-      <FileType>Document</FileType>
-    </CopyFileToFolders>
+    <CopyFileToFolders Include="changelog" />
     <None Include="Far.ico" />
     <None Include="Far.black.ico" />
     <None Include="Far.hack.ico" />
@@ -587,4 +588,5 @@ cl /nologo /c /Fo"$(IntDir)%(Filename)_c++.testobj" /TP api_test.c
   <ItemGroup>
     <Natvis Include="far.natvis" />
   </ItemGroup>
+  <Import Project="$(ProjectDir)..\_build\vc\config\common.targets" />
 </Project>

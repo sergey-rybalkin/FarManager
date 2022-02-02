@@ -557,7 +557,7 @@ bool Key::enum_sub_keys_nt(std::vector<std::wstring>& names) noexcept {
       SetLastError(res);
       return false;
     }
-    names.push_back(std::wstring(name.data(), name_size));
+    names.emplace_back(name.data(), name_size);
     index++;
   }
   return true;
@@ -624,7 +624,8 @@ bool FileEnum::next_nt(bool& more) noexcept {
   for (;;) {
     if (h_find == INVALID_HANDLE_VALUE) {
       if (n_far_items >= 0) {
-        if (!(more = n_far_items > 0))
+        more = (n_far_items > 0);
+        if (!more)
           return true;
         find_data = far_items.front();
         far_items.pop_front();

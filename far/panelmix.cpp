@@ -52,7 +52,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "plugins.hpp"
 #include "lang.hpp"
 #include "fileattr.hpp"
-#include "string_utils.hpp"
 #include "cvtname.hpp"
 #include "global.hpp"
 #include "exception.hpp"
@@ -63,7 +62,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Common:
 #include "common/enum_tokens.hpp"
 #include "common/from_string.hpp"
-#include "common/function_traits.hpp"
 
 // External:
 #include "format.hpp"
@@ -316,7 +314,7 @@ std::vector<column> DeserialiseViewSettings(string_view const ColumnTitles, stri
 {
 	// BUGBUG, add error checking
 
-	FN_RETURN_TYPE(DeserialiseViewSettings) Columns;
+	std::vector<column> Columns;
 
 	for (const auto& Type: enum_tokens(ColumnTitles, L","sv))
 	{
@@ -430,8 +428,8 @@ std::vector<column> DeserialiseViewSettings(string_view const ColumnTitles, stri
 		Columns.emplace_back(NewColumn);
 	}
 
-	const auto EnumWidths = enum_tokens(ColumnWidths, L","sv);
-	auto EnumWidthsRange = range(EnumWidths);
+	enum_tokens const EnumWidths(ColumnWidths, L","sv);
+	range EnumWidthsRange(EnumWidths);
 
 	for (auto& i: Columns)
 	{
@@ -474,7 +472,7 @@ std::vector<column> DeserialiseViewSettings(string_view const ColumnTitles, stri
 
 std::pair<string, string> SerialiseViewSettings(const std::vector<column>& Columns)
 {
-	FN_RETURN_TYPE(SerialiseViewSettings) Result;
+	std::pair<string, string> Result;
 	auto& [strColumnTitles, strColumnWidths] = Result;
 
 	const auto GetModeSymbol = [](FILEPANEL_COLUMN_FLAGS Mode)
@@ -495,7 +493,7 @@ std::pair<string, string> SerialiseViewSettings(const std::vector<column>& Colum
 		case COLFLAGS_RIGHTALIGNFORCE: return L'F';
 		case COLFLAGS_MARK_DYNAMIC:    return L'D';
 		default:
-			throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"Unexpected mode {}"sv), as_underlying_type(Mode)));
+			throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"Unexpected mode {}"sv), std::to_underlying(Mode)));
 		}
 	};
 
@@ -655,25 +653,26 @@ string FormatStr_DateTime(os::chrono::time_point FileTime, column_type const Col
 			break;
 	}
 
-	string strDateStr,strTimeStr;
+	const auto& [Date, Time] = ConvertDate(FileTime, ColumnWidth, FullYear, Brief, TextMonth);
 
-	ConvertDate(FileTime, strDateStr, strTimeStr, ColumnWidth, FullYear, Brief, TextMonth);
+	string OutStr;
 
-	string strOutStr;
 	switch(ColumnType)
 	{
 		case column_type::date:
-			strOutStr=strDateStr;
+			OutStr = Date;
 			break;
+
 		case column_type::time:
-			strOutStr=strTimeStr;
+			OutStr = Time;
 			break;
+
 		default:
-			strOutStr = concat(strDateStr, L' ', strTimeStr);
+			OutStr = concat(Date, L' ', Time);
 			break;
 	}
 
-	return fit_to_right(strOutStr, Width);
+	return fit_to_right(OutStr, Width);
 }
 
 string FormatStr_Size(
@@ -726,7 +725,7 @@ string FormatStr_Size(
 				// Directory Junction or Volume Mount Point
 				case IO_REPARSE_TAG_MOUNT_POINT:
 					{
-						lng ID_Msg = lng::MListJunction;
+						auto ID_Msg = lng::MListJunction;
 						if (Global->Opt->PanelDetailedJunction && !CurDir.empty())
 						{
 							string strLinkName;

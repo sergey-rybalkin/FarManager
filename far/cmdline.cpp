@@ -698,7 +698,7 @@ void CommandLine::SetCurDir(string_view const CurDir, bool redrawPrompt)
 		PrepareGitPrompt();
 	}
 
-	if (!equal_icase(m_CurDir, CurDir) || !equal_icase(os::fs::GetCurrentDirectory(), CurDir))
+	if (!equal_icase(m_CurDir, CurDir) || !equal_icase(os::fs::get_current_directory(), CurDir))
 	{
 		m_CurDir = CurDir;
 
