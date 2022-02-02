@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 
   <PropertyGroup Label="Globals">
@@ -18,12 +18,6 @@
 
   <PropertyGroup Label="UserMacros">
     <BootstrapDir>$(IntDir)include\bootstrap\</BootstrapDir>
-    <TargetOsVersion Condition="'$(Platform)'=='Win32'">5.0</TargetOsVersion>
-    <TargetOsVersion Condition="'$(Platform)'=='x64'">5.2</TargetOsVersion>
-    <NewOptions Condition="'$(VisualStudioVersion)'=='15.0'">
-    </NewOptions>
-    <NewOptions Condition="'$(VisualStudioVersion)'&gt;='16.0'">
-    </NewOptions>
     <M4Cmd>tools\m4.exe -P -DFARBIT=$(PlatformArchitecture) -DBUILD_TYPE=%25FARMANAGER_BUILD_TYPE%25 -DSCM_REVISION=%25FARMANAGER_SCM_REVISION%25</M4Cmd>
   </PropertyGroup>
 
@@ -35,88 +29,21 @@ if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
     </PreBuildEvent>
     <ClCompile>
       <AdditionalIncludeDirectories>$(BootstrapDir)..;..\..\libgit2-1.1.0\include</AdditionalIncludeDirectories>
-      <AdditionalOptions>/J /Zc:__cplusplus,externConstexpr,inline,throwingNew /volatile:iso $(NewOptions) %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>..\..\libgit2-1.1.0\include;$(BootstrapDir)..</AdditionalIncludeDirectories>
-      <AdditionalOptions>/J /Zc:__cplusplus,externConstexpr,inline,throwingNew /volatile:iso /utf-8 $(NewOptions) %(AdditionalOptions)</AdditionalOptions>
-      <PreprocessorDefinitions>_ENABLE_EXTENDED_ALIGNED_STORAGE;_HAS_AUTO_PTR_ETC=0;_CRT_SECURE_NO_WARNINGS;FAR_ALPHA_VERSION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <ExceptionHandling>Sync</ExceptionHandling>
-      <PrecompiledHeader>Use</PrecompiledHeader>
-      <PrecompiledHeaderFile>headers.hpp</PrecompiledHeaderFile>
-      <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <ExternalWarningLevel>Level4</ExternalWarningLevel>
-      <AssemblerListingLocation>$(OutDir)cod\</AssemblerListingLocation>
-      <StringPooling>true</StringPooling>
-      <FunctionLevelLinking>true</FunctionLevelLinking>
-      <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <Cpp0xSupport>true</Cpp0xSupport>
-      <DisableSpecificDiagnostics>869,3280</DisableSpecificDiagnostics>
-      <ForcedIncludeFiles>disabled_warnings.hpp;headers.hpp;memcheck.hpp</ForcedIncludeFiles>
-      <EnforceTypeConversionRules>true</EnforceTypeConversionRules>
-      <RemoveUnreferencedCodeData>true</RemoveUnreferencedCodeData>
-      <DiagnosticsFormat>Caret</DiagnosticsFormat>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
-      <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <ConformanceMode>true</ConformanceMode>
-      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
-      <UseFullPaths>false</UseFullPaths>
-    </ClCompile>
-    <ResourceCompile>
-      <Culture>0x0409</Culture>
-    </ResourceCompile>
-    <Link>
-      <AdditionalDependencies>netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;version.lib;userenv.lib;comdlg32.lib;Winhttp.lib;Crypt32.lib;git2.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <GenerateManifest>false</GenerateManifest>
-      <ModuleDefinitionFile>
-      </ModuleDefinitionFile>
-      <GenerateDebugInformation>true</GenerateDebugInformation>
-      <GenerateMapFile>true</GenerateMapFile>
-      <SubSystem>Console</SubSystem>
-      <LargeAddressAware>true</LargeAddressAware>
-    </Link>
-  </ItemDefinitionGroup>
-  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
-    <ClCompile>
-      <Optimization>MaxSpeed</Optimization>
-      <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <WholeProgramOptimization>true</WholeProgramOptimization>
-    </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ResourceCompile>
-    <Link>
-      <LinkTimeCodeGeneration>UseLinkTimeCodeGeneration</LinkTimeCodeGeneration>
-      <OptimizeReferences>true</OptimizeReferences>
-      <EnableCOMDATFolding>true</EnableCOMDATFolding>
-      <SetChecksum>true</SetChecksum>
-      <Profile>true</Profile>
-      <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">..\..\libgit2-1.1.0\build\MinSizeRel</AdditionalLibraryDirectories>
-    </Link>
-    <PostBuildEvent Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64'">
-      <Command>editbin /nologo /subsystem:console,$(TargetOsVersion) /osversion:$(TargetOsVersion) $(OutDir)$(TargetName)$(TargetExt) &gt; nul</Command>
-      <Message>Fixing subsystem version</Message>
-    </PostBuildEvent>
-      <AdditionalIncludeDirectories>$(BootstrapDir)..</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>headers.hpp</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <ForcedIncludeFiles>%(ForcedIncludeFiles);headers.hpp;memcheck.hpp</ForcedIncludeFiles>
     </ClCompile>
+    <Link>
+      <AdditionalLibraryDirectories>..\..\libgit2-1.1.0\build\$(Configuration)</AdditionalLibraryDirectories>
+      <AdditionalDependencies>netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;version.lib;userenv.lib;comdlg32.lib;Winhttp.lib;Crypt32.lib;git2.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
     <ClCompile>
       <PreprocessorDefinitions>ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ResourceCompile>
-      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-    </ResourceCompile>
-    <Link>
-      <ImageHasSafeExceptionHandlers>false</ImageHasSafeExceptionHandlers>
-      <AdditionalLibraryDirectories Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">..\..\libgit2-1.1.0\build\Debug</AdditionalLibraryDirectories>
-    </Link>
-
     <PostBuildEvent Condition="'$(Platform)'=='Win32' or '$(Platform)'=='x64'">
       <Command>$(OutDir)$(TargetName)$(TargetExt) /service:test</Command>
       <Message>Running unit tests</Message>
