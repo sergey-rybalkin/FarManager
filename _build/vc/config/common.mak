@@ -109,7 +109,7 @@ LINKFLAGS = $(LINKFLAGS)\
 	/largeaddressaware\
 	/dynamicbase\
 	/map\
-	/LIBPATH:"..\..\libgit2-1.1.0\build\MinSizeRel\"\
+	/LIBPATH:"..\..\libgit2-1.3.0\build\MinSizeRel\"\
 
 ULINKFLAGS = $(ULINKFLAGS) -q -m- -ap -Gz -O- -o- -Gh -Gh- -GF:LARGEADDRESSAWARE -d*kernel32
 

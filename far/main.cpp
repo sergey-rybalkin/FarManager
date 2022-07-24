@@ -264,7 +264,7 @@ static int MainProcess(
 			{
 				FarChDir(AnotherPanel->GetCurDir());
 
-				if (IsPluginPrefixPath(ppanel))
+					if (GetPluginPrefixPath(ppanel))
 				{
 					AnotherPanel->Parent()->SetActivePanel(AnotherPanel);
 
@@ -289,7 +289,7 @@ static int MainProcess(
 
 			FarChDir(ActivePanel->GetCurDir());
 
-			if (IsPluginPrefixPath(apanel))
+				if (GetPluginPrefixPath(apanel))
 			{
 				execute_info Info;
 				Info.DisplayCommand = apanel;
@@ -507,7 +507,7 @@ static void log_hook_wow64_status()
 		{
 			if (const auto LdrLoadDll = GetProcAddress(NtDll, "LdrLoadDll"))
 			{
-				const auto FunctionData = reinterpret_cast<std::byte const*>(LdrLoadDll);
+				const auto FunctionData = view_as<std::byte const*>(LdrLoadDll);
 				LOGWARNING(L"LdrLoadDll: {}"sv, BlobToHexString({ FunctionData, 32 }));
 			}
 		}
@@ -583,9 +583,8 @@ static int mainImpl(span<const wchar_t* const> const Args)
 				if (std::iswdigit(Arg[2]))
 				{
 					StartLine = static_cast<int>(std::wcstol(Arg + 2, nullptr, 10));
-					const wchar_t* ChPtr = wcschr(Arg + 2, L':');
 
-					if (ChPtr)
+						if (const wchar_t* ChPtr = std::wcschr(Arg + 2, L':'))
 						StartChar = static_cast<int>(std::wcstol(ChPtr + 1, nullptr, 10));
 				}
 
@@ -631,9 +630,11 @@ static int mainImpl(span<const wchar_t* const> const Args)
 				constexpr auto SetParam = L"set:"sv;
 				if (starts_with_icase(Arg + 1, SetParam))
 				{
-					if (const auto EqualPtr = wcschr(Arg + 1, L'='))
+					if (const auto EqualPtr = std::wcschr(Arg + 1, L'='))
 					{
-						Overrides.emplace(string(Arg + 1 + SetParam.size(), EqualPtr), EqualPtr + 1);
+								const auto NameData = Arg + 1 + SetParam.size();
+								const size_t NameSize = EqualPtr - NameData;
+								Overrides.emplace(string_view{ NameData, NameSize }, EqualPtr + 1);
 					}
 				}
 				else if (Iter + 1 != Args.end())
@@ -737,7 +738,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 		{
 			if (CntDestName < 2)
 			{
-				if (IsPluginPrefixPath(Arg))
+				if (GetPluginPrefixPath(Arg))
 				{
 					DestNames[CntDestName++] = Arg;
 				}
