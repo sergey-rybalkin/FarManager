@@ -68,6 +68,9 @@ LINK_OBJS = \
 	"$(INTDIR)\clipboard.obj" \
 	"$(INTDIR)\cmdline.obj" \
 	"$(INTDIR)\codepage_selection.obj" \
+	"$(INTDIR)\color_picker.obj" \
+	"$(INTDIR)\color_picker_256.obj" \
+	"$(INTDIR)\color_picker_rgb.obj" \
 	"$(INTDIR)\colormix.obj" \
 	"$(INTDIR)\common.tests.obj" \
 	"$(INTDIR)\components.obj" \
@@ -247,7 +250,7 @@ lng: $(BOOTSTRAPDIR)farlang.templ
 depfile:
 	@echo Rebuilding dependencies...
 	set BOOTSTRAPDIR=$(BOOTSTRAPDIR)
-	set FORCEINCLUDELIST=$(PCH_NAME).hpp memcheck.hpp
+	set FORCEINCLUDELIST=$(PCH_NAME).hpp memcheck.hpp disabled_warnings.hpp
 	scripts\list_deps.cmd | $(GAWK) -f scripts\mkdep.awk - > $(DEPFILE)
 
 .PHONY: include

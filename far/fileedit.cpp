@@ -1232,16 +1232,6 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 					return true;
 				}
 
-				string strFullFileNameTemp = strFullFileName;
-
-				if (!os::fs::exists(strFullFileName)) // а сам файл то еще на месте?
-				{
-					if (!CheckShortcutFolder(strFullFileNameTemp, true, false))
-						return false;
-
-					path::append(strFullFileNameTemp, L'.'); // для вваливания внутрь :-)
-				}
-
 				const auto ActivePanel = Global->CtrlObject->Cp()->ActivePanel();
 
 				if (m_Flags.Check(FFILEEDIT_NEW) || (ActivePanel && ActivePanel->FindFile(strFileName) == -1)) // Mantis#279
@@ -1252,7 +1242,7 @@ bool FileEditor::ReProcessKey(const Manager::Key& Key, bool CalledFromControl)
 
 				{
 					SCOPED_ACTION(SaveScreen);
-					Global->CtrlObject->Cp()->GoToFile(strFullFileNameTemp);
+					Global->CtrlObject->Cp()->GoToFile(strFullFileName);
 					m_Flags.Set(FFILEEDIT_REDRAWTITLE);
 				}
 
@@ -1740,7 +1730,7 @@ bool FileEditor::LoadFile(const string_view Name, int& UserBreak, error_state_ex
 	return true;
 
 	}
-	catch (const std::bad_alloc&)
+	catch (std::bad_alloc const&)
 	{
 		// TODO: better diagnostics
 		m_editor->FreeAllocatedData();
@@ -1749,7 +1739,7 @@ bool FileEditor::LoadFile(const string_view Name, int& UserBreak, error_state_ex
 		ErrorState = last_error();
 		return false;
 	}
-	catch (const std::exception&)
+	catch (std::exception const&)
 	{
 		// A portion of file can be locked
 
@@ -2070,7 +2060,7 @@ int FileEditor::SaveFile(const string_view Name, int Ask, bool bSaveAs, error_st
 			}
 		});
 	}
-	catch (const far_exception& e)
+	catch (far_exception const& e)
 	{
 		RetCode = SAVEFILE_ERROR;
 		ErrorState = e;
@@ -2251,11 +2241,11 @@ string FileEditor::GetTitle() const
 	return strLocalTitle;
 }
 
-static std::pair<string, size_t> char_code(std::optional<unsigned> const& Char, int const Codebase)
+static std::pair<string, size_t> char_code(std::optional<char32_t> const& Char, int const Codebase)
 {
 	const auto process = [&](const auto& Format, string_view const Max)
 	{
-		auto Result = std::pair{ Char.has_value()? format(Format, *Char) : L""s, Max.size() };
+		auto Result = std::pair{ Char.has_value()? format(Format, static_cast<uint32_t>(*Char)) : L""s, Max.size()};
 		Result.second = std::max(Result.first.size(), Result.second);
 		return Result;
 	};
@@ -2274,7 +2264,7 @@ static std::pair<string, size_t> char_code(std::optional<unsigned> const& Char, 
 	}
 }
 
-static std::pair<string, size_t> ansi_char_code(std::optional<unsigned> const& Char, int const Codebase, uintptr_t const Codepage)
+static std::pair<string, size_t> ansi_char_code(std::optional<char32_t> const& Char, int const Codebase, uintptr_t const Codepage)
 {
 	const auto process = [&](const auto& Format, string_view const Max)
 	{
@@ -2282,7 +2272,7 @@ static std::pair<string, size_t> ansi_char_code(std::optional<unsigned> const& C
 
 		char Buffer;
 		encoding::diagnostics Diagnostics;
-		if (Char.has_value() && *Char <= std::numeric_limits<wchar_t>::max())
+		if (Char.has_value() && *Char <= std::numeric_limits<char16_t>::max())
 		{
 			const auto Ch = static_cast<wchar_t>(*Char);
 			if (encoding::get_bytes(Codepage, { &Ch, 1 }, { &Buffer, 1 }, &Diagnostics) == 1 && !Diagnostics.ErrorPosition)
@@ -2328,7 +2318,7 @@ void FileEditor::ShowStatus() const
 	string CharCode;
 
 	{
-		std::optional<unsigned> Char;
+		std::optional<char32_t> Char;
 
 		if (CurPos + 1 < Str.size() && is_valid_surrogate_pair(Str[CurPos], Str[CurPos + 1]))
 			Char = encoding::utf16::extract_codepoint(Str[CurPos], Str[CurPos + 1]);

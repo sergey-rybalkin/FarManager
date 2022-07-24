@@ -52,6 +52,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "drivemix.hpp"
 #include "global.hpp"
 #include "keyboard.hpp"
+#include "log.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -59,6 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Common:
 #include "common/enum_substrings.hpp"
 #include "common/keep_alive.hpp"
+#include "common/view/select.hpp"
 
 // External:
 #include "format.hpp"
@@ -105,7 +107,14 @@ namespace
 
 namespace detail
 {
-	struct devinfo_handle_closer { void operator()(HDEVINFO Handle) const noexcept { SetupDiDestroyDeviceInfoList(Handle); } };
+	struct devinfo_handle_closer
+	{
+		void operator()(HDEVINFO Handle) const noexcept
+		{
+			if (!SetupDiDestroyDeviceInfoList(Handle))
+				LOGWARNING(L"SetupDiDestroyDeviceInfoList(): {}"sv, last_error());
+		}
+	};
 }
 
 class [[nodiscard]] dev_info: noncopyable
@@ -311,10 +320,10 @@ static device_paths get_device_paths_impl(DEVINST hDevInst)
 
 		AddEndSlash(strMountPoint);
 		string strVolumeName;
-		if (os::fs::GetVolumeNameForVolumeMountPoint(strMountPoint,strVolumeName))
-		{
-			DevicePaths.Disks |= DriveMaskFromVolumeName(strVolumeName);
-		}
+		if (!os::fs::GetVolumeNameForVolumeMountPoint(strMountPoint, strVolumeName))
+			continue;
+
+		DevicePaths.Disks |= DriveMaskFromVolumeName(strVolumeName);
 		DevicePaths.Volumes.emplace_back(strVolumeName);
 	}
 
@@ -416,22 +425,12 @@ static bool RemoveHotplugDriveDevice(const DeviceInfo& Info, bool const Confirm,
 
 	if (Confirm)
 	{
-		string DisksStr;
 		const auto Separator = L", "sv;
-		for (const auto& i: irange(Info.DevicePaths.Disks.size()))
-		{
-			if (Info.DevicePaths.Disks[i])
-				append(DisksStr, os::fs::drive::get_device_path(i), Separator);
-		}
-		// remove trailing ", "
-		if (!DisksStr.empty())
-		{
-			DisksStr.resize(DisksStr.size() - Separator.size());
-		}
-		else
-		{
+
+		auto DisksStr = join(select(os::fs::enum_drives(Info.DevicePaths.Disks), [](wchar_t const Drive){ return os::fs::drive::get_device_path(Drive); }), Separator);
+
+		if (DisksStr.empty())
 			DisksStr = join(Info.DevicePaths.Volumes, L", "sv);
-		}
 
 		std::vector<string> MessageItems;
 		MessageItems.reserve(6);

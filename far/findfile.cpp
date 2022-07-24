@@ -60,6 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "delete.hpp"
 #include "datetime.hpp"
 #include "pathmix.hpp"
+#include "exitcode.hpp"
 #include "strmix.hpp"
 #include "mix.hpp"
 #include "constitle.hpp"
@@ -1976,7 +1977,7 @@ void FindFiles::OpenFile(string_view const SearchFileName, int OpenKey, const Fi
 	const auto FileNameOnly = ExtractFileName(SearchFileName);
 	const auto PathOnly = SearchFileName.substr(0, SearchFileName.size() - FileNameOnly.size());
 
-	if (shouldForceInternal || !ProcessLocalFileTypes(SearchFileName, FileNameOnly, openMode, PluginMode))
+	if (shouldForceInternal || !ProcessLocalFileTypes(SearchFileName, FileNameOnly, openMode, PluginMode, PathOnly))
 	{
 		if (openMode == FILETYPE_ALTVIEW && Global->Opt->strExternalViewer.empty())
 			openMode = FILETYPE_VIEW;
@@ -2026,7 +2027,7 @@ void FindFiles::OpenFile(string_view const SearchFileName, int OpenKey, const Fi
 			if (FindItem->Arc && !(FindItem->Arc->Flags & OPIF_REALNAMES))
 				ShellEditor->SetSaveToSaveAs(true);
 
-			if (-1 == ShellEditor->GetExitCode())
+			if (any_of(ShellEditor->GetExitCode(), -1, XC_OPEN_NEWINSTANCE))
 			{
 				Global->WindowManager->ExecuteModal(ShellEditor);
 				// заставляем рефрешится экран

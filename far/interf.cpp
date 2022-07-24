@@ -81,19 +81,23 @@ static HICON set_icon(HWND Wnd, bool Big, HICON Icon)
 	return reinterpret_cast<HICON>(SendMessage(Wnd, WM_SETICON, Big? ICON_BIG : ICON_SMALL, reinterpret_cast<LPARAM>(Icon)));
 }
 
-void consoleicons::set_icon()
+void consoleicons::update_icon()
 {
 	if (!Global->Opt->SetIcon)
 		return restore_icon();
-
-	const auto hWnd = console.GetWindow();
-	if (!hWnd)
-		return;
 
 	if (Global->Opt->IconIndex < 0 || static_cast<size_t>(Global->Opt->IconIndex) >= size())
 		return;
 
 	const int IconId = (Global->Opt->SetAdminIcon && os::security::is_admin())? FAR_ICON_RED : FAR_ICON + Global->Opt->IconIndex;
+	set_icon(IconId);
+}
+
+void consoleicons::set_icon(int const IconId)
+{
+	const auto hWnd = console.GetWindow();
+	if (!hWnd)
+		return;
 
 	const auto Set = [&](icon& Icon)
 	{
@@ -377,7 +381,7 @@ void InitConsole()
 	UpdateScreenSize();
 	Global->ScrBuf->FillBuf();
 
-	consoleicons::instance().set_icon();
+	consoleicons::instance().update_icon();
 
 	FirstInit = false;
 }
@@ -749,7 +753,7 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 
 		const auto Codepoint = encoding::utf16::extract_codepoint(Str);
 
-		if (Codepoint > std::numeric_limits<wchar_t>::max())
+		if (Codepoint > std::numeric_limits<char16_t>::max())
 		{
 			Char[1] = Str[1];
 			Str.remove_prefix(2);
@@ -794,12 +798,6 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 					Buffer.back().Char = encoding::replace_char;
 					// Stash the actual codepoint. The drawing code will restore it from here:
 					Buffer.back().Attributes.Reserved[0] = Codepoint;
-
-					// As of 10 Jun 2021, neither Conhost nor Terminal can render these properly.
-					// Expect the broken UI
-
-					// Uncomment for testing:
-					// Buffer.back().Attributes.Reserved[0] = 0;
 				}
 				else
 				{
@@ -1132,7 +1130,7 @@ void DropShadow(rectangle const Where, bool const IsLegacy)
 
 void SetColor(int Color)
 {
-	CurColor = colors::ConsoleColorToFarColor(Color);
+	CurColor = colors::NtColorToFarColor(Color);
 }
 
 void SetColor(PaletteColors Color)
@@ -1226,7 +1224,7 @@ size_t string_pos_to_visual_pos(string_view Str, size_t const StringPos, size_t 
 		else if (CharWidthEnabled)
 		{
 			const auto Codepoint = encoding::utf16::extract_codepoint(Str.substr(State.StringIndex));
-			CharStringIncrement = Codepoint > std::numeric_limits<wchar_t>::max()? 2 : 1;
+			CharStringIncrement = Codepoint > std::numeric_limits<char16_t>::max()? 2 : 1;
 			CharVisualIncrement = char_width::is_wide(Codepoint)? 2 : 1;
 		}
 		else
@@ -1283,7 +1281,7 @@ size_t visual_pos_to_string_pos(string_view Str, size_t const VisualPos, size_t 
 		{
 			const auto Codepoint = encoding::utf16::extract_codepoint(Str.substr(State.StringIndex));
 			CharVisualIncrement = char_width::is_wide(Codepoint)? 2 : 1;
-			CharStringIncrement = Codepoint > std::numeric_limits<wchar_t>::max()? 2 : 1;
+			CharStringIncrement = Codepoint > std::numeric_limits<char16_t>::max()? 2 : 1;
 		}
 		else
 		{

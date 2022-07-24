@@ -393,7 +393,7 @@ static void wait_for_process_or_detach(os::handle const& Process, int const Cons
 		os::chrono::sleep_for(100ms);
 		InitConsole();
 
-		consoleicons::instance().set_icon();
+		consoleicons::instance().update_icon();
 		console.SetAllAliases(std::move(Aliases));
 
 		return;
@@ -736,7 +736,7 @@ void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator
 
 		const auto ObjectNameShort = ConvertNameToShort(Command);
 		const auto LastX = WhereX(), LastY = WhereY();
-		if (ProcessLocalFileTypes(Command, ObjectNameShort, FILETYPE_EXEC, Info.WaitMode == execute_info::wait_mode::wait_finish, false, Info.RunAs, [&](execute_info& AssocInfo)
+		if (ProcessLocalFileTypes(Command, ObjectNameShort, FILETYPE_EXEC, Info.WaitMode == execute_info::wait_mode::wait_finish, Info.Directory, false, Info.RunAs, [&](execute_info& AssocInfo)
 		{
 			GotoXY(LastX, LastY);
 

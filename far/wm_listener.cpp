@@ -47,8 +47,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Platform:
 #include "platform.debug.hpp"
+#include "platform.fs.hpp"
 
 // Common:
+#include "common.hpp"
 #include "common/scope_exit.hpp"
 
 // External:
@@ -63,10 +65,6 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 	{
 		switch (Msg)
 		{
-		case WM_CLOSE:
-			DestroyWindow(Hwnd);
-			break;
-
 		case WM_DESTROY:
 			PostQuitMessage(0);
 			break;
@@ -78,17 +76,18 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 				case DBT_DEVICEARRIVAL:
 				case DBT_DEVICEREMOVECOMPLETE:
 					{
-						const auto& BroadcastHeader = *view_as<const DEV_BROADCAST_HDR*>(lParam);
+						const auto& BroadcastHeader = view_as<DEV_BROADCAST_HDR>(lParam);
 						if (BroadcastHeader.dbch_devicetype == DBT_DEVTYP_VOLUME)
 						{
-							LOGINFO(L"WM_DEVICECHANGE(DBT_DEVTYP_VOLUME)"sv);
-							const auto& BroadcastVolume = *view_as<const DEV_BROADCAST_VOLUME*>(&BroadcastHeader);
-							message_manager::instance().notify(update_devices, update_devices_message
-							{
-								BroadcastVolume.dbcv_unitmask,
-								wParam == DBT_DEVICEARRIVAL,
-								(BroadcastVolume.dbcv_flags & DBTF_MEDIA) != 0
-							});
+							const auto& BroadcastVolume = view_as<DEV_BROADCAST_VOLUME>(&BroadcastHeader);
+
+							const auto Drives = BroadcastVolume.dbcv_unitmask;
+							const auto IsArrival = wParam == DBT_DEVICEARRIVAL;
+							const auto IsMedia = (BroadcastVolume.dbcv_flags & DBTF_MEDIA) != 0;
+
+							LOGINFO(L"WM_DEVICECHANGE(type: {}, media: {}, drives: {})"sv, IsArrival? L"arrival"sv : L"removal"sv, IsMedia, join(os::fs::enum_drives(Drives), {}));
+
+							message_manager::instance().notify(update_devices, update_devices_message{ Drives, IsArrival, IsMedia });
 						}
 					}
 					break;
@@ -99,7 +98,9 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 		case WM_SETTINGCHANGE:
 			if (lParam)
 			{
-				const auto Area = view_as<const wchar_t*>(lParam);
+				// https://docs.microsoft.com/en-us/windows/win32/winmsg/wm-settingchange
+				// Some applications send this message with lParam set to NULL
+				const auto Area = NullToEmpty(view_as<const wchar_t*>(lParam));
 
 				if (Area == L"Environment"sv)
 				{
@@ -114,10 +115,6 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 					LOGINFO(L"WM_SETTINGCHANGE(intl)"sv);
 					message_manager::instance().notify(update_intl);
 				}
-				else
-				{
-					LOGDEBUG(L"WM_SETTINGCHANGE({}) ignored"sv, Area);
-				}
 			}
 			break;
 
@@ -125,9 +122,19 @@ static LRESULT CALLBACK WndProc(HWND Hwnd, UINT Msg, WPARAM wParam, LPARAM lPara
 			switch (wParam)
 			{
 			case PBT_APMPOWERSTATUSCHANGE: // change status
-			case PBT_POWERSETTINGCHANGE:   // change percent
-				LOGINFO(L"WM_POWERBROADCAST"sv);
+				LOGINFO(L"WM_POWERBROADCAST(PBT_APMPOWERSTATUSCHANGE)"sv);
 				message_manager::instance().notify(update_power);
+				break;
+
+			case PBT_POWERSETTINGCHANGE: // change percent
+				{
+					const auto& Data = view_as<POWERBROADCAST_SETTING>(lParam);
+					if (Data.PowerSetting == GUID_BATTERY_PERCENTAGE_REMAINING)
+					{
+						LOGINFO(L"WM_POWERBROADCAST(PBT_POWERSETTINGCHANGE): {}% battery remaining"sv, view_as<DWORD>(Data.Data));
+						message_manager::instance().notify(update_power);
+					}
+				}
 				break;
 
 			// TODO:
@@ -174,7 +181,10 @@ void wm_listener::WindowThreadRoutine(const os::event& ReadyEvent)
 	WNDCLASSEX wc{ sizeof(wc) };
 	wc.lpfnWndProc = WndProc;
 	wc.lpszClassName = L"FarHiddenWindowClass";
-	UnregisterClass(wc.lpszClassName, nullptr);
+
+	if (UnregisterClass(wc.lpszClassName, nullptr))
+		LOGWARNING(L"Class {} was already registered"sv, wc.lpszClassName);
+
 	if (!RegisterClassEx(&wc))
 	{
 		LOGERROR(L"RegisterClassEx(): {}"sv, last_error());
@@ -182,7 +192,11 @@ void wm_listener::WindowThreadRoutine(const os::event& ReadyEvent)
 		return;
 	}
 
-	SCOPE_EXIT{ UnregisterClass(wc.lpszClassName, nullptr); };
+	SCOPE_EXIT
+	{
+		if (!UnregisterClass(wc.lpszClassName, {}))
+			LOGWARNING(L"UnregisterClass(): {}"sv, last_error());
+	};
 
 	m_Hwnd = CreateWindowEx(0, wc.lpszClassName, nullptr, 0, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, nullptr, nullptr, nullptr, nullptr);
 	if (!m_Hwnd)
@@ -197,7 +211,16 @@ void wm_listener::WindowThreadRoutine(const os::event& ReadyEvent)
 		imports.RegisterPowerSettingNotification(m_Hwnd, &GUID_BATTERY_PERCENTAGE_REMAINING, DEVICE_NOTIFY_WINDOW_HANDLE) :
 		nullptr;
 
-	SCOPE_EXIT{ if (hpn) imports.UnregisterPowerSettingNotification(hpn); };
+	if (!hpn && imports.RegisterPowerSettingNotification)
+	{
+		LOGWARNING(L"RegisterPowerSettingNotification(): {}"sv, last_error());
+	}
+
+	SCOPE_EXIT
+	{
+		if (hpn && !imports.UnregisterPowerSettingNotification(hpn))
+			LOGWARNING(L"UnregisterPowerSettingNotification(): {}"sv, last_error());
+	};
 
 	MSG Msg;
 	WndProcExceptionPtr = &m_ExceptionPtr;

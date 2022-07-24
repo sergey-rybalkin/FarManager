@@ -871,7 +871,7 @@ void RegExp::InnerCompile(const wchar_t* const start, const wchar_t* src, int sr
 	brackets[0]=code.data();
 #ifdef RE_DEBUG
 	resrc = L'(';
-	resrc.append(src, srclength).append(L")\x2190");
+	resrc.append(src, srclength).append(L")←");
 #endif
 	havelookahead=0;
 
@@ -3836,7 +3836,7 @@ TEST_CASE("regex.list.special")
 	RegExp re;
 	std::vector<RegExpMatch> Match;
 
-	re.Compile(L"[]]");
+	re.Compile(L"[]]"sv);
 	REQUIRE(!re.Match(L"!", Match));
 	REQUIRE(re.Match(L"]", Match));
 	REQUIRE(Match.size() == 1u);
@@ -3844,7 +3844,7 @@ TEST_CASE("regex.list.special")
 	REQUIRE(Match[0].end == 1);
 
 
-	re.Compile(L"[^]]");
+	re.Compile(L"[^]]"sv);
 	REQUIRE(!re.Match(L"]", Match));
 	REQUIRE(re.Match(L"!", Match));
 	REQUIRE(Match.size() == 1u);
