@@ -28,14 +28,14 @@
 if not exist $(BootstrapDir) mkdir $(BootstrapDir)</Command>
     </PreBuildEvent>
     <ClCompile>
-      <AdditionalIncludeDirectories>$(BootstrapDir)..;..\..\libgit2-1.1.0\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(BootstrapDir)..;..\..\libgit2-1.3.0\include</AdditionalIncludeDirectories>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>headers.hpp</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>$(IntDir)headers.pch</PrecompiledHeaderOutputFile>
       <ForcedIncludeFiles>%(ForcedIncludeFiles);headers.hpp;memcheck.hpp</ForcedIncludeFiles>
     </ClCompile>
     <Link>
-      <AdditionalLibraryDirectories>..\..\libgit2-1.1.0\build\$(Configuration)</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>..\..\libgit2-1.3.0\build\$(Configuration)</AdditionalLibraryDirectories>
       <AdditionalDependencies>netapi32.lib;mpr.lib;psapi.lib;secur32.lib;setupapi.lib;rpcrt4.lib;version.lib;userenv.lib;comdlg32.lib;Winhttp.lib;Crypt32.lib;git2.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
