@@ -686,7 +686,15 @@ void CommandLine::PrepareGitPrompt()
 
 	git_repository_free(repo);
 
-	FarColor postfixColor = colors::NtColorToFarColor(color);
+	const auto MakeFarColor = [](int ConsoleColor)
+	{
+		auto Colour = colors::NtColorToFarColor(ConsoleColor);
+		colors::make_transparent(Colour.BackgroundColor);
+		Colour.Flags |= FCF_INHERIT_STYLE;
+		return Colour;
+	};
+
+	FarColor postfixColor = MakeFarColor(color);
 	m_Prompt.emplace_back(segment{ promptPostfix, postfixColor });
 }
 

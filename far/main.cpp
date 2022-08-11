@@ -85,6 +85,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/uuid.hpp"
 
 // External:
+#include <git2.h>
 
 #ifdef ENABLE_TESTS
 #include "testing.hpp"
@@ -1037,7 +1038,13 @@ static int wmain_seh()
 	{
 		try
 		{
-			return mainImpl({ Argv.get() + 1, Argv.get() + Argc });
+			git_libgit2_init();
+
+			int retVal = mainImpl({ Argv.get() + 1, Argv.get() + Argc });
+
+			git_libgit2_shutdown();
+
+			return retVal;
 		}
 		catch (far_known_exception const& e)
 		{
