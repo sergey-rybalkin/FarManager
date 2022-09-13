@@ -110,6 +110,7 @@ LINKFLAGS = $(LINKFLAGS)\
 	/largeaddressaware\
 	/dynamicbase\
 	/map\
+    /LIBPATH:"..\..\libgit2-1.5.0\build\MinSizeRel\"\
 	/merge:_RDATA=.rdata
 
 ULINKFLAGS = $(ULINKFLAGS) -q -m- -ap -Gz -O- -o- -Gh -Gh- -b* \
@@ -207,4 +208,6 @@ LINK_LIBS =\
 	userenv.lib\
 	comdlg32.lib\
 	wbemuuid.lib\
-
+	Winhttp.lib\
+	Crypt32.lib\
+	git2.lib
