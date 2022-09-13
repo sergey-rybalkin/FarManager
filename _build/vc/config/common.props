@@ -134,6 +134,7 @@
       <SubSystem>Console</SubSystem>
       <LargeAddressAware>true</LargeAddressAware>
       <ImportLibrary>$(IntDir)$(TargetName).lib</ImportLibrary>
+      <MergeSections>_RDATA=.rdata</MergeSections>
     </Link>
   </ItemDefinitionGroup>
 
@@ -207,6 +208,9 @@
     <ClCompile>
       <EnableEnhancedInstructionSet>NoExtensions</EnableEnhancedInstructionSet>
     </ClCompile>
+    <Link>
+      <ImageHasSafeExceptionHandlers Condition="'$(Configuration)'=='Release'">true</ImageHasSafeExceptionHandlers>
+    </Link>
   </ItemDefinitionGroup>
 
   <ItemDefinitionGroup Condition="'$(Platform)'=='x64'">

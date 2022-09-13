@@ -1034,7 +1034,7 @@ HANDLE WINAPI apiDialogInit(const UUID* PluginId, const UUID* Id, intptr_t X1, i
 		{
 			class plugin_dialog: public Dialog
 			{
-				struct private_tag {};
+				struct private_tag { explicit private_tag() = default; };
 
 			public:
 				static dialog_ptr create(span<const FarDialogItem> const Src, FARWINDOWPROC const DlgProc, void* const InitParam)
@@ -2954,7 +2954,7 @@ size_t WINAPI apiFormatFileSize(unsigned long long Size, intptr_t Width, FARFORM
 	return cpp_try(
 	[&]
 	{
-		static const std::pair<unsigned long long, unsigned long long> FlagsPair[] =
+		static const std::pair<unsigned long long, unsigned long long> FlagsPair[]
 		{
 			{ FFFS_COMMAS,         COLFLAGS_GROUPDIGITS     },    // Вставлять разделитель между тысячами
 			{ FFFS_THOUSAND,       COLFLAGS_THOUSAND        },    // Вместо делителя 1024 использовать делитель 1000

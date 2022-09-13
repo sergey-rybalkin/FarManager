@@ -148,8 +148,9 @@ enum advanced_attributes
 	SA_CHECKBOX_RECALL_ON_OPEN,
 	SA_CHECKBOX_RECALL_ON_DATA_ACCESS,
 	SA_CHECKBOX_STRICTLY_SEQUENTIAL,
+	SA_CHECKBOX_DEVICE,
 
-	SA_ADVANCED_ATTRIBUTE_LAST = SA_CHECKBOX_STRICTLY_SEQUENTIAL,
+	SA_ADVANCED_ATTRIBUTE_LAST = SA_CHECKBOX_DEVICE,
 };
 
 constexpr size_t advanced_attributes_count = SA_ADVANCED_ATTRIBUTE_LAST - SA_ADVANCED_ATTRIBUTE_FIRST + 1;
@@ -189,6 +190,7 @@ AttributeMap[]
 	{ SA_CHECKBOX_RECALL_ON_OPEN,               FILE_ATTRIBUTE_RECALL_ON_OPEN,        lng::MSetAttrRecallOnOpen,       },
 	{ SA_CHECKBOX_RECALL_ON_DATA_ACCESS,        FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS, lng::MSetAttrRecallOnDataAccess, },
 	{ SA_CHECKBOX_STRICTLY_SEQUENTIAL,          FILE_ATTRIBUTE_STRICTLY_SEQUENTIAL,   lng::MSetAttrStrictlySequential, },
+	{ SA_CHECKBOX_DEVICE,                       FILE_ATTRIBUTE_DEVICE,                lng::MSetAttrDevice,             },
 };
 
 static_assert(std::size(AttributeMap) == main_attributes_count + advanced_attributes_count);
@@ -859,7 +861,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 				}
 			}
 
-			if (os::fs::is_directory(SingleSelFindData.Attributes))
+			if (os::fs::is_directory(SingleSelFindData))
 				EnableSubfolders();
 
 			if (SingleSelFindData.Attributes != INVALID_FILE_ATTRIBUTES)
@@ -994,7 +996,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 			}
 
 			// обработка случая "несколько хардлинков"
-			if (os::fs::is_file(SingleSelFindData.Attributes))
+			if (os::fs::is_file(SingleSelFindData))
 			{
 				if (const auto Hardlinks = GetNumberOfLinks(SingleSelFileName); Hardlinks && *Hardlinks > 1)
 				{
@@ -1060,7 +1062,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 
 			for (const auto& PanelItem: SrcPanel->enum_selected())
 			{
-				if (!FolderPresent && os::fs::is_directory(PanelItem.Attributes))
+				if (!FolderPresent && os::fs::is_directory(PanelItem))
 				{
 					FolderPresent = true;
 					EnableSubfolders();

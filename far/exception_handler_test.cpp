@@ -100,49 +100,42 @@ namespace tests
 	{
 		std::exception_ptr Ptr;
 
-		cpp_try(
-		[]
+		[&]() noexcept
 		{
-			throw std::runtime_error("Test nested std error"s);
-		},
-		[&]
-		{
-			SAVE_EXCEPTION_TO(Ptr);
-		});
+			cpp_try(
+			[]
+			{
+				throw std::runtime_error("Test nested std error"s);
+			},
+			[&]
+			{
+				SAVE_EXCEPTION_TO(Ptr);
+			});
+		}();
 
+		assert(Ptr);
 		rethrow_if(Ptr);
 	}
 
 	static void cpp_std_nested_thread()
 	{
 		std::exception_ptr Ptr;
-		os::thread Thread(os::thread::mode::join, [&]
+		os::thread(os::thread::mode::join, [&]
 		{
 			os::debug::set_thread_name(L"Nested thread exception test");
 
-			seh_try_thread(Ptr, [&]
+			cpp_try(
+			[]
 			{
-				cpp_try(
-				[]
-				{
-					throw std::runtime_error("Test nested std error (thread)"s);
-				},
-				[&]
-				{
-					SAVE_EXCEPTION_TO(Ptr);
-				});
+				throw std::runtime_error("Test nested std error (thread)"s);
+			},
+			[&]
+			{
+				SAVE_EXCEPTION_TO(Ptr);
 			});
 		});
 
-		while (!Thread.is_signaled() && !Ptr)
-			;
-
-		if (Ptr)
-		{
-			// You're someone else's problem
-			Thread.detach();
-		}
-
+		assert(Ptr);
 		rethrow_if(Ptr);
 	}
 
@@ -343,12 +336,12 @@ namespace tests
 
 	static void seh_divide_by_zero_thread()
 	{
-		std::exception_ptr Ptr;
-		os::thread Thread(os::thread::mode::join, [&]
+		seh_exception SehException;
+		os::thread const Thread(os::thread::mode::join, [&]
 		{
 			os::debug::set_thread_name(L"Divide by zero test");
 
-			seh_try_thread(Ptr, []
+			seh_try_thread(SehException, []
 			{
 				volatile const auto InvalidDenominator = 0;
 				[[maybe_unused]]
@@ -356,16 +349,11 @@ namespace tests
 			});
 		});
 
-		while (!Thread.is_signaled() && !Ptr)
-			;
+		const auto Result = os::handle::wait_any({ Thread.native_handle(), SehException.native_handle() });
 
-		if (Ptr)
-		{
-			// You're someone else's problem
-			Thread.detach();
-		}
-
-		rethrow_if(Ptr);
+		assert(Result == 1);
+		if (Result == 1)
+			SehException.raise();
 	}
 
 	static void seh_int_overflow()
@@ -377,17 +365,15 @@ namespace tests
 
 	static void seh_stack_overflow()
 	{
+		[[maybe_unused]]
 		volatile char Buffer[10240];
-		Buffer[0] = 1;
 
 		// Prevent the compiler from detecting recursion on all control paths:
-		volatile const auto Condition = true;
-		if (Condition)
+		if ([[maybe_unused]] volatile const auto Condition = true)
 			seh_stack_overflow();
 
-		// A "side effect" to prevent deletion of this function call due to C4718.
 		// After the recursive call to prevent the tail call optimisation.
-		Sleep(Buffer[0]);
+		Buffer[0] = 1;
 	}
 
 	[[noreturn]]
@@ -484,6 +470,12 @@ namespace tests
 		const volatile size_t Index = 1;
 		v.data()[Index] = 42;
 	}
+
+	static void debug_nt_assertion_failure()
+	{
+		if ([[maybe_unused]] volatile const auto Condition = true)
+			DbgRaiseAssertionFailure();
+	}
 }
 
 static bool trace()
@@ -566,6 +558,7 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::debug_bounds_check,           L"Debug bounds check"sv },
 		{ tests::debug_bounds_check_as_stack,  L"Debug bounds check stack (ASAN)"sv },
 		{ tests::debug_bounds_check_as_heap,   L"Debug bounds check heap (ASAN)"sv },
+		{ tests::debug_nt_assertion_failure,   L"Debug NT assertion failure"sv },
 	};
 
 	const auto ModalMenu = VMenu2::create(L"Test Exceptions"s, {}, ScrY - 4);

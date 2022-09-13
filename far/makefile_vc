@@ -135,6 +135,7 @@ LINK_OBJS = \
 	"$(INTDIR)\hotplug.obj" \
 	"$(INTDIR)\imports.obj"\
 	"$(INTDIR)\infolist.obj" \
+	"$(INTDIR)\initguid.obj" \
 	"$(INTDIR)\interf.obj" \
 	"$(INTDIR)\keybar.obj" \
 	"$(INTDIR)\keyboard.obj" \
@@ -300,10 +301,10 @@ AllDirs:
 	$(ULINKFLAGS) $(LINK_OBJS)
 	,"$(OUTDIR)\Far.exe","$(OUTDIR)\Far.map"
 	,$(LINK_LIBS)
-	,far.def,"$(RES_FILE)"
+	,,"$(RES_FILE)"
 <<
 !endif
-!if "$(BUILD_PLATFORM)" == "X86" || "$(BUILD_PLATFORM)" == "AMD64"
+!if ("$(BUILD_PLATFORM)" == "X86" || "$(BUILD_PLATFORM)" == "AMD64") && !defined(LINK_ULINK)
 	@echo Fixing subsystem version
 	editbin /nologo /subsystem:console,$(OS_VERSION) /osversion:$(OS_VERSION) $(OUTDIR)\Far.exe > $(INTDIR)\version_fix.log
 !endif
@@ -316,11 +317,14 @@ $(PCH_FILE): $(PCH_NAME).cpp $(PCH_NAME).hpp
 	@echo Making precompiled headers
 	$(CPP) $(CPPFLAGS) $(PCH_NAME).cpp /Yc$(PCH_NAME).hpp /Fp$(PCH_FILE)
 
-$(INTDIR)\vc_crt_fix_impl.obj: vc_crt_fix_impl.cpp
-	$(CPP) $(CPPFLAGS) /Zc:threadSafeInit- vc_crt_fix_impl.cpp
+$(INTDIR)\initguid.obj: $(@B).cpp
+	$(CPP) $(CPPFLAGS) $(@B).cpp
 
-$(INTDIR)\vc_crt_fix_ulink.obj: vc_crt_fix_ulink.cpp
-	$(CPP) $(CPPFLAGS) vc_crt_fix_ulink.cpp
+$(INTDIR)\vc_crt_fix_impl.obj: $(@B).cpp
+	$(CPP) $(CPPFLAGS) /Zc:threadSafeInit- $(@B).cpp
+
+$(INTDIR)\vc_crt_fix_ulink.obj: $(@B).cpp
+	$(CPP) $(CPPFLAGS) $(@B).cpp
 
 !ifdef NOBATCH
 .c{$(INTDIR)}.obj:

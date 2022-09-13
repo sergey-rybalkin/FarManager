@@ -127,7 +127,7 @@ static const auto HelpFormatLinkModule = FSTR(L"<{}>{}"sv);
 
 class Help final: public window
 {
-	struct private_tag {};
+	struct private_tag { explicit private_tag() = default; };
 
 public:
 	static help_ptr create(string_view Topic, string_view Mask, unsigned long long Flags);
@@ -272,35 +272,14 @@ void Help::init(string_view const Topic, string_view const Mask, unsigned long l
 		ReadHelp(StackData->strHelpMask);
 	}
 
-	if (!HelpList.empty())
-	{
-		m_Flags.Clear(FHELPOBJ_ERRCANNOTOPENHELP);
-		InitKeyBar();
-		SetMacroMode(MACROAREA_HELP);
-		MoveToReference(1,1);
-		Global->WindowManager->ExecuteWindow(shared_from_this()); //OT
-		Global->WindowManager->ExecuteModal(shared_from_this()); //OT
-	}
-	else
-	{
-		ErrorHelp = true;
+	if (HelpList.empty())
+		throw MAKE_FAR_KNOWN_EXCEPTION(concat(msg(lng::MHelpTopicNotFound), L'\n', StackData->strHelpTopic));
 
-		if (!(Flags&FHELP_NOSHOWERROR))
-		{
-			if (!m_Flags.Check(FHELPOBJ_ERRCANNOTOPENHELP))
-			{
-				Message(MSG_WARNING,
-					msg(lng::MHelpTitle),
-					{
-						msg(lng::MHelpTopicNotFound),
-						StackData->strHelpTopic
-					},
-					{ lng::MOk });
-			}
-
-			m_Flags.Clear(FHELPOBJ_ERRCANNOTOPENHELP);
-		}
-	}
+	InitKeyBar();
+	SetMacroMode(MACROAREA_HELP);
+	MoveToReference(1,1);
+	Global->WindowManager->ExecuteWindow(shared_from_this()); //OT
+	Global->WindowManager->ExecuteModal(shared_from_this()); //OT
 }
 
 bool Help::ReadHelp(string_view const Mask)
@@ -498,13 +477,13 @@ bool Help::ReadHelp(string_view const Mask)
 
 			size_t LastKeySize = 0;
 
-			strReadStr = join(select(enum_tokens(strKeyName, L" "sv),
+			strReadStr = join(L"\n"sv, select(enum_tokens(strKeyName, L" "sv),
 				[&](const auto& i)
 				{
 					LastKeySize = i.size();
 					return concat(L" #"sv, escape(i), L'#');
-				}),
-				L"\n"sv);
+				})
+			);
 
 			if (!strDescription.empty())
 			{
@@ -674,17 +653,9 @@ m1:
 							else
 								RepeatLastLine = true;
 						}
-						else if (!strReadStr.empty())
+						else if (StringLen(strReadStr)<RealMaxLength)
 						{
-							if (StringLen(strReadStr)<RealMaxLength)
-							{
-								AddLine(strReadStr);
-								continue;
-							}
-						}
-						else
-						{
-							AddLine({});
+							AddLine(strReadStr);
 							continue;
 						}
 					}
@@ -806,7 +777,6 @@ m1:
 		PrevSymbol = strReadStr.empty() ? L'\0' : strReadStr[0];
 	}
 
-	AddLine({});
 	ErrorHelp = false;
 
 	if (IsNewTopic)
@@ -1224,7 +1194,7 @@ void Help::CorrectPosition() const
 		StackData->CurY=0;
 	}
 
-	StackData->TopStr = std::max(0, std::min(StackData->TopStr, static_cast<int>(HelpList.size()) - FixCount - BodyHeight()));
+	StackData->TopStr = std::max(0, std::min(StackData->TopStr, static_cast<int>(HelpList.size()) - BodyHeight()));
 }
 
 long long Help::VMProcess(int OpCode,void* vParam, long long iParam)
@@ -2056,7 +2026,6 @@ void Help::Search(const os::fs::file& HelpFile,uintptr_t nCodePage)
 		}
 	}
 
-	AddLine({});
 	MoveToReference(1,1);
 }
 
@@ -2115,8 +2084,6 @@ void Help::ReadDocumentsHelp(int TypeIndex)
 
 	// сортируем по алфавиту
 	std::sort(HelpList.begin()+1, HelpList.end());
-	// $ 26.06.2000 IS - Устранение глюка с хелпом по f1, shift+f2, end (решение предложил IG)
-	AddLine({});
 }
 
 void Help::SetScreenPosition()
@@ -2218,7 +2185,23 @@ namespace help
 {
 	bool show(string_view const Topic, string_view const Mask, unsigned long long const Flags)
 	{
-		return !Help::create(Topic, Mask, Flags)->GetError();
+		try
+		{
+			return !Help::create(Topic, Mask, Flags)->GetError();
+		}
+		catch (far_exception const& e)
+		{
+			if (!(Flags & FHELP_NOSHOWERROR))
+			{
+				Message(MSG_WARNING, e,
+					msg(lng::MHelpTitle),
+					{
+					},
+					{ lng::MOk });
+			}
+
+			return false;
+		}
 	}
 
 	string make_link(string_view const Path, string_view const Topic)

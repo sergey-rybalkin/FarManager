@@ -251,7 +251,7 @@ végtelenségig fog várakozni a bemenő adatfolyam végére. Ezt a hibát a Far
 egy későbbi verziójában a szerzők valószínűleg ki fogják javítani.
 
  #-w[-]#
- Stretch to console window instead of console buffer or vice versa.
+ Show the interface within the console window instead of the console buffer or vice versa.
 
  #-t templateprofile#
  Location of Far template configuration file (overrides the ini file).
@@ -347,7 +347,7 @@ $ #Panelvezérlő parancsok#
  Megmutatja/elrejti a funkcióbillentyűk sorát                #Ctrl+B#
  a képernyő alján
  Toggle total and free size show mode                  #Ctrl+Shift+S#
- in bytes (if possible) or with size suffices K/M/G/T
+ in bytes (if possible) or with size suffixes K/M/G/T
 
  #Fájlpanel parancsok#
 
@@ -515,7 +515,7 @@ $ #Sort criteria#
  Move the criterion down.
 
  #Ctrl+R#
- Reset the set of criteria to detault.
+ Reset the set of criteria to default.
 
 
 @FastFind
@@ -2639,8 +2639,8 @@ to calculate the total files count.
 nem elérhető).
 
  #Use Virtual Terminal for rendering#
- Render the output using ANSI escape sequences.
- This allows using 24-bit colors and may (or may not) work better (or worse) with some Unicode characters.
+ Render the output using ANSI escape sequences. You can find more about it ~here~@https://docs.microsoft.com/en-us/windows/console/classic-vs-vt@.
+ This allows using 8 and 24-bit colors, text styles, and may (or may not) work better (or worse) with some Unicode characters.
  Requires Windows 10 and above.
 
  #Fullwidth-aware rendering#
@@ -4426,6 +4426,9 @@ $ #Color Picker#
  Only the standard 16-color palette is guaranteed to work everywhere.
  Support for everything else is conditional and defined by your terminal.
 
+ Extended colors and styles require Virtual Terminal-based rendering, which can be enabled in ~Interface settings~@InterfSettings@.
+You can find more about it ~here~@https://docs.microsoft.com/en-us/windows/console/classic-vs-vt@.
+
 
 @ColorPicker256
 $ #256 Color Picker#
@@ -4437,7 +4440,7 @@ $ #256 Color Picker#
  \80  \90  \A0  \B0  \C0  \D0  \E0  \F0  \-
 
  The next 216 colors are represented as a 6x6x6 cube. The palette usually has 6 levels for every primary color and forms a homogeneous RGB cube.
- Use the buttons on the right to rotate the cube and access its inner levels.
+ Use the buttons on the right to rotate the cube, access its inner levels or mix the primary colors directly.
 
  \(:10)  \(:11)  \(:12)  \(:13)  \(:14)  \(:15)  \-  \(:34)  \(:35)  \(:36)  \(:37)  \(:38)  \(:39)  \-  \(:58)  \(:59)  \(:5A)  \(:5B)  \(:5C)  \(:5D)  \-
  \(:16)  \(:17)  \(:18)  \(:19)  \(:1A)  \(:1B)  \-  \(:3A)  \(:3B)  \(:3C)  \(:3D)  \(:3E)  \(:3F)  \-  \(:5E)  \(:5F)  \(:60)  \(:61)  \(:62)  \(:63)  \-

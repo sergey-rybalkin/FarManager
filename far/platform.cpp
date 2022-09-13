@@ -43,6 +43,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "string_utils.hpp"
 #include "exception.hpp"
 #include "log.hpp"
+#include "encoding.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -304,12 +305,27 @@ bool get_locale_value(LCID const LcId, LCTYPE const Id, int& Value)
 string GetPrivateProfileString(string_view const AppName, string_view const KeyName, string_view const Default, string_view const FileName)
 {
 	string Value;
-	return detail::ApiDynamicStringReceiver(Value, [&](span<wchar_t> const Buffer)
+
+	if (!detail::ApiDynamicStringReceiver(Value, [&](span<wchar_t> const Buffer)
 	{
 		const auto Size = ::GetPrivateProfileString(null_terminated(AppName).c_str(), null_terminated(KeyName).c_str(), null_terminated(Default).c_str(), Buffer.data(), static_cast<DWORD>(Buffer.size()), null_terminated(FileName).c_str());
 		return Size == Buffer.size() - 1? Buffer.size() * 2 : Size;
-	})?
-		Value : string(Default);
+	}))
+		return {};
+
+	// GetPrivateProfileStringW doesn't work with UTF-8 and interprets it as ANSI.
+	// We try to re-convert if possible.
+
+	const auto AnsiBytes = encoding::ansi::get_bytes(Value);
+
+	if (encoding::ansi::get_chars(AnsiBytes) != Value)
+		return Value;
+
+	bool PureAscii{};
+	if (!encoding::is_valid_utf8(AnsiBytes, false, PureAscii) || PureAscii)
+		return Value;
+
+	return encoding::utf8::get_chars(AnsiBytes);
 }
 
 bool GetWindowText(HWND Hwnd, string& Text)
@@ -476,6 +492,26 @@ HKL make_hkl(string_view const LayoutStr)
 	return {};
 }
 
+bool is_interactive_user_session()
+{
+	const auto WindowStation = GetProcessWindowStation();
+	if (!WindowStation)
+	{
+		LOGWARNING(L"GetProcessWindowStation(): {}"sv, last_error());
+		return false; // assume the worse
+	}
+
+	USEROBJECTFLAGS Flags;
+	if (!GetUserObjectInformation(WindowStation, UOI_FLAGS, &Flags, sizeof(Flags), {}))
+	{
+		LOGWARNING(L"GetUserObjectInformation(): {}"sv, last_error());
+		return false; // assume the worse
+	}
+
+	// An invisible window station suggests that we aren't interactive.
+	return flags::check_all(Flags.dwFlags, WSF_VISIBLE);
+}
+
 namespace rtdl
 	{
 		void module::module_deleter::operator()(HMODULE Module) const
@@ -501,6 +537,24 @@ namespace rtdl
 		FARPROC module::get_proc_address(HMODULE Module, const char* Name) const
 		{
 			return Module? ::GetProcAddress(Module, Name) : nullptr;
+		}
+
+		opaque_function_pointer::opaque_function_pointer(const module& Module, const char* Name):
+			m_Module(&Module),
+			m_Name(Name)
+		{}
+
+		opaque_function_pointer::operator bool() const noexcept
+		{
+			return get_pointer() != nullptr;
+		}
+
+		void* opaque_function_pointer::get_pointer() const
+		{
+			if (!m_Pointer)
+				m_Pointer = m_Module->GetProcAddress<void*>(m_Name);
+
+			return *m_Pointer;
 		}
 	}
 

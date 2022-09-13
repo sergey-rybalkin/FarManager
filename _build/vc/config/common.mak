@@ -110,9 +110,13 @@ LINKFLAGS = $(LINKFLAGS)\
 	/largeaddressaware\
 	/dynamicbase\
 	/map\
-	/LIBPATH:"..\..\libgit2-1.3.0\build\MinSizeRel\"\
+	/merge:_RDATA=.rdata
 
-ULINKFLAGS = $(ULINKFLAGS) -q -m- -ap -Gz -O- -o- -Gh -Gh- -GF:LARGEADDRESSAWARE -d*kernel32
+ULINKFLAGS = $(ULINKFLAGS) -q -m- -ap -Gz -O- -o- -Gh -Gh- -b* \
+             -GF:NXCOMPAT -GF:LARGEADDRESSAWARE
+!if "$(DIRBIT)"=="64"
+ULINKFLAGS = $(ULINKFLAGS) -GM:_RDATA=.rdata
+!endif
 
 # Configuration-specific flags
 !ifdef DEBUG
@@ -146,13 +150,16 @@ CPPFLAGS = $(CPPFLAGS) /analyze
 CPPFLAGS = $(CPPFLAGS) /arch:IA32
 !ifndef DEBUG
 CPPFLAGS = $(CPPFLAGS) /Oy-
+LINKFLAGS = $(LINKFLAGS) /safeseh
+ULINKFLAGS = $(ULINKFLAGS) -RS
 !endif # DEBUG
 LINKFLAGS = $(LINKFLAGS) /machine:i386
+ULINKFLAGS = $(ULINKFLAGS) -Tpe -W5.1 -V5.1
 OS_VERSION = 5.0
 MASM = ml
 !elseif "$(BUILD_PLATFORM)" == "AMD64"
 LINKFLAGS = $(LINKFLAGS) /machine:amd64
-ULINKFLAGS = $(ULINKFLAGS) -Tpe+
+ULINKFLAGS = $(ULINKFLAGS) -Tpe+ -V5.2 -W5.2
 OS_VERSION = 5.2
 MASM = ml64
 AFLAGS=$(AFLAGS) /D "X64"
@@ -200,7 +207,4 @@ LINK_LIBS =\
 	userenv.lib\
 	comdlg32.lib\
 	wbemuuid.lib\
-	Winhttp.lib\
-	Crypt32.lib\
-	git2.lib
 
