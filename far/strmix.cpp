@@ -44,11 +44,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "preservestyle.hpp"
 #include "locale.hpp"
-#include "stddlg.hpp"
 #include "encoding.hpp"
 #include "regex_helpers.hpp"
 #include "string_utils.hpp"
-#include "exception.hpp"
 #include "global.hpp"
 
 // Platform:
@@ -328,18 +326,40 @@ bool IsCaseMixed(const string_view Str)
    Форматирование размера файла в удобочитаемый вид.
 */
 
-static const unsigned long long BytesInUnit[][2]
+template<size_t multiplier>
+struct units
 {
-	{0x0000000000000001ull,                   1ull}, // B
-	{0x0000000000000400ull,                1000ull}, // KiB / KB
-	{0x0000000000100000ull,             1000000ull}, // MiB / MB
-	{0x0000000040000000ull,          1000000000ull}, // GiB / GB
-	{0x0000010000000000ull,       1000000000000ull}, // TiB / TB
-	{0x0004000000000000ull,    1000000000000000ull}, // PiB / PB
-	{0x1000000000000000ull, 1000000000000000000ull}, // EiB / EB
+	enum: unsigned long long
+	{
+		B = 1,
+		K = B * multiplier,
+		M = K * multiplier,
+		G = M * multiplier,
+		T = G * multiplier,
+		P = T * multiplier,
+		E = P * multiplier,
+	};
 };
 
-static const unsigned long long PrecisionMultiplier[]
+using binary = units<1024>;
+using decimal = units<1000>;
+
+static constexpr unsigned long long BytesInUnit[][2]
+{
+#define BD_UNIT(x) { binary::x, decimal::x }
+
+	BD_UNIT(B),
+	BD_UNIT(K),
+	BD_UNIT(M),
+	BD_UNIT(G),
+	BD_UNIT(T),
+	BD_UNIT(P),
+	BD_UNIT(E),
+
+#undef BU_NIT
+};
+
+static constexpr unsigned long long PrecisionMultiplier[]
 {
 	  1ull,
 	 10ull,
@@ -491,13 +511,26 @@ string FileSizeToStr(unsigned long long FileSize, int WidthWithSign, unsigned lo
 	return FormatSize(std::move(Str), UnitIndex);
 }
 
-
 // Заменить в строке Str Count вхождений подстроки FindStr на подстроку ReplStr
 // Если Count == npos - заменять "до полной победы"
-bool ReplaceStrings(string& strStr, const string_view FindStr, const string_view ReplStr, const bool IgnoreCase, size_t Count)
+bool ReplaceStrings(string& strStr, string_view FindStr, string_view ReplStr, const bool IgnoreCase, size_t Count)
 {
 	if (strStr.empty() || FindStr.empty() || !Count)
 		return false;
+
+	string FindCopy, ReplaceCopy;
+
+	if (Count != 1 && within(strStr, FindStr))
+	{
+		FindCopy = FindStr;
+		FindStr = FindCopy;
+	}
+
+	if (Count != 1 && within(strStr, ReplStr))
+	{
+		ReplaceCopy = ReplStr;
+		ReplStr = ReplaceCopy;
+	}
 
 	size_t replaced = 0;
 	size_t StartPos = 0;
@@ -596,7 +629,7 @@ bool FindWordInString(string_view const Str, size_t CurPos, size_t& Begin, size_
 	if (Str.empty() || CurPos > Str.size())
 		return false;
 
-	const auto WordDiv = concat(WordDiv0, GetSpaces(), GetEols());
+	const auto WordDiv = concat(WordDiv0, GetBlanks(), GetEols());
 
 	if (!CurPos)
 	{
@@ -673,15 +706,13 @@ unsigned long long ConvertFileSizeString(string_view const FileSizeStr)
 	}
 }
 
-namespace
-{
-	string ReplaceBrackets(
+string ReplaceBrackets(
 		const string_view SearchStr,
 		const string_view ReplaceStr,
 		span<RegExpMatch const> Match,
 		const named_regex_match* NamedMatch,
 		int& CurPos,
-		int* SearchLength)
+		int& SearchLength)
 	{
 		string result;
 		for (size_t i = 0, length = ReplaceStr.size(); i < length; ++i)
@@ -734,8 +765,9 @@ namespace
 								if (Iterator != NamedMatch->Matches.cend())
 								{
 									Success = true;
-									start = Iterator->second.start;
-									end = Iterator->second.end;
+									const auto& m = Match[Iterator->second];
+									start = m.start;
+									end = m.end;
 								}
 							}
 						}
@@ -760,22 +792,24 @@ namespace
 			}
 		}
 
-		*SearchLength = Match[0].end - Match[0].start;
+		SearchLength = Match[0].end - Match[0].start;
 		CurPos = Match[0].start;
 		return result;
 	}
 
+namespace
+{
 	bool CanContainWholeWord(string_view const Haystack, size_t const Offset, size_t const NeedleSize, string_view const WordDiv)
 	{
-		const auto BlankOrWordDiv = [&WordDiv](wchar_t Ch)
+		const auto SpaceOrWordDiv = [&WordDiv](wchar_t Ch)
 		{
-			return std::iswblank(Ch) || contains(WordDiv, Ch);
+			return std::iswspace(Ch) || contains(WordDiv, Ch);
 		};
 
-		if (Offset && !BlankOrWordDiv(Haystack[Offset - 1]))
+		if (Offset && !SpaceOrWordDiv(Haystack[Offset - 1]))
 			return false;
 
-		if (Offset + NeedleSize < Haystack.size() && !BlankOrWordDiv(Haystack[Offset + NeedleSize]))
+		if (Offset + NeedleSize < Haystack.size() && !SpaceOrWordDiv(Haystack[Offset + NeedleSize]))
 			return false;
 
 		return true;
@@ -787,14 +821,13 @@ namespace
 		std::vector<RegExpMatch>& Match,
 		named_regex_match* const NamedMatch,
 		intptr_t Position,
-		bool const WholeWords,
-		bool const Reverse,
+		search_replace_string_options const options,
 		string& ReplaceStr,
 		int& CurPos,
-		int* SearchLength,
+		int& SearchLength,
 		string_view WordDiv)
 	{
-		if (!Reverse)
+		if (!options.Reverse)
 		{
 			auto CurrentPosition = Position;
 
@@ -803,7 +836,7 @@ namespace
 				if (!re.SearchEx(Source, CurrentPosition, Match, NamedMatch))
 					return false;
 
-				if (WholeWords && !CanContainWholeWord(Source, Match[0].start, Match[0].end - Match[0].start, WordDiv))
+				if (options.WholeWords && !CanContainWholeWord(Source, Match[0].start, Match[0].end - Match[0].start, WordDiv))
 				{
 					++CurrentPosition;
 					continue;
@@ -827,7 +860,7 @@ namespace
 			if (pos > Position)
 				break;
 
-			if (WholeWords && !CanContainWholeWord(Source, Match[0].start, Match[0].end - Match[0].start, WordDiv))
+			if (options.WholeWords && !CanContainWholeWord(Source, Match[0].start, Match[0].end - Match[0].start, WordDiv))
 			{
 				++pos;
 				continue;
@@ -836,7 +869,7 @@ namespace
 			found = true;
 			FoundMatch = std::move(Match);
 			if (NamedMatch)
-				FoundNamedMatch.Matches = std::move(NamedMatch)->Matches;
+				FoundNamedMatch.Matches = std::move(NamedMatch->Matches);
 			++pos;
 		}
 
@@ -857,11 +890,8 @@ bool SearchString(
 	std::vector<RegExpMatch>& Match,
 	named_regex_match* const NamedMatch,
 	int& CurPos,
-	search_case_fold const CaseFold,
-	bool const WholeWords,
-	bool const Reverse,
-	bool const Regexp,
-	int* const SearchLength,
+	search_replace_string_options const options,
+	int& SearchLength,
 	string_view WordDiv)
 {
 	string Dummy;
@@ -874,11 +904,7 @@ bool SearchString(
 		NamedMatch,
 		Dummy,
 		CurPos,
-		CaseFold,
-		WholeWords,
-		Reverse,
-		Regexp,
-		false,
+		options,
 		SearchLength,
 		WordDiv
 	);
@@ -893,20 +919,16 @@ bool SearchAndReplaceString(
 	named_regex_match* const NamedMatch,
 	string& ReplaceStr,
 	int& CurPos,
-	search_case_fold const CaseFold,
-	bool const WholeWords,
-	bool const Reverse,
-	bool const Regexp,
-	bool const PreserveStyle,
-	int* const SearchLength,
+	search_replace_string_options const options,
+	int& SearchLength,
 	string_view WordDiv)
 {
-	*SearchLength = 0;
+	SearchLength = 0;
 
 	if (WordDiv.empty())
 		WordDiv = Global->Opt->strWordDiv;
 
-	if (!Regexp && PreserveStyle && PreserveStyleReplaceString(Haystack, Needle, ReplaceStr, CurPos, CaseFold, WholeWords, WordDiv, Reverse, *SearchLength))
+	if (!options.Regexp && options.PreserveStyle && PreserveStyleReplaceString(Haystack, Needle, ReplaceStr, CurPos, options, WordDiv, SearchLength))
 		return true;
 
 	if (Needle.empty())
@@ -915,7 +937,7 @@ bool SearchAndReplaceString(
 	auto Position = CurPos;
 	const auto HaystackSize = static_cast<int>(Haystack.size());
 
-	if (Reverse)
+	if (options.Reverse)
 	{
 		// MZK 2018-04-01 BUGBUG: regex reverse search: "^$" does not match empty string
 		Position = std::min(Position - 1, HaystackSize - 1);
@@ -924,51 +946,51 @@ bool SearchAndReplaceString(
 			return false;
 	}
 
-	if (Regexp)
+	if (options.Regexp)
 	{
 		// Empty Haystack is ok for regex search, e.g. ^$
 		if ((Position || HaystackSize) && Position >= HaystackSize)
 			return false;
 
-		return SearchStringRegex(Haystack, re, Match, NamedMatch, Position, WholeWords, Reverse, ReplaceStr, CurPos, SearchLength, WordDiv);
+		return SearchStringRegex(Haystack, re, Match, NamedMatch, Position, options, ReplaceStr, CurPos, SearchLength, WordDiv);
 	}
 
 	if (Position >= HaystackSize)
 		return false;
 
-	auto Where = Reverse?
+	auto Where = options.Reverse?
 		Haystack.substr(0, Position + 1) :
 		Haystack.substr(Position);
 
 	const auto Next = [&](size_t const Offset)
 	{
-		Where = Reverse?
+		Where = options.Reverse?
 			Where.substr(0, Offset > 0? Offset - 1 : 0) :
 			Where.substr(Offset + 1);
 	};
 
 	while (!Where.empty())
 	{
-		const auto FoundPosition = NeedleSearcher.find_in(Where, Reverse);
+		const auto FoundPosition = NeedleSearcher.find_in(Where, options.Reverse);
 		if (!FoundPosition)
 			return false;
 
 		const auto [FoundOffset, FoundSize] = *FoundPosition;
 
-		const auto AbsoluteOffset = Reverse? FoundOffset : Haystack.size() - Where.size() + FoundOffset;
+		const auto AbsoluteOffset = options.Reverse? FoundOffset : Haystack.size() - Where.size() + FoundOffset;
 
-		if (WholeWords && !CanContainWholeWord(Haystack, AbsoluteOffset, FoundSize, WordDiv))
+		if (options.WholeWords && !CanContainWholeWord(Haystack, AbsoluteOffset, FoundSize, WordDiv))
 		{
 			Next(FoundOffset);
 			continue;
 		}
 
 		CurPos = static_cast<int>(AbsoluteOffset);
-		*SearchLength = static_cast<int>(FoundSize);
+		SearchLength = static_cast<int>(FoundSize);
 
 		// В случае PreserveStyle: если не получилось сделать замену c помощью PreserveStyleReplaceString,
 		// то хотя бы сохранить регистр первой буквы.
-		if (PreserveStyle && !ReplaceStr.empty() && is_alpha(ReplaceStr.front()) && is_alpha(Haystack[CurPos]))
+		if (options.PreserveStyle && !ReplaceStr.empty() && is_alpha(ReplaceStr.front()) && is_alpha(Haystack[CurPos]))
 		{
 			if (is_upper(Haystack[CurPos]))
 				inplace::upper(ReplaceStr.front());
@@ -1178,6 +1200,34 @@ TEST_CASE("ReplaceStrings")
 	}
 }
 
+TEST_CASE("ReplaceStrings.within")
+{
+	{
+		auto Str = L"99 little bugs in the code. 99 little bugs in the code"s;
+		const auto Find = string_view(Str).substr(0, 2);
+		const auto Replace = string_view(Str).substr(3, 6);
+		ReplaceStrings(Str, Find, Replace);
+		REQUIRE(Str == L"little little bugs in the code. little little bugs in the code"sv);
+	}
+
+	{
+		auto Str = L"banana banana banana banana"s;
+		const auto Find = string_view(Str).substr(21, 6);
+		const auto Replace = string_view(Str).substr(2, 2);
+		ReplaceStrings(Str, Find, Replace);
+		REQUIRE(Str == L"na na na na"sv);
+	}
+
+	{
+		auto Str = L"Alegría Macarena"s;
+		const auto Find = string_view(Str).substr(0, 7);
+		const auto Replace = string_view(Str).substr(8, 8);
+		// A single replace should pick the fast path
+		ReplaceStrings(Str, Find, Replace, false, 1);
+		REQUIRE(Str == L"Macarena Macarena"sv);
+	}
+}
+
 TEST_CASE("remove_duplicates")
 {
 	static const struct
@@ -1369,29 +1419,30 @@ TEST_CASE("truncate")
 		{ L"c:/123/456"sv, 20, L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv,  L"c:/123/456"sv, },
 	};
 
-	using handler = string(string_view, size_t);
-	using legacy_handler = wchar_t*(wchar_t*, int);
-	using result_ptr = decltype(&tests::ResultLeft);
-	using tp = std::tuple<handler*, legacy_handler*, result_ptr>;
-
-	static const std::array Functions
+	static const struct
 	{
-		tp{ truncate_left,   legacy::truncate_left,   &tests::ResultLeft   },
-		tp{ truncate_center, legacy::truncate_center, &tests::ResultCenter },
-		tp{ truncate_right,  legacy::truncate_right,  &tests::ResultRight  },
-		tp{ truncate_path,   legacy::truncate_path,   &tests::ResultPath   },
+		string(*Truncate)(string_view, size_t);
+		wchar_t*(*TruncateLegacy)(wchar_t*, int);
+		string_view tests::*StrAccessor;
+	}
+	Functions[]
+	{
+		{ truncate_left,   legacy::truncate_left,   &tests::ResultLeft   },
+		{ truncate_center, legacy::truncate_center, &tests::ResultCenter },
+		{ truncate_right,  legacy::truncate_right,  &tests::ResultRight  },
+		{ truncate_path,   legacy::truncate_path,   &tests::ResultPath   },
 	};
 
 	for (const auto& i: Tests)
 	{
-		for (const auto& [Truncate, TruncateLegacy, StrAccessor]: Functions)
+		for (const auto& f: Functions)
 		{
-			const auto Baseline = std::invoke(StrAccessor, i);
+			const auto Baseline = std::invoke(f.StrAccessor, i);
 
-			REQUIRE(Truncate(string(i.Src), i.Size) == Baseline);
+			REQUIRE(f.Truncate(string(i.Src), i.Size) == Baseline);
 
 			string Buffer(i.Src);
-			REQUIRE(TruncateLegacy(Buffer.data(), static_cast<int>(i.Size)) == Baseline);
+			REQUIRE(f.TruncateLegacy(Buffer.data(), static_cast<int>(i.Size)) == Baseline);
 		}
 	}
 }

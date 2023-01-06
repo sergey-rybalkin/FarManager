@@ -62,10 +62,7 @@ struct map_file::line
 
 static string get_map_name(string_view const ModuleName)
 {
-	string_view BaseName = ModuleName;
-	const auto Ext = name_ext(BaseName).second;
-	BaseName.remove_suffix(Ext.size());
-	return BaseName + L".map"sv;
+	return name_ext(ModuleName).first + L".map"sv;
 }
 
 map_file::map_file(string_view const ModuleName)
@@ -128,7 +125,12 @@ static map_file::info get_impl(uintptr_t const Address, std::map<uintptr_t, map_
 
 	undecorate(Begin->second.Name);
 
-	return { Begin->second.Name, *Begin->second.File, Address - Begin->first };
+	return
+	{
+		.File = *Begin->second.File,
+		.Symbol = Begin->second.Name,
+		.Displacement = Address - Begin->first
+	};
 }
 
 map_file::info map_file::get(uintptr_t const Address)
@@ -146,7 +148,7 @@ enum class map_format
 
 static auto determine_format(string_view const Str)
 {
-	if (starts_with(Str, L' '))
+	if (Str.starts_with(L' '))
 		return map_format::msvc;
 
 	if (Str == L"Address  Size     Align Out     In      Symbol"sv)
@@ -180,8 +182,10 @@ static void read_vc(std::istream& Stream, unordered_string_set& Files, std::map<
 {
 	RegExp ReBase, ReSymbol;
 	ReBase.Compile(L"^ +Preferred load address is ([0-9A-Fa-f]+)$"sv, OP_OPTIMIZE);
-	ReSymbol.Compile(L"^ +([0-9A-Fa-f]+):([0-9A-Fa-f]+) +([^ ]+) +([0-9A-Fa-f]+) .+ ([^ ]+)$"sv, OP_OPTIMIZE);
+	ReSymbol.Compile(L"^ +[0-9A-Fa-f]+:[0-9A-Fa-f]+ +([^ ]+) +([0-9A-Fa-f]+) .+ ([^ ]+)$"sv, OP_OPTIMIZE);
+
 	std::vector<RegExpMatch> m;
+	m.reserve(3);
 
 	uintptr_t BaseAddress{};
 
@@ -198,7 +202,7 @@ static void read_vc(std::istream& Stream, unordered_string_set& Files, std::map<
 
 		if (ReSymbol.Search(i.Str, m))
 		{
-			auto Address = from_string<uintptr_t>(group(i.Str, m, 4), {}, 16);
+			auto Address = from_string<uintptr_t>(group(i.Str, m, 2), {}, 16);
 			if (!Address)
 				continue;
 
@@ -206,8 +210,8 @@ static void read_vc(std::istream& Stream, unordered_string_set& Files, std::map<
 				Address -= BaseAddress;
 
 			map_file::line Line;
-			Line.Name = group(i.Str, m, 3);
-			const auto File = group(i.Str, m, 5);
+			Line.Name = group(i.Str, m, 1);
+			const auto File = group(i.Str, m, 3);
 			Line.File = &*Files.emplace(File).first;
 
 			Symbols.emplace(Address, std::move(Line));
@@ -221,7 +225,9 @@ static void read_clang(std::istream& Stream, unordered_string_set& Files, std::m
 	RegExp ReObject, ReSymbol;
 	ReObject.Compile(L"^[0-9A-Fa-f]+ [0-9A-Fa-f]+ +[0-9]+         (.+)$"sv);
 	ReSymbol.Compile(L"^([0-9A-Fa-f]+) [0-9A-Fa-f]+     0                 (.+)$"sv);
+
 	std::vector<RegExpMatch> m;
+	m.reserve(2);
 
 	string ObjName;
 
@@ -254,7 +260,9 @@ static void read_gcc(std::istream& Stream, unordered_string_set& Files, std::map
 	ReFile.Compile(L"^File $"sv);
 	ReFileName.Compile(L"^\\[ *[0-9]+\\]\\(.+\\)\\(.+\\)\\(.+\\)\\(.+\\) \\(nx 1\\) 0x[0-9A-Fa-f]+ (.+)$"sv);
 	ReSymbol.Compile(L"^\\[ *[0-9]+\\]\\(.+\\)\\(.+\\)\\(.+\\)\\(.+\\) \\(nx 0\\) 0x([0-9A-Fa-f]+) (.+)$"sv);
+
 	std::vector<RegExpMatch> m;
+	m.reserve(2);
 
 	const auto BaseAddress = 0x1000;
 
@@ -308,22 +316,6 @@ void map_file::read(std::istream& Stream)
 
 #include "testing.hpp"
 
-struct test_symbol_info
-{
-	string_view
-		File, Symbol;
-
-	size_t Displacement;
-
-	bool operator==(map_file::info const& Info) const
-	{
-		return
-			File == Info.File &&
-			Symbol == Info.Symbol &&
-			Displacement == Info.Displacement;
-	}
-};
-
 TEST_CASE("map_file.msvc")
 {
 	const auto MapFileData =
@@ -360,7 +352,7 @@ R"( Far
 	static const struct
 	{
 		uintptr_t Address;
-		test_symbol_info Info;
+		map_file::info Info;
 	}
 	Tests[]
 	{
@@ -416,7 +408,7 @@ R"(Address  Size     Align Out     In      Symbol
 	static const struct
 	{
 		uintptr_t Address;
-		test_symbol_info Info;
+		map_file::info Info;
 	}
 	Tests[]
 	{
@@ -478,7 +470,7 @@ File )" R"(
 	static const struct
 	{
 		uintptr_t Address;
-		test_symbol_info Info;
+		map_file::info Info;
 	}
 	Tests[]
 	{

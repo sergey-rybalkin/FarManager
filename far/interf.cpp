@@ -57,6 +57,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "global.hpp"
 #include "log.hpp"
 #include "char_width.hpp"
+#include "exception_handler.hpp"
 
 // Platform:
 #include "platform.concurrency.hpp"
@@ -64,7 +65,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "platform.security.hpp"
 
 // Common:
-#include "common/function_ref.hpp"
 
 // External:
 #include "format.hpp"
@@ -160,7 +160,7 @@ static point InitialSize;
 
 static os::event& CancelIoInProgress()
 {
-	static os::event s_CancelIoInProgress;
+	static os::event s_CancelIoInProgress(os::event::type::manual, os::event::state::nonsignaled);
 	return s_CancelIoInProgress;
 }
 
@@ -176,7 +176,7 @@ static void CancelSynchronousIoWrapper(void* Thread)
 	CancelIoInProgress().reset();
 }
 
-static BOOL WINAPI CtrlHandler(DWORD CtrlType)
+static BOOL control_handler(DWORD CtrlType)
 {
 	switch(CtrlType)
 	{
@@ -216,6 +216,19 @@ static BOOL WINAPI CtrlHandler(DWORD CtrlType)
 		//return TRUE;
 	}
 	return FALSE;
+}
+
+static BOOL WINAPI CtrlHandler(DWORD CtrlType)
+{
+	return cpp_try(
+	[&]
+	{
+		return control_handler(CtrlType);
+	},
+	[&]
+	{
+		return FALSE;
+	});
 }
 
 static bool ConsoleGlobalKeysHook(const Manager::Key& key)
@@ -306,27 +319,29 @@ static bool ConsoleGlobalKeysHook(const Manager::Key& key)
 
 void InitConsole()
 {
-	static bool FirstInit = true;
-
-	if (FirstInit)
+	if (static bool FirstInit = true; FirstInit)
 	{
-		CancelIoInProgress() = os::event(os::event::type::manual, os::event::state::nonsignaled);
-
-		DWORD Mode;
-		if(!console.GetMode(console.GetInputHandle(), Mode))
-		{
-			static const auto ConIn = os::OpenConsoleInputBuffer();
-			SetStdHandle(STD_INPUT_HANDLE, ConIn.native_handle());
-		}
-
-		if(!console.GetMode(console.GetOutputHandle(), Mode))
-		{
-			static const auto ConOut = os::OpenConsoleActiveScreenBuffer();
-			SetStdHandle(STD_OUTPUT_HANDLE, ConOut.native_handle());
-			SetStdHandle(STD_ERROR_HANDLE, ConOut.native_handle());
-		}
-
 		Global->WindowManager->AddGlobalKeyHandler(ConsoleGlobalKeysHook);
+		FirstInit = false;
+	}
+
+	if (DWORD Mode; !console.GetMode(console.GetInputHandle(), Mode))
+	{
+		static os::handle ConIn;
+		// Separately to allow reinitialization
+		ConIn = os::OpenConsoleInputBuffer();
+
+		SetStdHandle(STD_INPUT_HANDLE, ConIn.native_handle());
+	}
+
+	if (DWORD Mode; !console.GetMode(console.GetOutputHandle(), Mode))
+	{
+		static os::handle ConOut;
+		// Separately to allow reinitialization
+		ConOut = os::OpenConsoleActiveScreenBuffer();
+
+		SetStdHandle(STD_OUTPUT_HANDLE, ConOut.native_handle());
+		SetStdHandle(STD_ERROR_HANDLE, ConOut.native_handle());
 	}
 
 	console.SetControlHandler(CtrlHandler, true);
@@ -342,48 +357,43 @@ void InitConsole()
 	console.GetSize(InitialSize);
 	console.GetCursorInfo(InitialCursorInfo);
 
-	if (FirstInit)
-	{
-		rectangle WindowRect;
-		console.GetWindowRect(WindowRect);
-		console.GetSize(InitSize);
+	rectangle WindowRect;
+	console.GetWindowRect(WindowRect);
+	console.GetSize(InitSize);
 
-		if(Global->Opt->WindowMode)
+	if(Global->Opt->WindowMode)
+	{
+		AdjustConsoleScreenBufferSize();
+		console.ResetViewportPosition();
+	}
+	else
+	{
+		if (WindowRect.left || WindowRect.top || WindowRect.right != InitSize.x - 1 || WindowRect.bottom != InitSize.y - 1)
 		{
-			AdjustConsoleScreenBufferSize();
-			console.ResetViewportPosition();
+			console.SetSize({ WindowRect.width(), WindowRect.height() });
+			console.GetSize(InitSize);
 		}
-		else
+	}
+	if (IsZoomed(console.GetWindow()))
+	{
+		ChangeVideoMode(true);
+	}
+	else
+	{
+		point CurrentSize;
+		if (console.GetSize(CurrentSize))
 		{
-			if (WindowRect.left || WindowRect.top || WindowRect.right != InitSize.x - 1 || WindowRect.bottom != InitSize.y - 1)
-			{
-				console.SetSize({ WindowRect.width(), WindowRect.height() });
-				console.GetSize(InitSize);
-			}
-		}
-		if (IsZoomed(console.GetWindow()))
-		{
-			ChangeVideoMode(true);
-		}
-		else
-		{
-			point CurrentSize;
-			if (console.GetSize(CurrentSize))
-			{
-				SaveNonMaximisedBufferSize(CurrentSize);
-			}
+			SaveNonMaximisedBufferSize(CurrentSize);
 		}
 	}
 
-
 	SetFarConsoleMode();
+	SetPalette();
 
 	UpdateScreenSize();
 	Global->ScrBuf->FillBuf();
 
 	consoleicons::instance().update_icon();
-
-	FirstInit = false;
 }
 
 void CloseConsole()
@@ -546,8 +556,13 @@ void ChangeVideoMode(bool Maximize)
 
 	if (Maximize)
 	{
-		SendMessage(console.GetWindow(),WM_SYSCOMMAND,SC_MAXIMIZE,0);
-		coordScreen = console.GetLargestWindowSize();
+		SendMessage(console.GetWindow(), WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+
+		coordScreen = console.GetLargestWindowSize(console.GetOutputHandle());
+
+		if (!coordScreen.x || !coordScreen.y)
+			return;
+
 		coordScreen.x += Global->Opt->ScrSize.DeltaX;
 		coordScreen.y += Global->Opt->ScrSize.DeltaY;
 	}
@@ -792,7 +807,7 @@ static void string_to_buffer_full_width_aware(string_view Str, std::vector<FAR_C
 			if (Char[1])
 			{
 				// It's a surrogate pair that occupies one cell only. Here be dragons.
-				if (console.IsVtEnabled())
+				if (console.IsVtActive())
 				{
 					// Put *one* fake character:
 					Buffer.back().Char = encoding::replace_char;
@@ -1618,6 +1633,12 @@ void AdjustConsoleScreenBufferSize()
 	}
 
 	console.SetScreenBufferSize(Size);
+}
+
+void SetPalette()
+{
+	if (Global->Opt->SetPalette)
+		console.SetPalette(colors::nt_palette());
 }
 
 static point& NonMaximisedBufferSize()

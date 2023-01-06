@@ -197,8 +197,7 @@ namespace tests
 		{
 			~c() noexcept(false)
 			{
-				volatile const auto Throw = true;
-				if (Throw)
+				if ([[maybe_unused]] volatile const auto Throw = true)
 					throw MAKE_FAR_EXCEPTION(L"Dtor exception"s);
 			}
 		};
@@ -226,7 +225,7 @@ namespace tests
 		}
 		catch (far_exception const&)
 		{
-			assert(false);
+			UNREACHABLE;
 		}
 	}
 
@@ -291,7 +290,7 @@ namespace tests
 #endif
 	}
 
-	static void cpp_assert()
+	static void cpp_assertion_failure()
 	{
 		assert(true == false);
 	}
@@ -315,14 +314,17 @@ namespace tests
 	}
 
 	static volatile const int NotExecutable = 42;
-	static void seh_access_violation_execute()
+	static void seh_access_violation_ex_nx()
 	{
 		using func_t = void(*)();
 
-		// Try something real first to see the address
 		reinterpret_cast<func_t>(const_cast<int*>(&NotExecutable))();
+	}
 
-		// Fallback
+	static void seh_access_violation_ex_nul()
+	{
+		using func_t = void(*)();
+
 		volatile const func_t InvalidAddress = nullptr;
 		InvalidAddress();
 	}
@@ -420,6 +422,14 @@ namespace tests
 		volatile const auto Result = Max + 1;
 	}
 
+	static void seh_fp_invalid()
+	{
+		detail::set_fp_exceptions(true);
+		volatile const auto InvalidDenominator = 0.0;
+		[[maybe_unused]]
+		volatile const auto Result = InvalidDenominator / InvalidDenominator;
+	}
+
 	static void seh_breakpoint()
 	{
 		os::debug::breakpoint();
@@ -450,6 +460,12 @@ namespace tests
 		});
 	}
 
+	static void seh_assertion_failure()
+	{
+		if ([[maybe_unused]] volatile const auto Condition = true)
+			DbgRaiseAssertionFailure();
+	}
+
 	static void debug_bounds_check()
 	{
 		[[maybe_unused]] std::vector<int> v(1);
@@ -457,24 +473,39 @@ namespace tests
 		v[Index] = 42;
 	}
 
-	static void debug_bounds_check_as_stack()
+	WARNING_PUSH()
+	WARNING_DISABLE_CLANG("-Wmissing-noreturn")
+	static void debug_reach_unreachable()
+	{
+		UNREACHABLE;
+	}
+	WARNING_POP()
+
+	static void asan_stack_buffer_overflow()
 	{
 		[[maybe_unused]] int v[1];
 		const volatile size_t Index = 1;
 		v[Index] = 42;
 	}
 
-	static void debug_bounds_check_as_heap()
+	static void asan_heap_buffer_overflow()
 	{
 		[[maybe_unused]] std::vector<int> v(1);
 		const volatile size_t Index = 1;
 		v.data()[Index] = 42;
 	}
 
-	static void debug_nt_assertion_failure()
+	static void asan_stack_use_after_scope()
 	{
-		if ([[maybe_unused]] volatile const auto Condition = true)
-			DbgRaiseAssertionFailure();
+		volatile int* Ptr;
+
+		{
+			volatile int i = 42;
+			Ptr = &i;
+		}
+
+		[[maybe_unused]]
+		volatile const auto i = *Ptr;
 	}
 }
 
@@ -492,7 +523,7 @@ static bool trace()
 	Menu->SetMenuFlags(VMENU_WRAPMODE | VMENU_SHOWAMPERSAND);
 	Menu->SetPosition({ -1, -1, 0, 0 });
 
-	tracer.get_symbols({}, os::debug::current_stack(), [&](string_view const Line)
+	tracer.get_symbols({}, os::debug::current_stacktrace(), [&](string_view const Line)
 	{
 		Menu->AddItem(string(Line));
 	});
@@ -538,10 +569,11 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::cpp_pure_virtual_call,        L"C++ pure virtual call"sv },
 		{ tests::cpp_memory_leak,              L"C++ memory leak"sv },
 		{ tests::cpp_invalid_parameter,        L"C++ invalid parameter"sv },
-		{ tests::cpp_assert,                   L"C++ assert"sv },
+		{ tests::cpp_assertion_failure,        L"C++ assertion failure"sv },
 		{ tests::seh_access_violation_read,    L"SEH access violation (read)"sv },
 		{ tests::seh_access_violation_write,   L"SEH access violation (write)"sv },
-		{ tests::seh_access_violation_execute, L"SEH access violation (execute)"sv },
+		{ tests::seh_access_violation_ex_nx,   L"SEH access violation (execute NX)"sv },
+		{ tests::seh_access_violation_ex_nul,  L"SEH access violation (execute nullptr)"sv },
 		{ tests::seh_divide_by_zero,           L"SEH divide by zero"sv },
 		{ tests::seh_divide_by_zero_thread,    L"SEH divide by zero (thread)"sv },
 		{ tests::seh_int_overflow,             L"SEH int overflow"sv },
@@ -551,14 +583,17 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::seh_fp_overflow,              L"SEH floating-point overflow"sv },
 		{ tests::seh_fp_underflow,             L"SEH floating-point underflow"sv },
 		{ tests::seh_fp_inexact_result,        L"SEH floating-point inexact result"sv },
+		{ tests::seh_fp_invalid,               L"SEH floating-point invalid operation"sv },
 		{ tests::seh_breakpoint,               L"SEH breakpoint"sv },
 		{ tests::seh_alignment_fault,          L"SEH alignment fault"sv },
 		{ tests::seh_unknown,                  L"SEH unknown"sv },
 		{ tests::seh_unhandled,                L"SEH unhandled"sv },
+		{ tests::seh_assertion_failure,        L"SEH assertion failure"sv },
 		{ tests::debug_bounds_check,           L"Debug bounds check"sv },
-		{ tests::debug_bounds_check_as_stack,  L"Debug bounds check stack (ASAN)"sv },
-		{ tests::debug_bounds_check_as_heap,   L"Debug bounds check heap (ASAN)"sv },
-		{ tests::debug_nt_assertion_failure,   L"Debug NT assertion failure"sv },
+		{ tests::debug_reach_unreachable,      L"Debug reach unreachable"sv },
+		{ tests::asan_stack_buffer_overflow,   L"ASan stack-buffer-overflow"sv },
+		{ tests::asan_heap_buffer_overflow,    L"ASan heap-buffer-overflow"sv },
+		{ tests::asan_stack_use_after_scope,   L"ASan stack-use-after-scope"sv },
 	};
 
 	const auto ModalMenu = VMenu2::create(L"Test Exceptions"s, {}, ScrY - 4);

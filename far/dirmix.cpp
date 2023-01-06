@@ -44,13 +44,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "flink.hpp"
 #include "treelist.hpp"
 #include "pathmix.hpp"
-#include "strmix.hpp"
 #include "interf.hpp"
 #include "elevation.hpp"
 #include "network.hpp"
 #include "string_utils.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.env.hpp"
 #include "platform.fs.hpp"
 
@@ -165,7 +165,7 @@ int TestFolder(string_view const Path)
 	if (os::fs::is_not_empty_directory(Path))
 		return TSTFLD_NOTEMPTY;
 
-	const auto ErrorState = last_error();
+	const auto ErrorState = os::last_error();
 	const auto LastError = ErrorState.Win32Error;
 	if (LastError == ERROR_FILE_NOT_FOUND || LastError == ERROR_NO_MORE_FILES)
 		return TSTFLD_EMPTY;
@@ -228,7 +228,7 @@ bool CutToExistingParent(string& Path)
 
 bool TryParentFolder(string& Path)
 {
-	const auto ErrorState = last_error();
+	const auto ErrorState = os::last_error();
 	if (Message(MSG_WARNING, ErrorState,
 		msg(lng::MError),
 		{

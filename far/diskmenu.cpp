@@ -62,6 +62,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "scrbuf.hpp"
 #include "plugapi.hpp"
 #include "message.hpp"
+#include "notification.hpp"
 #include "keyboard.hpp"
 #include "dirmix.hpp"
 #include "lockscrn.hpp"
@@ -71,6 +72,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.com.hpp"
 #include "platform.fs.hpp"
 #include "platform.reg.hpp"
@@ -424,7 +426,7 @@ static bool ProcessDelDisk(panel_ptr Owner, string_view const Path, int DriveTyp
 				return true;
 			}
 
-			const auto ErrorState = last_error();
+			const auto ErrorState = os::last_error();
 
 			const auto LastError = ErrorState.Win32Error;
 			const auto strMsgText = format(msg(lng::MChangeDriveCannotDelSubst), DosDriveName);
@@ -484,7 +486,7 @@ static bool ProcessDelDisk(panel_ptr Owner, string_view const Path, int DriveTyp
 			if (WNetCancelConnection2(C_DosDriveName.c_str(), UpdateProfile, FALSE) == NO_ERROR)
 				return true;
 
-			const auto ErrorState = last_error();
+			const auto ErrorState = os::last_error();
 
 			const auto strMsgText = format(msg(lng::MChangeDriveCannotDisconnect), DosDriveName);
 			const auto LastError = ErrorState.Win32Error;
@@ -545,7 +547,7 @@ static bool ProcessDelDisk(panel_ptr Owner, string_view const Path, int DriveTyp
 			if (auto Dummy = false; detach_vhd(Path, Dummy))
 				return true;
 
-			const auto ErrorState = last_error();
+			const auto ErrorState = os::last_error();
 
 			Message(MSG_WARNING, ErrorState,
 				msg(lng::MError),
@@ -638,7 +640,7 @@ static void RemoveHotplugDevice(panel_ptr Owner, const disk_item& item, VMenu2 &
 		if (RemoveHotplugDrive(item.Path, false, Cancelled) || Cancelled)
 			return;
 
-		const auto ErrorState = last_error();
+		const auto ErrorState = os::last_error();
 
 		// восстановим пути - это избавит нас от левых данных в панели.
 		if (AMode != panel_mode::PLUGIN_PANEL)
@@ -1272,7 +1274,11 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 		if (ChDisk->GetExitCode() < 0)
 		{
 			if (os::fs::drive::get_type(CurDir) == DRIVE_NO_ROOT_DIR)
-				return ChDisk->GetSelectPos();
+			{
+				// get_type can return DRIVE_NO_ROOT_DIR when we can't access the path
+				if (!ElevationRequired(ELEVATION_READ_REQUEST))
+					return ChDisk->GetSelectPos();
+			}
 
 			return -1;
 		}
@@ -1333,7 +1339,7 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 
 		while (!(FarChDir(dos_drive_name(item.Path)) || (IsDisk && FarChDir(dos_drive_root_directory(item.Path)))))
 		{
-			error_state_ex const ErrorState = last_error();
+			error_state_ex const ErrorState = os::last_error();
 
 			DialogBuilder Builder(lng::MError);
 

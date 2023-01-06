@@ -536,15 +536,15 @@ $ #Ułatwienia w wierszu poleceń#
 
  Przejdź o znak w lewo                                  #Lewo,Ctrl+S#
  Przejdź o znak w prawo                                #Prawo,Ctrl+D#
- Słowo w lewo                                             #Ctrl+Lewo#
- Słowo w prawo                                           #Ctrl+Prawo#
+ Wyraz w lewo                                             #Ctrl+Lewo#
+ Wyraz w prawo                                           #Ctrl+Prawo#
  Początek linii                                           #Ctrl+Home#
  Koniec linii                                              #Ctrl+End#
  Usuń znak                                                      #Del#
  Usuń znak po lewej                                              #BS#
  Usuń do końca linii                                         #Ctrl+K#
- Usuń słowo po lewej                                        #Ctrl+BS#
- Usuń słowo po prawej                                      #Ctrl+Del#
+ Usuń wyraz po lewej                                        #Ctrl+BS#
+ Usuń wyraz po prawej                                      #Ctrl+Del#
  Kopiuj do schowka                                         #Ctrl+Ins#
  Wklej ze schowka                                         #Shift+Ins#
  Poprzednie polecenie                                        #Ctrl+E#
@@ -1560,8 +1560,7 @@ $ #Menu: Menu opcje#
 
  #Strony kodowe#         Pokazuje listę ~Stron kodowych~@CodePagesMenu@ plików.
 
- #Kolory#                Pozwala na wybór kolorów dla różnych elementów ekranu, pozwala zmienić
-                       cały wygląd programu Far na czarno/biały lub ustawić domyślne kolory.
+ #Kolory#                Pokazuje menu ~Grup kolorów~@ColorGroups@.
 
  #Wyróżnianie plików#    Pokazuje okno ~Wyróżniania plików~@Highlight@ i sortowania grup plików.
  #i sortowanie grup#
@@ -1675,14 +1674,18 @@ przecinkami). Może być także użyte z emulacją systemu za pomocą ~wtyczek~@
 ten tekst. Po podaniu tekstu i zaznaczeniu opcji #Uwzględniaj wielkość znaków#
 używane będzie porównywanie wielkich i małych znaków.
 
- Opcja #Tylko całe słowa# pozwala znaleźć tylko tekst, który jest oddzielony
+ Opcja #Tylko całe wyrazy# pozwala znaleźć tylko tekst, który jest oddzielony
 od innego tekstu spacją, tabulatorem, znakiem łamania linii lub standardowym
 separatorem, którym domyślnie są znaki: #!%^&*()+|{}:"<>?`-=\\[];',./#.
 
- Zaznaczając opcję #Szukaj wartości szesnastkowej# można wyszukać pliki
-zawierające szesnastkową sekwencję podanych bajtów. W tym przypadku
-opcje #Uwzględnij wielkość znaków#, #Tylko całe wyrazy#, #Użyj strony kodowej#
-i #Szukaj folderów# zostaną wyłączone i ich wcześniejsze zaznaczenie nie ma
+ #Wyszukiwanie rozmyte# jest niewrażliwe na znaki diakrytyczne, traktuje ligatury
+jako odpowiedniki odpowiadającym im sekwencjom wieloznakowym, a wymyślne cyfry
+do odpowiadających im znaków liczbowych i ignoruje kilka innych drobnych różnic.
+
+ Zaznaczając opcję #Szesnastkowo# można wyszukać pliki zawierające szesnastkową
+sekwencję podanych bajtów. W tym przypadku opcje #Uwzględnij wielkość znaków#,
+#Tylko całe wyrazy#, #Wyszukiwanie rozmyte#, #Użyj strony kodowej#
+i #Szukaj folderów# zostają wyłączone i ich wcześniejsze wartości nie mają
 żadnego wpływu na proces wyszukiwania.
 
  Zaznaczenie #Nie zawierające# pozwoli odszukać pliki #nie# zawierające podany
@@ -1734,8 +1737,8 @@ gdzie można rozszerzyć zakres szukania i prezentacji wyników wyszukiwania.
 
 @FindFileAdvanced
 $ #Znajdź plik: Zaawansowane opcje#
- #Szukaj wyłącznie w pierwszych# - dane wpisane w pole #Zawierający tekst#
-(lub #Zawierająca wartość szesnastkową#) mogą być wyszukiwane nie tylko
+ #Szukaj wyłącznie w pierwszych# - dane wpisane w pole #Tekst#
+(lub #Szesnastkowo#) mogą być wyszukiwane nie tylko
 w całym pliku, ale także w podanym zakresie od początku pliku.
 Jeżeli podana wartość jest mniejsza niż wielkość pliku, pozostała zawartość
 pliku będzie zignorowana nawet jeżeli poszukiwana sekwencja będzie się tam
@@ -2312,6 +2315,20 @@ Np. !^!.! oznacza nazwę bieżącego pliku w panelu aktywnym,
 !##!\\!^!.! - plik w panelu pasywnym z taką samą nazwą jak
 bieżący plik w aktywnym panelu.
 
+ #![#
+ Przedrostek "![" wymusza na wszystkich kolejnych symbolach
+specjalnych, aby odnosiły się do lewego panelu (zobacz uwaga
+nr 4). Np. ![!.! oznacza bieżącą nazwę pliku w lewym panelu,
+![!\\!^!.! - plik w lewym panelu o takiej samej nazwie jak
+nazwa bieżącego pliku w aktywnym panelu.
+
+ #!]#
+ Przedrostek "!]" wymusza na wszystkich kolejnych symbolach
+specjalnych, aby odnosiły się do prawego panelu (zobacz uwaga
+nr 4). Np. !]!.! oznacza bieżącą nazwę pliku w prawym panelu,
+!]!\\!^!.! - plik w prawym panelu o takiej samej nazwie jak
+nazwa bieżącego pliku w aktywnym panelu.
+
  Uwagi:
 
  1. ^<wrap>Podczas obsługi znaków specjalnych, Far podstawia tylko
@@ -2341,8 +2358,8 @@ plików, w kodowaniu ANSI, z pełnymi ścieżkami, każdy ujęty w cudzysłów".
  3. ^<wrap>Jeżeli określono wiele skojarzeń, meta-znaki !@@! oraz !$! są pokazywane w menu bez zmian.
 Znaki te są tłumaczone podczas wykonywania poleceń.
 
- 4. ^<wrap>Przedrostki "!##" oraz "!^" działają jako przełączniki. Efekt ich działania trwa
-aż do następnego podobnego przedrostka. Np.
+ 4. ^<wrap>Przedrostki "!##", "!^", "![" oraz "!]" działają jako przełączniki.
+Efekt ich działania trwa aż do następnego podobnego przedrostka, np.
 
     if exist !##!\\!^!.! diff -c -p !##!\\!^!.! !\\!.!
 
@@ -2558,7 +2575,7 @@ całkowitą liczbę plików.
 wyświetlona lista współdzielonych zasobów serwera.
 
  #Użyj Terminalu Wirtualnego do renderowania#
- Renderuj dane wyjściowe za pomocą sekwencji ANSI escape. You can find more about it ~here~@https://docs.microsoft.com/en-us/windows/console/classic-vs-vt@.
+ Renderuj dane wyjściowe za pomocą sekwencji ANSI escape. Więcej informacji znajdziesz ~tutaj~@https://docs.microsoft.com/en-us/windows/console/classic-vs-vt@ (po angielsku).
  Pozwala to na użycie 8 i 24-bitowych kolorów, stylów tekstu, i pozwala (lub nie) pracować lepiej (lub gorzej) z niektórymi znakami Unicode.
  Wymaga Windows 10 lub nowszego.
 
@@ -2701,7 +2718,7 @@ dodatkowych informacji w wierszu poleceń.
  $+ - głębokość zagnieżdżenia folderu
  $##nn - ^<wrap>maksymalna szerokość zachęty, wyrażana jako procentowa wartość szerokości okna
  $@@xx - ^<wrap>"Administrator", jeżeli Far został uruchomiony jako administrator.
-xx jest symbolem zastępczym dla dwóch znaków otaczających słowo "Administrator".
+xx jest symbolem zastępczym dla dwóch znaków otaczających wyraz "Administrator".
 Dla przykładu: #$@@{}$s$p$g# zostanie wyświetlone jako #"{Administrator} C:\>"#.
 
  Domyślnie używana jest sekwencja #$p$g# - bieżący dysk i ścieżka oraz znak większości ("C:\>").
@@ -2906,7 +2923,7 @@ Mac).
  Długie linie tekstu, które nie mieszą się w oknie także mogą być obcięte
 lub zawinięte na wiele wierszy ekranu. Klawisz #F2# przełącza pomiędzy
 trybami #zawijaj# i #obetnij#. W trybie #Zawijaj#, kombinacja klawiszy
-#Shift+F2# kontroluje czy wiersze mogą być dzielone wewnątrz słowa.
+#Shift+F2# kontroluje, czy wiersze mogą być dzielone wewnątrz wyrazów.
 
  W trybie #obcinania#, tekst może być przewijany poziomo w obrębie okna.
 Klawisz kursora #w prawo# przewija tekst o jedną kolumnę w lewo; klawisz
@@ -3033,19 +3050,19 @@ Jeżeli wartość zostanie pominięta, to odpowiadający jej parametr nie zostan
 $ #Podgląd: Wyszukiwanie#
  Do wyszukiwania w ~Podglądzie~@Viewer@ dostępne są następujące tryby i opcje:
 
- #Szukaj tekstu#
+ #Tekst#
  Szukaj dowolnego tekstu wprowadzonego w linii edycji #Znajdź#.
 
- #Szukaj wartości szesnastkowych#
- Szukaj ciągu odpowiadającemu kodom szesnastkowym wprowadzonym w polu #Znajdź#.
+ #Szesnastkowo#
+ Szukaj ciągu odpowiadającemu wartościom szesnastkowym wprowadzonym w polu #Znajdź#.
 
  #Uwzględnij wielkość znaków#
  Uwzględniona zostanie wielkość wprowadzonych znaków w polu szukania
 (więc np, #Tekst# nie zostanie odnaleziony jeżeli szukamy łańcucha #tekst#).
 
- #Tylko całe słowa#
+ #Tylko całe wyrazy#
  Wprowadzony tekst zostanie odnaleziony tylko wtedy, gdy wystąpi w tekście
-jako całe słowo.
+jako cały wyraz.
 
  #Szukaj w odwrotnym kierunku#
  Odwraca kierunek szukania - szuka od końca pliku do początku.
@@ -3053,6 +3070,14 @@ jako całe słowo.
  #Wyrażenie regularne#
  Włącza użycie ~Wyrażeń regularnych~@RegExp@ w szukanym tekście.
 Wyszukiwanie wielowierszowe nie jest obsługiwane.
+
+ #Wyszukiwanie rozmyte#
+ Wyszukiwanie nie będzie rozróżniać diakrytyki (np. #deja# zostanie znalezione w #déjà vu#),
+ligatury będą równoznaczne z odpowiadającym im sekwencjom wieloznakowym (#fluffy# pasuje do #ﬂuﬀy#),
+fantazyjne liczby odpowiadającym im cyfrom (#42# pasuje do #④②#), itd.
+
+ Należy zwrócić uwagę na rozróżnianie wielkości znaków. Np. #Uber# zostanie odnaleziony w wyrazie
+#Überwald#, ale nie w wyrazie #überwald#. Natomiast #Æther# będzie pasował do #AEther#, ale nie #Aether#.
 
 
 @Editor
@@ -3178,11 +3203,11 @@ bieżącą linię i kopiują ją do schowka.
 $ #Edytor: Szukaj/zastąp#
  Następujące opcje są dostępne przy szukaniu lub zastępowaniu w ~edytorze~@Editor@:
 
- #Uwzględniaj wielkość liter#
+ #Uwzględniaj wielkość znaków#
  Wielkość wprowadzonych znaków będzie brana pod uwagę podczas wyszukiwania (np. #Tekst# nie zostanie
-odnaleziony jeżeli wyszukiwane będzie słowo #tekst#).
+odnaleziony jeżeli wyszukiwany będzie wyraz #tekst#).
 
- #Tylko całe słowa#
+ #Tylko całe wyrazy#
  Poszukiwany tekst będzie odnaleziony, tylko gdy wprowadzony tekst będzie całym wyrazem.
 
  #Szukaj w odwrotnym kierunku#
@@ -3193,6 +3218,14 @@ odnaleziony jeżeli wyszukiwane będzie słowo #tekst#).
 i ~zastępowanie~@RegExpRepl@).
 Każda linia jest dekodowana osobno, więc wprowadzanie wyrażeń wieloliniowych i znaki łamania
 linii nie zostaną odnalezione.
+
+ #Wyszukiwanie rozmyte#
+ Wyszukiwanie nie będzie rozróżniać diakrytyki (np. #deja# zostanie znalezione w #déjà vu#),
+ligatury będą równoznaczne z odpowiadającym im sekwencjom wieloznakowym (#fluffy# pasuje do #ﬂuﬀy#),
+fantazyjne liczby odpowiadającym im cyfrom (#42# pasuje do #④②#), itd.
+
+ Należy zwrócić uwagę na rozróżnianie wielkości znaków. Np. #Uber# zostanie odnaleziony w wyrazie
+#Überwald#, ale nie w wyrazie #überwald#. Natomiast #Æther# będzie pasował do #AEther#, ale nie #Aether#.
 
  ~Zachowaj styl~@PreserveStyle@
  Zachowuje styl (wielkość znaków i ograniczniki w kodzie źródłowym) w zastąpionym tekście.
@@ -3261,7 +3294,7 @@ zarówno jako #Tytuł# jak i #WIELKIE# litery.
  Wzorzec wyszukiwania i ciąg zastępując są dzielone na tokeny zgodnie
 z powyższymi zasadami. Tekst jest przeszukiwany pod kątem ciągu, który
 może być podzielony na tokeny jak poszukiwany wzorzec. Tokeny są porównywane
-zgodnie z #"Uwzględnieniem wielkości liter"# i #"Tylko całe słowa"#.
+zgodnie z #"Uwzględnieniem wielkości znaków"# i #"Tylko całe wyrazy"#.
 
  Jeżeli szukany i zastępowany ciąg znaków mają tę samą liczbę tokenów
 i znalezione tokeny mają wspólny styl (#Pierwsza wielka# jest ważniejsza
@@ -4293,6 +4326,38 @@ podczas przetwarzania plików Far zawsze używa oryginalnych wielkości znaków.
  Zobacz także: polecenia ~menu~@MenuCmd@.
 
 
+@ColorGroups
+$ #Grupy kolorów#
+ To menu pozwala na wybór kolorów dla różnych elementów ekranu lub ustawić domyślne kolory.
+
+ #Ustaw kolory domyślne#
+ Przywraca kolory do wartości domyślnych, wyrażonych jako indeksy w palecie kolorów.
+
+ #Ustaw kolory domyślne (RGB)#
+ Przyraca kolory do wartości domyślnych, wyrażonych jako kolory w przestrzeni barw RGB,
+normalnie używanych do odpowiednich indeksów palety konsoli.
+ W przeciwieństwie do indeksów palety konsoli, wartości RGB są niezleżne od urządzenia
+i zawsze będą tak samo wyglądać w dowolnym terminalu.
+ Na przykład, domyślna #indeksu# tła panelu jest #1#, który zwykle (ale nie zawsze),
+jest mapowany na jakiś nieokreślony odcień koloru niebieskiego.
+ Domyślną wartością #RGB# tła panelu jest zawsze wartość #000080#.
+
+ #Uwaga#: kolory RGB wymagają renderowania opartego na Wirtualnym Terminalu, który można
+włączyć w ~Ustawieniach interfejsu~@InterfSettings@.
+Jeżeli nie jest włączony lub wybrany terminal nie obsługuje kolorów RGB, kolory będą ustawione
+na zbliżone do najbliższych indeksów palety konsoli.
+
+ Oto bieżąca paleta:
+
+ \00  \10  \20  \30  \40  \50  \60  \70  \-
+ \80  \90  \A0  \B0  \C0  \D0  \E0  \F0  \-
+
+ Oto domyślna reprezentacja RGB:
+
+ \(T0:T000000)  \(T0:T000080)  \(T0:T008000)  \(T0:T008080)  \(T0:T800000)  \(T0:T800080)  \(T0:T808000)  \(T0:TC0C0C0)  \-
+ \(T0:T808080)  \(T0:T0000FF)  \(T0:T00FF00)  \(T0:T00FFFF)  \(T0:TFF0000)  \(T0:TFF00FF)  \(T0:TFFFF00)  \(T0:TFFFFFF)  \-
+
+
 @ColorPicker
 $ #Wybór kolorów#
  To okno dialogowe pozwala zdefiniować kolor wyświetlania znaków, kolor tła i styl tekstu.
@@ -4322,8 +4387,8 @@ $ #Wybór kolorów#
  Tylko standardowa 16 kolorowa paleta jest gwarantem poprawnej pracy na wszystkich komputerach.
  Obsługa wszystkich innych jest warunkowa i definiowana przez Twój terminal.
 
- Extended colors and styles require Virtual Terminal-based rendering, which can be enabled in ~Interface settings~@InterfSettings@.
-You can find more about it ~here~@https://docs.microsoft.com/en-us/windows/console/classic-vs-vt@.
+ Rozszerzone kolory i style wymagają Terminalu Wirtualnego, który można włączyć w ~Ustawieniach interfejsu~@InterfSettings@.
+Więcej informacji znajdziesz ~tutaj~@https://docs.microsoft.com/en-us/windows/console/classic-vs-vt@ (po angielsku).
 
 
 @ColorPicker256
@@ -4822,13 +4887,13 @@ Far Manager ustawia kilka ~zmiennych systemowych~@FAREnv@.
  Wykonuje “polecenie” jeżeli “zmienna” jest zdefiniowana lub nie jest
 zdefiniowana (jeżeli dodano warunek “NOT”).
  Polecenie “IF” może być zagnieżdżone. W poniższym przykładzie
-“polecenie” będzie wykonane jeżeli istnieje “plik1”, “plik2” nie istnieje
+“polecenie” będzie wykonane jeżeli istnieje “plik1”, “plik2” nie istnieje,
 a “zmienna” jest zdefiniowana:
  #if exist plik1 if not exist plik2 if defined zmienna polecenie#
 
- #PUSHD ścieżka#
- Zachowuje bieżącą ścieżkę do użycia przez polecenie “POPD”,
-następnie zmienia na ścieżkę z aktywnego panelu plików.
+ #PUSHD [ścieżka]#
+ Zachowuje bieżącą ścieżkę do użycia przez polecenie “POPD”.
+Jeżeli “ścieżka” jest podana, zmienia na nią bieżącą ścieżkę w aktywnym panelu.
 
  #POPD#
  Zmienia bieżącą ścieżkę w aktywnym panelu na ścieżkę zachowaną poleceniem “PUSHD”.
@@ -4921,19 +4986,18 @@ do klasy, to nie może on być pierwszym znakiem lub musi być poprzedzony znaki
  #(?:wzorzec)#  - ^<wrap>zwykłe grupowanie, ale nie obejmuje liczb.
  #(?=wzorzec)#  - ^<wrap>przeszukiwanie do przodu. Dopasowanie rozpoczyna się od tego
 samego miejsca, ale tylko gdy zgadza się wzorzec w nawiasach. Np. #\w+(?=\s)#
-dopasowuje słowo, po którym następuje spacja, a spacja nie jest uwzględniana w wynikach
+dopasowuje wyraz, po którym następuje spacja, a spacja nie jest uwzględniana w wynikach
 szukania.
- #(?!pattern)#  - ^<wrap>negacja wyszukiwania do przodu. Dopasowanie kontynuuje od tego
+ #(?!wzorzec)#  - ^<wrap>negacja wyszukiwania do przodu. Dopasowanie kontynuuje od tego
 samego miejsca, jeżeli wzorzec się nie zgadza. Np. #foo(?!bar)# dopasowuje dowolne
 "foo" bez następującego "bar". Należy pamiętać że wyrażenie ma wielkość zero, co oznacza
 że #a(?!b)d# pasuje do #ad#, ponieważ po #a# następuje znak który nie jest #b# (lecz #d#),
 a #d# następuje po wyrażeniu o zerowym rozmiarze.
- #(?<=pattern)# - ^<wrap>wyszukiwanie wstecz. Niestety, wzorzec musi mieć określoną długość.
- #(?<!pattern)# - ^<wrap>negacja wyszukiwania wstecz. Takie same ograniczenia jak przy negacji
+ #(?<=wzorzec)# - ^<wrap>wyszukiwanie wstecz. Niestety, wzorzec musi mieć określoną długość.
+ #(?<!wzorzec)# - ^<wrap>negacja wyszukiwania wstecz. Takie same ograniczenia jak przy negacji
 wyszukiwania do przodu.
 
- #(?{name}pattern)# - group with a name. The name can be empty (in such case you
-cannot refer to this group) or must contain only word characters (#\w#) and spaces (#\s#).
+ #(?{nazwa}wzorzec)# - grupa z nazwą. Nazwa może zawierać tylko litery (#\w#) i spacje (#\s#).
 
  #Kwantyfikatory#
 
@@ -4994,7 +5058,7 @@ jest traktowany jako tekst, a nie jako wyrażenie regularne
  #\L#   - znak nie pisany małą literą
  #\u#   - znak pisany wielką literą
  #\U#   - znak pisany nie wielką literą
- #\b#   - ^<wrap>granica słowa - oznacza, że po lewej lub prawej stronie od bieżącej pozycji
+ #\b#   - ^<wrap>granica wyrazów - oznacza, że po lewej lub prawej stronie od bieżącej pozycji
 znajduje się litera i odpowiednio po prawej i lewej stronie znajduje się znak nie będący literą.
  #\B#   - przeciwieństwo \b
  #\A#   - początek tekstu, ignoruje opcję “m”
@@ -5009,7 +5073,7 @@ dużej ilości danych.
 (w rzeczywistości - omijane) szybciej.
 
  #\NN#  - ^<wrap>odniesienie do wcześniej dopasowanych nawiasów. NN jest liczbą całkowitą dodatnią.
-Wszystkie nawiasy oprócz (?:wzorzec), (?=wzorzec), (?!wzorzec), (?<=wzorzec), (?<!wzorzec) i (?{nazwa}wzorzec)
+Wszystkie nawiasy oprócz (?:wzorzec), (?=wzorzec), (?!wzorzec), (?<=wzorzec) i (?<!wzorzec)
 posiadają numer (w kolejności występowania).
         Przykład:
         "(['"])witaj\1" pasuje do "witaj" lub 'witaj'.
@@ -5541,7 +5605,7 @@ Jeżeli bieżąca wartość opcji jest inna niż domyślna, opcja jest oznaczona
  Przełącza lub edytuje wartość.
 
  #Shift+F4#
- Edytuje wartość całkowitą jako liczbę szesnastkową. Dla innych typów działa jak #F4#.
+ Edytuje wartość całkowitą jako wartość szesnastkową. Dla innych typów działa jak #F4#.
 
  #Alt+F4#
  Edytuje wartość całkowitą jak liczbę binarną. Dla innych typów działa jak #F4#.
@@ -5561,26 +5625,21 @@ Jeżeli bieżąca wartość opcji jest inna niż domyślna, opcja jest oznaczona
 
 @Codepages.NoAutoDetectCP
 $ #far:config Codepages.NoAutoDetectCP#
- Ten parametr tekstowy definiuje strony kodowe, które będą wyłączane
-z autodetekcji Universal Codepage Detector (UCD). Czasami, szczególnie
-w przypadku małych plików, UCD irytująco wybiera niewłaściwe strony kodowe.
+ Ten parametr tekstowy pozwala wykluczyć specyficzne strony kodowe z wyników
+heurystycznego wykrywania stron kodowych. Takie wykrywanie jest z definicji
+zawodne: zależy od danych statystycznych i może się mylić, zwłaszcza gdy
+ilość danych wejściowych jest mała.
 
- Domyślną wartością jest pusty łańcuch #""#. W takim przypadku wszystkie
-strony kodowe wykrywane przez UCD (około 20, znacznie mniej niż zazwyczaj
-jest dostępnych w systemie) są włączone.
+ Domyślnie parametr jest pusty i nie istnieją żadne ograniczenia, co do heurystycznego
+wykrywania stron kodowych.
 
- Jeżeli ten parametr jest ustawiony na #"-1"# i sekcja #Pozostałe# w menu
-~Strony kodowe~@CodePagesMenu@ jest ukryta (kombinacja klawiszy #Ctrl+H#),
-tylko strony kodowe #Systemowe# (ANSI, OEM), #Unicode#, i #Ulubione# będą
-włączone dla UCD. Jeżeli sekcja #Pozostałe# jest widoczna, to wszystkie
-strony kodowe są włączone.
+ Jeżeli parametr jest ustawiony na #-1#, to tylko strony kodowe widoczne w menu
+~Strony kodowe~@CodePagesMenu@ zostaną zaakceptowane.
+Można kontrolować, które strony kodowe mają być widoczne w sekcji #Ulubione#
+za pomocą kombinacji klawiszy #Ctrl+H#.
 
- W przeciwnym wypadku, parametr powinien zawierać listę stron kodowych
-wyłączonych dla UCD, oddzieloną przecinkami. Np.:
-#"1250,1252,1253,1255,855,10005,28592,28595,28597,28598,38598"#.
-
- Ponieważ strony kodowe Unicode (1200, 1201, 65001) są wykrywane poza UCD,
-nie można ich wyłączyć, nawet jeżeli znajdują się na liście wykluczeń.
+ Jeżeli parametr ten zawiera listę stron kodowych oddzieloną przecinkami, to wszystkie
+wymienione tutaj strony kodowe zostaną wykluczone z wykrywania heurystycznego.
 
  Ten parametr można zmienić tylko w ~far:config~@FarConfig@.
 
@@ -5794,7 +5853,7 @@ Jednakże, jeżeli “DATE” nie jest wymieniona w tym parametrze, a program
 o nazwie “date.exe” istnieje w jednym z folderów zmiennej #PATH#,
 to polecenie wewnętrznego procesora może nie zostanie nigdy uruchomione.
 
- Gotowe ustawienia dla CMD.EXE, COMMAND.COM i innych znanych procesorów
+ Gotowe ustawienia dla CMD.EXE i innych znanych procesorów
 poleceń można znaleźć w plikach #Addons\SetUp\Executor.*.farconfig#.
 
  Uwaga: Far wykonuje niektóre polecenia ~systemu operacyjnego~@OSCommands@
@@ -6014,7 +6073,7 @@ i ~Podglądzie~@Viewer@ plików.
  Makropolecenie #%File# jest interpretowane jako nazwa edytowanego
 lub przeglądanego pliku.
 
- Makropolecenie #%Lng# jest zastępowane słowami “edit” lub “view”
+ Makropolecenie #%Lng# jest zastępowane wyrazami “edit” lub “view”
 w bieżącym języku, zobacz ~Menu Opcje~@OptMenu@.
 
  Tekst ustawiony w opcji #Okno tytułowe Far# opcji
@@ -6242,7 +6301,7 @@ poza znakami #Spacja# i #Tab#.
 @XLat.WordDivForXlat
 $ #far:config XLat.WordDivForXlat#
  Ten parametr tekstowy definiuje ograniczniki dla transliteracji
-(funkcja #XLat#) bieżącego słowa bez jego zaznaczania.
+(funkcja #XLat#) bieżącego wyrazu bez jego zaznaczania.
 
  Domyślna wartość: #Space#, #Tab# and characters #!##$%^&*()+|=\\/@?#.
 

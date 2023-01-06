@@ -55,6 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.fs.hpp"
 
 // Common:
@@ -112,7 +113,7 @@ namespace detail
 		void operator()(HDEVINFO Handle) const noexcept
 		{
 			if (!SetupDiDestroyDeviceInfoList(Handle))
-				LOGWARNING(L"SetupDiDestroyDeviceInfoList(): {}"sv, last_error());
+				LOGWARNING(L"SetupDiDestroyDeviceInfoList(): {}"sv, os::last_error());
 		}
 	};
 }
@@ -156,12 +157,9 @@ public:
 		return SetupDiEnumDeviceInterfaces(m_info.native_handle(), nullptr, &InterfaceClassUuid, MemberIndex, &DeviceInterfaceData) != FALSE;
 	}
 
-	template<typename uuid_type>
 	[[nodiscard]]
-	auto DeviceInterfacesEnumerator(uuid_type&& InterfaceClassUuid) const
+	auto DeviceInterfacesEnumerator(UUID const& InterfaceClassUuid) const
 	{
-		static_assert(std::is_convertible_v<uuid_type, UUID>);
-
 		using value_type = SP_DEVICE_INTERFACE_DATA;
 		return make_inline_enumerator<value_type>([this, InterfaceClassUuid = keep_alive(FWD(InterfaceClassUuid)), Index = size_t{}](const bool Reset, value_type& Value) mutable
 		{
@@ -621,7 +619,7 @@ void ShowHotplugDevices()
 					else if (!Cancelled)
 					{
 						SetLastError(ERROR_DRIVE_LOCKED); // ... "The disk is in use or locked by another process."
-						const auto ErrorState = last_error();
+						const auto ErrorState = os::last_error();
 
 						Message(MSG_WARNING, ErrorState,
 							msg(lng::MError),

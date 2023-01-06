@@ -66,6 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.env.hpp"
 #include "platform.fs.hpp"
 
@@ -313,7 +314,7 @@ void UserMenu::SaveMenu(string_view const MenuFileName) const
 
 		if (!os::fs::set_file_attributes(MenuFileName, FileAttr & ~FILE_ATTRIBUTE_READONLY)) //BUGBUG
 		{
-			LOGWARNING(L"set_file_attributes({}): {}"sv, MenuFileName, last_error());
+			LOGWARNING(L"set_file_attributes({}): {}"sv, MenuFileName, os::last_error());
 		}
 	}
 
@@ -766,6 +767,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 		auto CurrentLabel = (*CurrentMenuItem)->strLabel;
 		SubstFileName(CurrentLabel, Context, {}, true, {}, true);
 		CurrentLabel = os::env::expand(CurrentLabel);
+		inplace::remove_highlight(CurrentLabel);
 
 		if ((*CurrentMenuItem)->Submenu)
 		{
@@ -917,7 +919,7 @@ intptr_t UserMenu::EditMenuDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, v
 
 						if (upper(HotKey.front()) == L'F')
 						{
-							if (in_closed_range(1, from_string<int>(HotKey.substr(1)), 24))
+							if (int Number; from_string(HotKey.substr(1), Number) && in_closed_range(1, Number, 24))
 								FocusPos=-1;
 						}
 					}

@@ -42,9 +42,9 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "stddlg.hpp"
 #include "pathmix.hpp"
 #include "strmix.hpp"
-#include "exception.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.fs.hpp"
 #include "platform.reg.hpp"
 
@@ -148,7 +148,7 @@ bool ConnectToNetworkResource(string_view const NewDir)
 			return true;
 		else if (Result != ERROR_ACCESS_DENIED && Result != ERROR_INVALID_PASSWORD && Result != ERROR_LOGON_FAILURE)
 		{
-			Message(MSG_WARNING, last_error(),
+			Message(MSG_WARNING, os::last_error(),
 				msg(lng::MError),
 				{
 					string(NewDir)
@@ -191,7 +191,7 @@ string ExtractComputerName(const string_view CurDir, string* const strTail)
 		return {};
 
 	if (strTail)
-		strTail->assign(Result, pos + 1, string::npos); // gcc 7.3-8.1 bug: npos required. TODO: Remove after we move to 8.2 or later)
+		strTail->assign(Result, pos + 1);
 
 	Result.resize(pos);
 

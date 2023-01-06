@@ -47,13 +47,13 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "interf.hpp"
 #include "imports.hpp"
 #include "string_sort.hpp"
-#include "exception.hpp"
 #include "exception_handler.hpp"
 #include "console.hpp"
 #include "keyboard.hpp"
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.process.hpp"
 
 // Common:
@@ -243,10 +243,9 @@ void ShowProcessList()
 						},
 						{ lng::MKillProcessKill, lng::MCancel }) == message_result::first_button)
 					{
-						const os::handle Process(OpenProcess(PROCESS_TERMINATE, FALSE, MenuData->Pid));
-						if (!Process || !TerminateProcess(Process.native_handle(), ERROR_PROCESS_ABORTED))
+						if (!os::process::terminate_other(MenuData->Pid))
 						{
-							const auto ErrorState = last_error();
+							const auto ErrorState = os::last_error();
 
 							Message(MSG_WARNING, ErrorState,
 								msg(lng::MKillProcessTitle),

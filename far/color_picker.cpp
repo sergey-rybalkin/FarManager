@@ -278,23 +278,23 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 					GetColor(Index);
 			};
 
-			const auto Colors = static_cast<FarDialogItemColors*>(Param2);
+			const auto& Colors = *static_cast<FarDialogItemColors const*>(Param2);
 
 			if (Param1 >= cd_fg_color_first && Param1 <= cd_fg_color_last)
 			{
-				Colors->Colors[0] = preview_or_disabled(CurColor.ForegroundColor, cd_fg_color_first);
+				Colors.Colors[0] = preview_or_disabled(CurColor.ForegroundColor, cd_fg_color_first);
 				return TRUE;
 			}
 
 			if (Param1 >= cd_bg_color_first && Param1 <= cd_bg_color_last)
 			{
-				Colors->Colors[0] = preview_or_disabled(CurColor.BackgroundColor, cd_bg_color_first);
+				Colors.Colors[0] = preview_or_disabled(CurColor.BackgroundColor, cd_bg_color_first);
 				return TRUE;
 			}
 
 			if (Param1 >= cd_sample_first && Param1 <= cd_sample_last)
 			{
-				Colors->Colors[0] = colors::merge(ColorState.BaseColor, ColorState.CurColor);
+				Colors.Colors[0] = colors::merge(ColorState.BaseColor, ColorState.CurColor);
 				return TRUE;
 			}
 
@@ -380,7 +380,7 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 				if (auto CustomColors = Global->Opt->Palette.GetCustomColors(); pick_color_rgb(Color, CustomColors))
 				{
 					SetComponentColorValue(IsFg, Color);
-					CurColor.Flags &= ~(FlagIndex(IsFg) | FlagIndex(IsFg));
+					CurColor.Flags &= ~FlagIndex(IsFg);
 
 					Dlg->SendMessage(DM_SETCHECK, IsFg? cd_fg_color_first : cd_bg_color_first, ToPtr(BSTATE_3STATE));
 					Dlg->SendMessage(DM_UPDATECOLORCODE, IsFg? cd_fg_colorcode : cd_bg_colorcode, {});
@@ -481,9 +481,9 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 
 bool GetColorDialog(FarColor& Color, bool const bCentered, const FarColor* const BaseColor, bool* const Reset)
 {
-	const auto IsVtEnabled = console.IsVtEnabled();
+	const auto IsVtActive = console.IsVtActive();
 	const auto IsVtSupported = console.IsVtSupported();
-	const auto ShowVtHint = !IsVtEnabled && !console.ExternalRendererLoaded();
+	const auto ShowVtHint = !IsVtActive && !console.ExternalRendererLoaded();
 
 	const auto
 		Fg4X = 5,

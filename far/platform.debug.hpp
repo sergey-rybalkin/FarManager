@@ -38,10 +38,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Platform:
 
 // Common:
+#include "common/function_ref.hpp"
+#include "common/range.hpp"
 
 // External:
 
 //----------------------------------------------------------------------------
+
+class map_file;
 
 namespace os::debug
 {
@@ -52,7 +56,46 @@ namespace os::debug
 	void set_thread_name(const wchar_t* Name);
 	void set_thread_name(string const& Name);
 	string get_thread_name(HANDLE ThreadHandle);
-	std::vector<uintptr_t> current_stack(size_t FramesToSkip = 0, size_t FramesToCapture = std::numeric_limits<size_t>::max());
+
+	struct stack_frame
+	{
+		uintptr_t Address;
+		DWORD InlineContext;
+	};
+
+	std::vector<stack_frame> current_stacktrace(size_t FramesToSkip = 0, size_t FramesToCapture = std::numeric_limits<size_t>::max());
+	std::vector<stack_frame> stacktrace(CONTEXT ContextRecord, HANDLE ThreadHandle);
+	bool is_inline_frame(DWORD InlineContext);
+
+	namespace symbols
+	{
+		struct symbol
+		{
+			string_view Name;
+			size_t Displacement{};
+		};
+
+		struct location
+		{
+			string_view FileName;
+			std::optional<size_t> Line;
+			size_t Displacement{};
+		};
+
+		bool initialize(string_view Module);
+
+		void clean();
+
+		void get(
+			string_view ModuleName,
+			span<stack_frame const> BackTrace,
+			std::unordered_map<uintptr_t, map_file>& MapFiles,
+			function_ref<void(uintptr_t, string_view, bool, symbol, location)> Consumer
+		);
+	}
+
+	void crt_report_to_ui();
+	void crt_report_to_stderr();
 }
 
 #endif // PLATFORM_DEBUG_HPP_8453E69F_3955_416D_BB64_A3A88D3D1D8D

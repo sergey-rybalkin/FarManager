@@ -51,6 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.concurrency.hpp"
 #include "platform.debug.hpp"
 #include "platform.fs.hpp"
@@ -66,6 +67,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // External:
 #include "format.hpp"
 #include "tinyxml.hpp"
+
+#include <share.h>
 
 //----------------------------------------------------------------------------
 
@@ -112,7 +115,7 @@ static auto& CreateChild(tinyxml::XMLElement& Parent, const char* Name)
 template<typename T>
 static void SetAttribute(tinyxml::XMLElement& Element, const char* Name, T const& Value)
 {
-	if constexpr (std::is_convertible_v<T, std::string_view>)
+	if constexpr (std::convertible_to<T, std::string_view>)
 		Element.SetAttribute(Name, null_terminated_t<char>(Value).c_str());
 	else
 		Element.SetAttribute(Name, Value);
@@ -842,8 +845,7 @@ const std::pair<FARCOLORFLAGS, string_view> ColorFlagNames[]
 {
 	{ FCF_FG_INDEX,        L"fgindex"sv      },
 	{ FCF_BG_INDEX,        L"bgindex"sv      },
-	{ FCF_FG_INDEX,        L"fg4bit"sv       }, // Legacy name
-	{ FCF_BG_INDEX,        L"bg4bit"sv       }, // Legacy name
+	{ FCF_INHERIT_STYLE,   L"inherit"sv      },
 	{ FCF_FG_BOLD,         L"bold"sv         },
 	{ FCF_FG_ITALIC,       L"italic"sv       },
 	{ FCF_FG_UNDERLINE,    L"underline"sv    },
@@ -854,6 +856,12 @@ const std::pair<FARCOLORFLAGS, string_view> ColorFlagNames[]
 	{ FCF_FG_BLINK,        L"blink"sv        },
 	{ FCF_FG_INVERSE,      L"inverse"sv      },
 	{ FCF_FG_INVISIBLE,    L"invisible"sv    },
+};
+
+const std::pair<FARCOLORFLAGS, string_view> LegacyColorFlagNames[]
+{
+	{ FCF_FG_INDEX, L"fg4bit"sv },
+	{ FCF_BG_INDEX, L"bg4bit"sv },
 };
 
 class HighlightHierarchicalConfigDb final: public HierarchicalConfigDb
@@ -903,7 +911,10 @@ private:
 			if (const auto foreground = e.Attribute("foreground"))
 				Color.ForegroundColor = std::strtoul(foreground, nullptr, 16);
 			if (const auto flags = e.Attribute("flags"))
-				Color.Flags = StringToFlags(encoding::utf8::get_chars(flags), ColorFlagNames);
+			{
+				const auto FlagsStr = encoding::utf8::get_chars(flags);
+				Color.Flags = StringToFlags(FlagsStr, ColorFlagNames) | StringToFlags(FlagsStr, LegacyColorFlagNames);
+			}
 
 			return bytes(view_bytes(Color));
 		}
@@ -1775,7 +1786,7 @@ private:
 	os::event AsyncDeleteAddDone{os::event::type::manual, os::event::state::signaled};
 	os::event AsyncCommitDone{os::event::type::manual, os::event::state::signaled};
 	os::event AsyncWork{os::event::type::automatic, os::event::state::nonsignaled};
-	os::thread WorkThread{os::thread::mode::join, &HistoryConfigCustom::ThreadProc, this};
+	[[maybe_unused]] os::thread WorkThread{os::thread::mode::join, &HistoryConfigCustom::ThreadProc, this};
 
 	struct AsyncWorkItem
 	{
@@ -1954,26 +1965,44 @@ private:
 
 	static void reindex(db_initialiser const& Db)
 	{
-		static const std::pair<std::string_view, std::string_view> ReindexTables[]
+		static constexpr struct
 		{
-			{ EDITORPOSITION_HISTORY_NAME ""sv, EDITORPOSITION_HISTORY_SCHEMA ""sv },
-			{ VIEWERPOSITION_HISTORY_NAME ""sv, VIEWERPOSITION_HISTORY_SCHEMA ""sv },
+			std::string_view Name;
+			string_view WideName;
+			std::string_view Schema;
+		}
+		ReindexTables[]
+		{
+#define INIT_TABLE(x) CHAR_SV(x ## POSITION_HISTORY_NAME), WIDE_SV(x ## POSITION_HISTORY_NAME), CHAR_SV(x ## POSITION_HISTORY_SCHEMA)
+			{ INIT_TABLE(EDITOR) },
+			{ INIT_TABLE(VIEWER) },
+#undef INIT_TABLE
 		};
 
-		for (const auto& [Name, Schema]: ReindexTables)
+		for (const auto& Table: ReindexTables)
 		{
-			const auto reindex = [&, Name = Name]{ Db.Exec(format(FSTR("REINDEX {}"sv), Name)); };
+			const auto reindex = [&]{ Db.Exec(format(FSTR("REINDEX {}"sv), Table.Name)); };
 
 			try
 			{
-				reindex();
+				if (const auto stmtIntegrityCheck = Db.create_stmt(format(FSTR("PRAGMA INTEGRITY_CHECK({})"sv), Table.Name)); stmtIntegrityCheck.Step())
+				{
+					if (const auto Result = stmtIntegrityCheck.GetColText(0); Result != L"ok"sv)
+					{
+						LOGWARNING(L"Integrity issue in {}: {}, reindexing the table"sv, Table.WideName, Result);
+						reindex();
+						LOGINFO(L"Reindexing of {} completed"sv, Table.WideName);
+					}
+				}
 			}
 			catch (far_sqlite_exception const& e)
 			{
-				if (!e.is_constaint_unique())
+				LOGWARNING(L"{}"sv, e);
+
+				if (!e.is_constraint_unique())
 					throw;
 
-				recreate_position_history(Db, Name, Schema);
+				recreate_position_history(Db, Table.Name, Table.Schema);
 				reindex();
 			}
 		}
@@ -2403,7 +2432,7 @@ static string rename_bad_database(string_view const Name)
 		if (os::fs::move_file(Name, Dest))
 			return Dest;
 
-		const auto ErrorState = last_error();
+		const auto ErrorState = os::last_error();
 		if (ErrorState.Win32Error == ERROR_ALREADY_EXISTS)
 			continue;
 

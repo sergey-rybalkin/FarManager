@@ -378,7 +378,8 @@ void Dialog::Construct(span<DialogItemEx> const SrcItems)
 	{
 		for (const auto& [ItemAuto, SrcItemAuto]: zip(Item.Auto, SrcItem.Auto))
 		{
-			// TODO: P1091R3
+			// https://github.com/llvm/llvm-project/issues/54300
+			// TODO: remove once we have it.
 			const auto SrcItemIterator = std::find_if(ALL_CONST_RANGE(SrcItems), [&SrcItemAuto = SrcItemAuto](const DialogItemEx& i)
 			{
 				return &i == SrcItemAuto.Owner;
@@ -927,12 +928,11 @@ void Dialog::InitDialogObjects(size_t ID)
 
 			if (Item.Type == DI_COMBOBOX && Item.strData.empty() && Item.ListItems)
 			{
-				FarListItem *ListItems=Item.ListItems->Items;
-				const auto Length = Item.ListItems->ItemsNumber;
+				span<FarListItem const> const ListItems{ Item.ListItems->Items, Item.ListItems->ItemsNumber };
 				//Item.ListPtr->AddItem(Item.ListItems);
 
-				const auto ItemIterator = std::find_if(ListItems, ListItems + Length, [](FarListItem& i) { return (i.Flags & LIF_SELECTED) != 0; });
-				if (ItemIterator != ListItems + Length)
+				const auto ItemIterator = std::find_if(ALL_CONST_RANGE(ListItems), [](FarListItem const& i) { return (i.Flags & LIF_SELECTED) != 0; });
+				if (ItemIterator != ListItems.cend())
 				{
 					if (Item.Flags & (DIF_DROPDOWNLIST | DIF_LISTNOAMPERSAND))
 						Item.strData = HiText2Str(ItemIterator->Text);
@@ -1722,9 +1722,9 @@ void Dialog::ShowDialog(size_t ID)
 					{
 						if (!strStr.empty())
 						{
-							if (!starts_with(strStr, L" "sv))
+							if (!strStr.starts_with(L" "sv))
 								strStr.insert(0, 1, L' ');
-							if (!ends_with(strStr, L" "sv))
+							if (!strStr.ends_with(L" "sv))
 								strStr.push_back(L' ');
 						}
 					}
@@ -3116,7 +3116,7 @@ bool Dialog::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 {
 	INPUT_RECORD mouse{ MOUSE_EVENT };
 	mouse.Event.MouseEvent=*MouseEvent;
-	MOUSE_EVENT_RECORD &MouseRecord=mouse.Event.MouseEvent;
+	const auto& MouseRecord = mouse.Event.MouseEvent;
 
 	if (!DialogMode.Check(DMODE_SHOW))
 		return false;
@@ -4348,7 +4348,7 @@ intptr_t Dialog::DefProc(intptr_t Msg, intptr_t Param1, void* Param2)
 			return de.Result;
 		}
 	}
-	DialogItemEx *CurItem=nullptr;
+	DialogItemEx const* CurItem = nullptr;
 	int Type=0;
 
 	switch (Msg)
@@ -4469,28 +4469,29 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 			auto W1 = m_Where.width();
 			auto H1 = m_Where.height();
 			m_Drag.OldRect = m_Where;
+			auto& Coord = *static_cast<COORD*>(Param2);
 
 			// переместили
 			if (Param1>0)  // абсолютно?
 			{
-				m_Where.left = static_cast<COORD*>(Param2)->X;
-				m_Where.top = static_cast<COORD*>(Param2)->Y;
+				m_Where.left = Coord.X;
+				m_Where.top = Coord.Y;
 				m_Where.right = W1;
 				m_Where.bottom = H1;
 				CheckDialogCoord();
 			}
 			else if (!Param1)  // значит относительно
 			{
-				m_Where.left += static_cast<COORD*>(Param2)->X;
-				m_Where.top += static_cast<COORD*>(Param2)->Y;
+				m_Where.left += Coord.X;
+				m_Where.top += Coord.Y;
 			}
 			else // Resize, Param2=width/height
 			{
 				const auto OldW1 = W1;
 				const auto OldH1 = H1;
 				const auto fixSize = [](intptr_t size) { return (size <= 0) ? 1 : size; };
-				W1 = fixSize(static_cast<COORD*>(Param2)->X);
-				H1 = fixSize(static_cast<COORD*>(Param2)->Y);
+				W1 = fixSize(Coord.X);
+				H1 = fixSize(Coord.Y);
 				RealWidth = W1;
 				RealHeight = H1;
 
@@ -4550,13 +4551,13 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 
 			if (Param1 < 0)  // размер?
 			{
-				static_cast<COORD*>(Param2)->X = m_Where.width();
-				static_cast<COORD*>(Param2)->Y = m_Where.height();
+				Coord.X = m_Where.width();
+				Coord.Y = m_Where.height();
 			}
 			else
 			{
-				static_cast<COORD*>(Param2)->X = m_Where.left;
-				static_cast<COORD*>(Param2)->Y = m_Where.top;
+				Coord.X = m_Where.left;
+				Coord.Y = m_Where.top;
 			}
 
 			int I=IsVisible();// && DialogMode.Check(DMODE_INITOBJECTS);
@@ -4632,11 +4633,11 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 		/*****************************************************************/
 		case DM_KEY:
 		{
-			const auto KeyArray = static_cast<const INPUT_RECORD*>(Param2);
+			const auto& KeyArray = static_cast<INPUT_RECORD const*>(Param2);
 			DialogMode.Set(DMODE_KEY);
 
 			for (const auto& I: irange(Param1))
-				ProcessKey(Manager::Key(InputRecordToKey(KeyArray+I)));
+				ProcessKey(Manager::Key(InputRecordToKey(&KeyArray[I])));
 
 			DialogMode.Clear(DMODE_KEY);
 			return 0;
@@ -4657,10 +4658,11 @@ intptr_t Dialog::SendMessage(intptr_t Msg,intptr_t Param1,void* Param2)
 			if (Param2)
 			{
 				const auto Rect = GetPosition();
-				static_cast<SMALL_RECT*>(Param2)->Left = Rect.left;
-				static_cast<SMALL_RECT*>(Param2)->Top = Rect.top;
-				static_cast<SMALL_RECT*>(Param2)->Right = Rect.right;
-				static_cast<SMALL_RECT*>(Param2)->Bottom = Rect.bottom;
+				auto& Dst = *static_cast<SMALL_RECT*>(Param2);
+				Dst.Left = Rect.left;
+				Dst.Top = Rect.top;
+				Dst.Right = Rect.right;
+				Dst.Bottom = Rect.bottom;
 				return TRUE;
 			}
 
@@ -6037,7 +6039,7 @@ rectangle Dialog::CalcComboBoxPos(const DialogItemEx* CurItem, intptr_t ItemCoun
 	return Rect;
 }
 
-void Dialog::SetComboBoxPos(DialogItemEx* Item)
+void Dialog::SetComboBoxPos(DialogItemEx const* Item)
 {
 	if (GetDropDownOpened())
 	{
@@ -6083,7 +6085,7 @@ void Dialog::RemoveFromList()
 
 bool Dialog::IsValid(Dialog* Handle)
 {
-	return contains(dialogs_set::instance().Set, Handle);
+	return dialogs_set::instance().Set.contains(Handle);
 }
 
 void Dialog::SetDeleting()

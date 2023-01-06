@@ -78,6 +78,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 
 // Common:
 #include "common/bytes_view.hpp"
@@ -129,12 +130,15 @@ Viewer::Viewer(window_ptr Owner, bool bQuickView, uintptr_t aCodePage):
 	ViOpt(Global->Opt->ViOpt),
 	Reader(ViewFile, (Global->Opt->ViOpt.MaxLineSize*2*64 > 64*1024 ? Global->Opt->ViOpt.MaxLineSize*2*64 : 64*1024)),
 	strLastSearchStr(Global->GetSearchString()),
-	LastSearchCaseFold(Global->GlobalSearchCaseFold),
-	LastSearchWholeWords(Global->GlobalSearchWholeWords),
-	LastSearchReverse(Global->GlobalSearchReverse),
-	LastSearchHex(Global->GetSearchHex()),
-	LastSearchRegexp(Global->Opt->ViOpt.SearchRegexp),
-	LastSearchDirection(Global->GlobalSearchReverse? -1 : +1),
+	LastSearchOptions
+	{
+		.CaseSensitive = Global->GlobalSearchCaseSensitive,
+		.WholeWords = Global->GlobalSearchWholeWords,
+		.Reverse = Global->GlobalSearchReverse,
+		.Regexp = Global->Opt->ViOpt.SearchRegexp,
+		.Fuzzy = Global->GlobalSearchFuzzy,
+		.SearchHex = Global->GetSearchHex()
+	},
 	m_DefCodepage(aCodePage),
 	m_Codepage(m_DefCodepage),
 	m_Wrap(Global->Opt->ViOpt.ViewerIsWrap),
@@ -180,12 +184,12 @@ Viewer::~Viewer()
 		{
 			if (!os::fs::set_file_attributes(strTempViewName, FILE_ATTRIBUTE_NORMAL)) // BUGBUG
 			{
-				LOGWARNING(L"set_file_attributes({}): {}"sv, strTempViewName, last_error());
+				LOGWARNING(L"set_file_attributes({}): {}"sv, strTempViewName, os::last_error());
 			}
 
 			if (!os::fs::delete_file(strTempViewName)) //BUGBUG
 			{
-				LOGWARNING(L"delete_file({}): {}"sv, strTempViewName, last_error());
+				LOGWARNING(L"delete_file({}): {}"sv, strTempViewName, os::last_error());
 			}
 		}
 	}
@@ -260,13 +264,14 @@ void Viewer::SavePosition()
 
 void Viewer::KeepInitParameters() const
 {
-	Global->StoreSearchString(strLastSearchStr, LastSearchHex);
-	Global->GlobalSearchCaseFold = LastSearchCaseFold;
-	Global->GlobalSearchWholeWords=LastSearchWholeWords;
-	Global->GlobalSearchReverse=LastSearchReverse;
+	Global->StoreSearchString(strLastSearchStr, LastSearchOptions.SearchHex);
+	Global->GlobalSearchCaseSensitive = LastSearchOptions.CaseSensitive;
+	Global->GlobalSearchWholeWords = LastSearchOptions.WholeWords;
+	Global->GlobalSearchReverse = LastSearchOptions.Reverse;
+	Global->GlobalSearchFuzzy = LastSearchOptions.Fuzzy;
 	Global->Opt->ViOpt.ViewerIsWrap = m_Wrap;
 	Global->Opt->ViOpt.ViewerWrap = m_WordWrap;
-	Global->Opt->ViOpt.SearchRegexp=LastSearchRegexp;
+	Global->Opt->ViOpt.SearchRegexp = LastSearchOptions.Regexp;
 }
 
 bool Viewer::OpenFile(string_view const Name, bool const Warn)
@@ -299,7 +304,7 @@ bool Viewer::OpenFile(string_view const Name, bool const Warn)
 			// BUGBUG check result
 			if (!ViewFile.Write(vread_buffer.data(), ReadSize))
 			{
-				LOGWARNING(L"Write({}): {}"sv, ViewFile.GetName(), last_error());
+				LOGWARNING(L"Write({}): {}"sv, ViewFile.GetName(), os::last_error());
 			}
 		}
 		ViewFile.SetPointer(0, nullptr, FILE_BEGIN);
@@ -317,7 +322,7 @@ bool Viewer::OpenFile(string_view const Name, bool const Warn)
 				 so don't show red message box */
 			if (Warn)
 			{
-				const auto ErrorState = last_error();
+				const auto ErrorState = os::last_error();
 
 				if (OperationFailed(ErrorState, strFileName, lng::MViewerTitle, msg(lng::MViewerCannotOpenFile), false) == operation::retry)
 					continue;
@@ -334,7 +339,7 @@ bool Viewer::OpenFile(string_view const Name, bool const Warn)
 	// BUGBUG check result
 	if (!os::fs::get_find_data(strFileName, ViewFindData))
 	{
-		LOGWARNING(L"get_find_data({}): {}"sv, strFileName, last_error());
+		LOGWARNING(L"get_find_data({}): {}"sv, strFileName, os::last_error());
 	}
 
 	uintptr_t CachedCodePage=0;
@@ -1006,20 +1011,25 @@ void Viewer::SetStatusMode(int Mode)
 	ShowStatusLine=Mode;
 }
 
-
-static bool is_word_div(const wchar_t ch)
+static bool is_word_div(const wchar_t ch, const string& word_div)
 {
-	static const wchar_t extra_div[]{ encoding::bom_char, encoding::replace_char };
-	return !ch || std::iswspace(ch) || contains(Global->Opt->strWordDiv.Get(), ch) || contains(extra_div, ch);
+	return !ch || std::iswspace(ch) || contains(word_div, ch);
 }
 
-static bool wrapped_char(const wchar_t ch)
+static string get_word_div()
 {
-	return IsBlankOrEos(ch) || contains(L",;>)"sv, ch);
+	static constexpr std::array extra_word_div{ encoding::bom_char, encoding::replace_char };
+
+	auto word_div{ Global->Opt->strWordDiv.Get() };
+	word_div.append(extra_word_div.cbegin(), extra_word_div.cend());
+	return word_div;
 }
 
 void Viewer::ReadString(ViewerString *pString, int MaxSize, bool update_cache)
 {
+	const auto& WordDiv{ Global->Opt->strWordDiv.Get() };
+	auto CanWrapLineAt{ [&WordDiv](wchar_t ch) { return IsBlankOrEos(ch) || contains(WordDiv, ch); } };
+
 	AdjustWidth();
 
 	int OutPtr = 0, nTab = 0, wrap_out = -1;
@@ -1089,7 +1099,7 @@ void Viewer::ReadString(ViewerString *pString, int MaxSize, bool update_cache)
 		if ( !m_Wrap )
 			continue;
 
-		if ( m_WordWrap && OutPtr <= Width && wrapped_char(ch))
+		if (m_WordWrap && OutPtr <= Width && CanWrapLineAt(ch))
 		{
 			wrap_out = OutPtr;
 			wrap_pos = fpos1;
@@ -2391,13 +2401,13 @@ void Viewer::Up(int nlines, bool adjust)
 	}
 }
 
-int Viewer::GetStrBytesNum(string_view const Str) const
+int Viewer::GetStrBytesNum(const wchar_t* const Str, int const Length) const
 {
 	const auto ch_size = getCharSize();
 	if (ch_size > 0)
-		return static_cast<int>(Str.size() * ch_size);
+		return Length * ch_size;
 
-	return static_cast<int>(encoding::get_bytes_count(m_Codepage, Str));
+	return static_cast<int>(encoding::get_bytes_count(m_Codepage, { Str, static_cast<size_t>(Length) }));
 }
 
 void Viewer::SetViewKeyBar(KeyBar *ViewKeyBar)
@@ -2436,21 +2446,23 @@ void Viewer::ChangeViewKeyBar()
 enum SEARCHDLG
 {
 	SD_DOUBLEBOX,
+	SD_RADIO_TEXT,
+	SD_RADIO_HEX,
 	SD_TEXT_SEARCH,
 	SD_EDIT_TEXT,
 	SD_EDIT_HEX,
 	SD_SEPARATOR1,
-	SD_RADIO_TEXT,
-	SD_RADIO_HEX,
 	SD_CHECKBOX_CASE,
 	SD_CHECKBOX_WORDS,
 	SD_CHECKBOX_REVERSE,
 	SD_CHECKBOX_REGEXP,
+	SD_CHECKBOX_FUZZY,
 	SD_SEPARATOR2,
 	SD_BUTTON_OK,
 	SD_BUTTON_CANCEL,
 
-	SD_COUNT
+	SD_COUNT,
+	SD_MAX_CHARS = 128
 };
 
 enum
@@ -2483,9 +2495,9 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 			Dlg->SendMessage(DM_SHOWITEM,SD_EDIT_HEX,ToPtr(Param1));
 			Dlg->SendMessage(DM_ENABLE,SD_CHECKBOX_CASE,ToPtr(!Param1));
 			const auto re = Dlg->SendMessage(DM_GETCHECK, SD_CHECKBOX_REGEXP, nullptr) == BSTATE_CHECKED;
-			const auto ww = !Param1 && !re;
-			Dlg->SendMessage(DM_ENABLE,SD_CHECKBOX_WORDS,ToPtr(ww));
+			Dlg->SendMessage(DM_ENABLE,SD_CHECKBOX_WORDS,ToPtr(!Param1 && !re));
 			Dlg->SendMessage(DM_ENABLE,SD_CHECKBOX_REGEXP,ToPtr(!Param1));
+			Dlg->SendMessage(DM_ENABLE,SD_CHECKBOX_FUZZY,ToPtr(!Param1 && !re));
 			return TRUE;
 		}
 		case DN_KILLFOCUS:
@@ -2559,6 +2571,7 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 				  || Param1 == SD_CHECKBOX_WORDS
 				  || Param1 == SD_CHECKBOX_REVERSE
 				  || Param1 == SD_CHECKBOX_REGEXP
+				  || Param1 == SD_CHECKBOX_FUZZY
 				){
 					Data.recursive = true;
 					Dlg->SendMessage(DM_SETFOCUS, Data.hex_mode? SD_EDIT_HEX : SD_EDIT_TEXT, nullptr);
@@ -2570,16 +2583,6 @@ intptr_t Viewer::ViewerSearchDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 				return TRUE;
 			else
 				break;
-		}
-		case DN_HOTKEY:
-		{
-			if (Param1==SD_TEXT_SEARCH)
-			{
-				const auto Data = view_as<const ViewerDialogData*>(Dlg->SendMessage(DM_GETITEMDATA, SD_EDIT_TEXT, nullptr));
-				Dlg->SendMessage(DM_SETFOCUS, (Data->hex_mode? SD_EDIT_HEX : SD_EDIT_TEXT), nullptr);
-				return FALSE;
-			}
-			break;
 		}
 		case DN_DRAWDIALOGDONE:
 		{
@@ -2603,15 +2606,17 @@ static auto hex2ss(const string_view from, intptr_t * const pos = nullptr)
 
 struct Viewer::search_data
 {
-	long long CurPos{-1};
-	long long MatchPos{-1};
-	bytes_view search_bytes;
-	string_view search_text;
-	int search_len{};
-	int  ch_size{};
+	long long CurPos{-1}; // IN: LastSelectPos in file, in bytes always. OUT: If Search_ NotFound/Eof/Bof/Cycle, current search position in file, in bytes always
+	long long MatchPos{-1}; // OUT: If found, position of the found sequence in file, in bytes always
+	bytes_view search_bytes; // IN: Needle if Hex
+	string_view search_text; // IN: Needle if Text / Regex
+	int search_len{}; // IN: Needle length; in wide characters if Text / Regex, in bytes if Hex. OUT: If found, length of found sequence in file, in bytes always
+	int  ch_size{}; // IN: getCharSize() if Text / Regex; 1 if Hex
+	const i_searcher* searcher{}; // IN: The searcher to use if Text; nullptr otherwise. TODO: use i_searcherfor all types of search
+	string word_div; // IN: Word delimiter characters if Text; empty otherwise
 	bool first_Rex{true};
+	RegExp Rex; // IN: Compiled regex if Regex
 	std::vector<RegExpMatch> RexMatch;
-	std::optional<RegExp> Rex;
 };
 
 enum SEARCHER_RESULT: int
@@ -2765,7 +2770,9 @@ SEARCHER_RESULT Viewer::search_hex_backward(search_data* sd)
 
 SEARCHER_RESULT Viewer::search_text_forward(search_data* sd)
 {
-	const auto bsize = 8192, slen = sd->search_len, ww = (LastSearchWholeWords ? 1 : 0);
+	assert(sd->searcher);
+
+	const auto bsize = 8192, slen = sd->search_len, ww = (LastSearchOptions.WholeWords ? 1 : 0);
 	wchar_t prev_char{}, *buff = Search_buffer.data(), *t_buff = (sd->ch_size < 0 ? buff + bsize : nullptr);
 	long long to;
 	const auto cpos = sd->CurPos;
@@ -2794,32 +2801,41 @@ SEARCHER_RESULT Viewer::search_text_forward(search_data* sd)
 	if ( swrap == SearchWrap_CYCLE && !tail_part && nb + 3*(slen+ww) < bsize && !veof() )
 	{
 		int nw1 = vread(buff+nw, 3*(slen+ww), t_buff ? t_buff+nw : nullptr);
-		nw1 = std::max(nw1, slen+ww-1);
+		nw1 = std::min(nw1, slen+ww-1);
+		to1 = to + (t_buff ? GetStrBytesNum(t_buff+nw, static_cast<size_t>(nw1)) : sd->ch_size * nw1);
 		nw += nw1;
-		to1 = to + (t_buff ? GetStrBytesNum({ t_buff, static_cast<size_t>(nw1) }) : sd->ch_size * nw1);
 	}
 
 	const auto is_eof = (to1 >= FileSize ? 1 : 0), iLast = nw - slen - ww + ww*is_eof;
-	if (LastSearchCaseFold != search_case_fold::exact)
-		inplace::upper({ buff, static_cast<size_t>(nw) });
 
-	for (const auto& i: irange(iLast + 1))
+	if (int CurPos{}, SearchLength{};
+		SearchString(
+		{ buff, buff + nw },
+		sd->search_text,
+		*sd->searcher,
+		sd->Rex,
+		sd->RexMatch,
+		{},
+		CurPos,
+		{
+			.CaseSensitive = LastSearchOptions.CaseSensitive,
+			.WholeWords = LastSearchOptions.WholeWords,
+		},
+		SearchLength,
+		sd->word_div))
 	{
+		auto matchWholeWords{ true };
 		if (ww)
 		{
-			if (!is_word_div(i > 0 ? buff[i-1] : prev_char))
-				continue;
-			if (!(i == iLast && is_eof) && !is_word_div(buff[i+slen]))
-				continue;
+			if (CurPos == 0 && !is_word_div(prev_char, sd->word_div)) matchWholeWords = false;
+			if (matchWholeWords && CurPos == iLast && !is_eof && !is_word_div(buff[CurPos + SearchLength], sd->word_div)) matchWholeWords = false;
 		}
-		if ( buff[i] != sd->search_text[0]
-		 || (slen > 1 && buff[i+1] != sd->search_text[1])
-		 || (slen > 2 && !std::equal(buff + i + 2, buff + i + slen, sd->search_text.cbegin() + 2))
-		) continue;
-
-		sd->MatchPos = cpos + GetStrBytesNum({ buff, static_cast<size_t>(i) });
-		sd->search_len = GetStrBytesNum({ buff + i, static_cast<size_t>(slen) });
-		return Search_Found;
+		if (matchWholeWords)
+		{
+			sd->MatchPos = cpos + GetStrBytesNum(t_buff, CurPos);
+			sd->search_len = GetStrBytesNum(t_buff + CurPos, SearchLength);
+			return Search_Found;
+		}
 	}
 
 	if (is_eof)
@@ -2835,7 +2851,7 @@ SEARCHER_RESULT Viewer::search_text_forward(search_data* sd)
 	}
 	else
 	{
-		sd->CurPos = to1 - GetStrBytesNum({ t_buff + iLast + 1, static_cast<size_t>(nw - iLast - 1) });
+		sd->CurPos = to1 - GetStrBytesNum(t_buff + iLast + 1, static_cast<size_t>(nw - iLast - 1));
 
 		if (LastSelectPos > 0 && cpos < LastSelectPos && sd->CurPos >= LastSelectPos)
 			return Search_NotFound;
@@ -2847,7 +2863,9 @@ SEARCHER_RESULT Viewer::search_text_forward(search_data* sd)
 
 SEARCHER_RESULT Viewer::search_text_backward(search_data* sd)
 {
-	const auto bsize = 8192, slen = sd->search_len, ww = (LastSearchWholeWords ? 1 : 0);
+	assert(sd->searcher);
+
+	const auto bsize = 8192, slen = sd->search_len, ww = (LastSearchOptions.WholeWords ? 1 : 0);
 	const auto buff = Search_buffer.data();
 	const auto t_buff = (sd->ch_size < 0 ? buff + bsize : nullptr);
 	auto cpos = sd->CurPos;
@@ -2874,7 +2892,7 @@ SEARCHER_RESULT Viewer::search_text_backward(search_data* sd)
 			vseek(to1, FILE_BEGIN);
 			const auto nw1 = vread(buff, nb1, t_buff);
 			if (nw1 > slen + ww - 1)
-				nb1 = GetStrBytesNum({ t_buff + nw1 - (slen + ww - 1), static_cast<size_t>(slen + ww - 1) });
+				nb1 = GetStrBytesNum(t_buff + nw1 - (slen + ww - 1), static_cast<size_t>(slen + ww - 1));
 			nb += nb1;
 		}
 	}
@@ -2882,27 +2900,38 @@ SEARCHER_RESULT Viewer::search_text_backward(search_data* sd)
 	cpos -= nb;
 	vseek(cpos, FILE_BEGIN);
 	const auto nw = vread(buff, nb, t_buff);
-	if (LastSearchCaseFold != search_case_fold::exact)
-		inplace::upper({ buff, static_cast<size_t>(nw) });
 
 	const auto is_eof = (veof() ? 1 : 0), iFirst = ww * (cpos > 0 ? 1 : 0), iLast = nw - slen - ww + ww*is_eof;
-	for (int i = iLast; i >= iFirst; --i)
+
+	if (int CurPos{ iLast + slen }, SearchLength{};
+		SearchString(
+		{ buff + iFirst, buff + iLast + slen },
+		sd->search_text,
+		*sd->searcher,
+		sd->Rex,
+		sd->RexMatch,
+		{},
+		CurPos,
+		{
+			.CaseSensitive = LastSearchOptions.CaseSensitive,
+			.WholeWords = LastSearchOptions.WholeWords,
+			.Reverse = true
+		},
+		SearchLength,
+		sd->word_div))
 	{
+		auto matchWholeWords{ true };
 		if (ww)
 		{
-			if ( i > 0 && !is_word_div(buff[i-1]) )
-				continue;
-			if ( !(i == iLast && is_eof) && !is_word_div(buff[i+slen]) )
-				continue;
+			if (CurPos == iFirst && cpos > 0 && !is_word_div(buff[iFirst - 1], sd->word_div)) matchWholeWords = false;
+			if (matchWholeWords && CurPos == iLast && !is_eof && !is_word_div(buff[CurPos + SearchLength], sd->word_div)) matchWholeWords = false;
 		}
-		if ( buff[i] != sd->search_text[0]
-		|| (slen > 1 && buff[i+1] != sd->search_text[1])
-		|| (slen > 2 && !std::equal(buff + i + 2, buff + i + slen, sd->search_text.cbegin() + 2))
-		) continue;
-
-		sd->MatchPos = cpos + GetStrBytesNum({ t_buff, static_cast<size_t>(i) });
-		sd->search_len = GetStrBytesNum({ t_buff + i, static_cast<size_t>(slen) });
-		return Search_Found;
+		if (matchWholeWords)
+		{
+			sd->MatchPos = cpos + iFirst + GetStrBytesNum(t_buff, CurPos);
+			sd->search_len = GetStrBytesNum(t_buff + CurPos, SearchLength);
+			return Search_Found;
+		}
 	}
 
 	if (cpos <= 0) // bof()
@@ -2919,7 +2948,7 @@ SEARCHER_RESULT Viewer::search_text_backward(search_data* sd)
 	}
 	else
 	{
-		sd->CurPos = cpos + GetStrBytesNum({ t_buff, static_cast<size_t>(iFirst + slen - 1) });
+		sd->CurPos = cpos + GetStrBytesNum(t_buff, static_cast<size_t>(iFirst + slen - 1));
 
 		if (cpos+nb > LastSelectPos && sd->CurPos <= LastSelectPos)
 			return Search_NotFound;
@@ -2981,7 +3010,6 @@ int Viewer::read_line(wchar_t *buf, wchar_t *tbuf, long long cpos, int adjust, l
 
 SEARCHER_RESULT Viewer::search_regex_forward(search_data* sd)
 {
-	assert(sd->Rex);
 	assert(Search_buffer.size() >= 2 * MaxViewLineBufferSize());
 
 	const auto line = Search_buffer.data();
@@ -3011,10 +3039,10 @@ SEARCHER_RESULT Viewer::search_regex_forward(search_data* sd)
 		if ( off > nw )
 			break;
 
-		if (!sd->Rex->SearchEx({ line, static_cast<size_t>(nw) }, off, sd->RexMatch))  // doesn't match
+		if (!sd->Rex.SearchEx({ line, static_cast<size_t>(nw) }, off, sd->RexMatch))  // doesn't match
 			break;
 
-		const auto fpos = bpos + GetStrBytesNum({ t_line, static_cast<size_t>(sd->RexMatch[0].start) });
+		const auto fpos = bpos + GetStrBytesNum(t_line, sd->RexMatch[0].start);
 		if ( fpos < cpos )
 		{
 			off = sd->RexMatch[0].start + 1; // skip
@@ -3027,7 +3055,7 @@ SEARCHER_RESULT Viewer::search_regex_forward(search_data* sd)
 		else // found
 		{
 			sd->MatchPos = fpos;
-			sd->search_len = GetStrBytesNum({ t_line + off + sd->RexMatch[0].start, static_cast<size_t>(sd->RexMatch[0].end - sd->RexMatch[0].start) });
+			sd->search_len = GetStrBytesNum(t_line + off + sd->RexMatch[0].start, sd->RexMatch[0].end - sd->RexMatch[0].start);
 			return Search_Found;
 		}
 	}
@@ -3058,7 +3086,6 @@ SEARCHER_RESULT Viewer::search_regex_forward(search_data* sd)
 
 SEARCHER_RESULT Viewer::search_regex_backward(search_data* sd)
 {
-	assert(sd->Rex);
 	assert(Search_buffer.size() >= 2 * MaxViewLineBufferSize());
 
 	wchar_t *line = Search_buffer.data(), *t_line = sd->ch_size < 0 ? Search_buffer.data() + MaxViewLineBufferSize() : nullptr;
@@ -3075,11 +3102,11 @@ SEARCHER_RESULT Viewer::search_regex_backward(search_data* sd)
 		if (lsize <= 0 || off > nw)
 			break;
 
-		if (!sd->Rex->SearchEx({ line, static_cast<size_t>(nw) }, off, sd->RexMatch))
+		if (!sd->Rex.SearchEx({ line, static_cast<size_t>(nw) }, off, sd->RexMatch))
 			break;
 
-		const auto fpos = bpos + GetStrBytesNum({ t_line, static_cast<size_t>(sd->RexMatch[0].start) });
-		const auto flen = GetStrBytesNum({ t_line + sd->RexMatch[0].start, static_cast<size_t>(sd->RexMatch[0].end - sd->RexMatch[0].start) });
+		const auto fpos = bpos + GetStrBytesNum(t_line, sd->RexMatch[0].start);
+		const auto flen = GetStrBytesNum(t_line + sd->RexMatch[0].start, sd->RexMatch[0].end - sd->RexMatch[0].start);
 		if (fpos+flen > cpos)
 			break;
 
@@ -3134,53 +3161,70 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 	if (!ViewFile || (Next && strLastSearchStr.empty()))
 		return;
 
-	auto SearchHex = LastSearchHex;
-	auto SearchCaseFold = LastSearchCaseFold;
-	auto WholeWords = LastSearchWholeWords;
-	auto ReverseSearch = LastSearchReverse;
-	auto SearchRegexp = LastSearchRegexp;
+	auto SearchOptions{ LastSearchOptions };
 
 	string strSearchStr;
 	if (!strLastSearchStr.empty())
 		strSearchStr = strLastSearchStr;
 
-	search_data sd;
-
 	if (!Next)
 	{
+		constexpr auto DlgWidth{ 76 };
+		constexpr auto HorizontalRadioGap{ 2 };
+		const auto& searchFor{ msg(lng::MViewSearchFor) };
+		const auto& searchForText{ msg(lng::MViewSearchForText) };
+		const auto& searchForHex{ msg(lng::MViewSearchForHex) };
+		const auto searchForW{ static_cast<int>(HiStrlen(searchFor)) };
+		const auto searchForTextW{ static_cast<int>(HiStrlen(searchForText) + 4) };
+		const auto searchForHexW{ static_cast<int>(HiStrlen(searchForHex) + 4) };
+
+		const auto searchForX1{ 4 + 1 };                                        const auto searchForX2{ searchForX1 + searchForW };
+
+		const auto searchForTextX1_{ searchForX2 + HorizontalRadioGap };        const auto searchForTextX2_{ searchForTextX1_ + searchForTextW };
+		const auto searchForHexX1_{ searchForTextX2_ + HorizontalRadioGap };    const auto searchForHexX2_{ searchForHexX1_ + searchForHexW };
+		const auto searchForHexOverage{ std::max(searchForHexX2_ - (DlgWidth - 4 - 1), 0) };
+
+		const auto searchForTextX1{ searchForTextX1_ - searchForHexOverage };   const auto searchForTextX2{ searchForTextX2_ - searchForHexOverage };
+		const auto searchForHexX1{ searchForHexX1_ - searchForHexOverage };     const auto searchForHexX2{ searchForHexX2_ - searchForHexOverage };
+
 		auto SearchDlg = MakeDialogItems<SD_COUNT>(
 		{
-			{ DI_DOUBLEBOX,   {{3,  1 }, {72, 11}}, DIF_NONE, msg(lng::MViewSearchTitle), },
-			{ DI_TEXT,        {{5,  2 }, {0,  2 }}, DIF_NONE, msg(lng::MViewSearchFor), },
-			{ DI_EDIT,        {{5,  3 }, {70, 3 }}, DIF_FOCUS | DIF_HISTORY | DIF_USELASTHISTORY, },
-			{ DI_FIXEDIT,     {{5,  3 }, {70, 3 }}, DIF_MASKEDIT, },
-			{ DI_TEXT,        {{-1, 4 }, {0,  4 }}, DIF_SEPARATOR, },
-			{ DI_RADIOBUTTON, {{5,  5 }, {0,  5 }}, DIF_GROUP, msg(lng::MViewSearchForText), },
-			{ DI_RADIOBUTTON, {{5,  6 }, {0,  6 }}, DIF_NONE, msg(lng::MViewSearchForHex), },
-			{ DI_CHECKBOX,    {{40, 5 }, {0,  5 }}, DIF_NONE, msg(lng::MViewSearchCase), },
-			{ DI_CHECKBOX,    {{40, 6 }, {0,  6 }}, DIF_NONE, msg(lng::MViewSearchWholeWords), },
-			{ DI_CHECKBOX,    {{40, 7 }, {0,  7 }}, DIF_NONE, msg(lng::MViewSearchReverse), },
-			{ DI_CHECKBOX,    {{40, 8 }, {0,  8 }}, DIF_DISABLE, msg(lng::MViewSearchRegexp), },
-			{ DI_TEXT,        {{-1, 9 }, {0,  9 }}, DIF_SEPARATOR, },
-			{ DI_BUTTON,      {{0,  10}, {0,  10}}, DIF_CENTERGROUP | DIF_DEFAULTBUTTON, msg(lng::MViewSearchSearch), },
-			{ DI_BUTTON,      {{0,  10}, {0,  10}}, DIF_CENTERGROUP, msg(lng::MViewSearchCancel), },
+			{ DI_DOUBLEBOX,   {{3,               1}, {DlgWidth-4,      10}}, DIF_NONE, msg(lng::MViewSearchTitle), },
+			{ DI_RADIOBUTTON, {{searchForTextX1, 2}, {searchForTextX2, 2 }}, DIF_GROUP, searchForText, },
+			{ DI_RADIOBUTTON, {{searchForHexX1,  2}, {searchForHexX2,  2 }}, DIF_NONE, searchForHex, },
+			{ DI_TEXT,        {{searchForX1,     2}, {0,               2 }}, DIF_NONE, searchFor, },
+			{ DI_EDIT,        {{5,               3}, {DlgWidth-4-2,    3 }}, DIF_FOCUS | DIF_HISTORY | DIF_USELASTHISTORY, },
+			{ DI_FIXEDIT,     {{5,               3}, {DlgWidth-4-2,    3 }}, DIF_MASKEDIT, },
+			{ DI_TEXT,        {{-1,              4}, {0,               4 }}, DIF_SEPARATOR, },
+			{ DI_CHECKBOX,    {{5,               5}, {0,               5 }}, DIF_NONE, msg(lng::MViewSearchCase), },
+			{ DI_CHECKBOX,    {{5,               6}, {0,               6 }}, DIF_NONE, msg(lng::MViewSearchWholeWords), },
+			{ DI_CHECKBOX,    {{5,               7}, {0,               7 }}, DIF_NONE, msg(lng::MViewSearchReverse), },
+			{ DI_CHECKBOX,    {{40,              5}, {0,               5 }}, DIF_NONE, msg(lng::MViewSearchRegexp), },
+			{ DI_CHECKBOX,    {{40,              6}, {0,               6 }}, DIF_NONE, msg(lng::MViewSearchFuzzy), },
+			{ DI_TEXT,        {{-1,              8}, {0,               8 }}, DIF_SEPARATOR, },
+			{ DI_BUTTON,      {{0,               9}, {0,               9 }}, DIF_CENTERGROUP | DIF_DEFAULTBUTTON, msg(lng::MViewSearchSearch), },
+			{ DI_BUTTON,      {{0,               9}, {0,               9 }}, DIF_CENTERGROUP, msg(lng::MViewSearchCancel), },
 		});
 
+		string mask(3 * SD_MAX_CHARS, L'H');
+		for (int i = 0; i < SD_MAX_CHARS; ++i)
+			mask[3 * i + 2] = L' '; // "HH HH ..."
+		SearchDlg[SD_RADIO_TEXT].Selected =!LastSearchOptions.SearchHex;
+		SearchDlg[SD_RADIO_HEX].Selected = LastSearchOptions.SearchHex;
+		SearchDlg[SD_EDIT_HEX].strMask = std::move(mask);
 		SearchDlg[SD_EDIT_TEXT].strHistory = L"SearchText"sv;
-		SearchDlg[SD_EDIT_HEX].strMask = L"HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH HH "sv;
-		SearchDlg[SD_RADIO_TEXT].Selected=!LastSearchHex;
-		SearchDlg[SD_RADIO_HEX].Selected=LastSearchHex;
-		SearchDlg[SD_CHECKBOX_CASE].Selected = LastSearchCaseFold == search_case_fold::exact;
-		SearchDlg[SD_CHECKBOX_WORDS].Selected=LastSearchWholeWords;
-		SearchDlg[SD_CHECKBOX_REVERSE].Selected=LastSearchReverse;
-		SearchDlg[SD_CHECKBOX_REGEXP].Selected=LastSearchRegexp;
+		SearchDlg[SD_CHECKBOX_CASE].Selected = LastSearchOptions.CaseSensitive;
+		SearchDlg[SD_CHECKBOX_WORDS].Selected = LastSearchOptions.WholeWords;
+		SearchDlg[SD_CHECKBOX_REVERSE].Selected = LastSearchOptions.Reverse;
+		SearchDlg[SD_CHECKBOX_REGEXP].Selected= LastSearchOptions.Regexp;
+		SearchDlg[SD_CHECKBOX_FUZZY].Selected = LastSearchOptions.Fuzzy;
 		SearchDlg[SearchDlg[SD_RADIO_HEX].Selected? SD_EDIT_HEX : SD_EDIT_TEXT].strData = strSearchStr;
 
 		ViewerDialogData my;
 		//
 		my.viewer = this;
 		my.edit_autofocus = (ViOpt.SearchEditFocus != 0);
-		my.hex_mode = (LastSearchHex != 0);
+		my.hex_mode = (LastSearchOptions.SearchHex != 0);
 		my.recursive = false;
 		//
 		SearchDlg[SD_EDIT_TEXT].UserData = reinterpret_cast<intptr_t>(&my);
@@ -3188,23 +3232,21 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		const auto Dlg = Dialog::create(SearchDlg, &Viewer::ViewerSearchDlgProc, this, const_cast<Manager::Key*>(FirstChar));
 		Dlg->SetId(ViewerSearchId);
 		Dlg->SetHelp(L"ViewerSearch"sv);
-		Dlg->SetPosition({ -1, -1, 76, 13 });
+		Dlg->SetPosition({ -1, -1, 76, 12 });
 
 		Dlg->Process();
 
 		if (Dlg->GetExitCode()!=SD_BUTTON_OK)
 			return;
 
-		SearchHex=SearchDlg[SD_RADIO_HEX].Selected == BSTATE_CHECKED;
-		SearchCaseFold =
-			SearchDlg[SD_CHECKBOX_CASE].Selected == BSTATE_CHECKED? search_case_fold::exact :
-			SearchDlg[SD_CHECKBOX_CASE].Selected == BSTATE_UNCHECKED? search_case_fold::icase :
-			search_case_fold::fuzzy;
-		WholeWords=SearchDlg[SD_CHECKBOX_WORDS].Selected == BSTATE_CHECKED;
-		ReverseSearch=SearchDlg[SD_CHECKBOX_REVERSE].Selected == BSTATE_CHECKED;
-		SearchRegexp=SearchDlg[SD_CHECKBOX_REGEXP].Selected == BSTATE_CHECKED;
+		SearchOptions.SearchHex = SearchDlg[SD_RADIO_HEX].Selected == BSTATE_CHECKED;
+		SearchOptions.CaseSensitive = SearchDlg[SD_CHECKBOX_CASE].Selected == BSTATE_CHECKED;
+		SearchOptions.WholeWords = SearchDlg[SD_CHECKBOX_WORDS].Selected == BSTATE_CHECKED;
+		SearchOptions.Reverse = SearchDlg[SD_CHECKBOX_REVERSE].Selected == BSTATE_CHECKED;
+		SearchOptions.Regexp = SearchDlg[SD_CHECKBOX_REGEXP].Selected == BSTATE_CHECKED;
+		SearchOptions.Fuzzy = SearchDlg[SD_CHECKBOX_FUZZY].Selected == BSTATE_CHECKED;
 
-		if (SearchHex)
+		if (SearchOptions.SearchHex)
 		{
 			strSearchStr = ExtractHexString(SearchDlg[SD_EDIT_HEX].strData);
 		}
@@ -3214,73 +3256,62 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 		}
 	}
 
-	LastSearchCaseFold = SearchCaseFold;
-	LastSearchWholeWords = WholeWords;
-	LastSearchReverse = ReverseSearch;
-	LastSearchRegexp = SearchRegexp;
-	LastSearchHex = SearchHex;
+	LastSearchOptions = SearchOptions;
 
 	if (Next == -1)
-		ReverseSearch = !ReverseSearch;
+		SearchOptions.Reverse = !SearchOptions.Reverse;
 
 	auto strMsgStr = strLastSearchStr = strSearchStr;
 
-	sd.search_len = static_cast<int>(strSearchStr.size());
+	searchers Searchers;
+	search_data sd;
 
 	bytes search_bytes;
 	decltype(&Viewer::search_hex_forward) searcher;
 
-	if (SearchHex)
+	if (SearchOptions.SearchHex)
 	{
-		search_bytes = hex2ss(strSearchStr);
-		sd.search_len = static_cast<int>(search_bytes.size());
-		sd.search_bytes = search_bytes;
 		sd.ch_size = 1;
-		SearchCaseFold = search_case_fold::exact;
-		SearchRegexp = false;
-		searcher = (ReverseSearch ? &Viewer::search_hex_backward : &Viewer::search_hex_forward);
+		search_bytes = hex2ss(strSearchStr);
+		sd.search_bytes = search_bytes;
+		sd.search_len = static_cast<int>(search_bytes.size());
+		SearchOptions.CaseSensitive = true;
+		SearchOptions.Regexp = false;
+		searcher = (SearchOptions.Reverse ? &Viewer::search_hex_backward : &Viewer::search_hex_forward);
 	}
 	else
 	{
 		sd.ch_size = getCharSize();
 		sd.search_text = strSearchStr;
+		sd.search_len = static_cast<int>(strSearchStr.size());
 
-		if (SearchRegexp)
+		if (SearchOptions.Regexp)
 		{
-			searcher = (ReverseSearch ? &Viewer::search_regex_backward : &Viewer::search_regex_forward);
+			searcher = (SearchOptions.Reverse ? &Viewer::search_regex_backward : &Viewer::search_regex_forward);
 
 			const auto strSlash = InsertRegexpQuote(strSearchStr);
 
 			strMsgStr = strSlash;
 
-			sd.Rex.emplace();
-
 			try
 			{
-				sd.Rex->Compile(strSlash, OP_PERLSTYLE | OP_OPTIMIZE | (SearchCaseFold == search_case_fold::exact? 0 : OP_IGNORECASE));
+				sd.Rex.Compile(strSlash, OP_PERLSTYLE | OP_OPTIMIZE | (SearchOptions.CaseSensitive? 0 : OP_IGNORECASE));
 			}
 			catch (regex_exception const& e)
 			{
 				ReCompileErrorMessage(e, strSlash);
 				return;
 			}
-
-			sd.RexMatch.resize(sd.Rex->GetBracketsCount());
 		}
 		else
 		{
-			searcher = (ReverseSearch ? &Viewer::search_text_backward : &Viewer::search_text_forward);
+			sd.searcher = &init_searcher(Searchers, SearchOptions.CaseSensitive, SearchOptions.Fuzzy, strLastSearchStr);
+			sd.word_div = get_word_div();
+			searcher = (SearchOptions.Reverse ? &Viewer::search_text_backward : &Viewer::search_text_forward);
 			inplace::quote_unconditional(strMsgStr);
 		}
 	}
 
-	if (SearchCaseFold != search_case_fold::exact && !SearchRegexp)
-	{
-		inplace::upper(strSearchStr);
-		sd.search_text = strSearchStr;
-	}
-
-	int search_direction = ReverseSearch ? -1 : +1;
 	switch (Next)
 	{
 		case +1:
@@ -3288,7 +3319,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 			if ( SelectPos >= 0 && SelectSize >= 0 )
 			{
 				if (sd.ch_size >= 1)
-					LastSelectPos = SelectPos + (ReverseSearch ? LastSelectSize-sd.ch_size : sd.ch_size);
+					LastSelectPos = SelectPos + (SearchOptions.Reverse ? LastSelectSize-sd.ch_size : sd.ch_size);
 				else
 				{
 					long long prev_pos = SelectPos;
@@ -3298,7 +3329,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 						wchar_t ch;
 						bool ok_getc = vgetc(&ch);
 						LastSelectPos = vtell();
-						if (!ReverseSearch || !ok_getc)
+						if (!SearchOptions.Reverse || !ok_getc)
 							break;
 						if ( LastSelectPos >= SelectPos + LastSelectSize )
 						{
@@ -3308,7 +3339,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 						prev_pos = LastSelectPos;
 					}
 				}
-				if (search_direction != LastSearchDirection)
+				if (SearchOptions.Reverse != LastSearchOptions.Reverse)
 					StartSearchPos = LastSelectPos;
 
 				break;
@@ -3319,13 +3350,14 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 			assert(Next >= -1 && Next <= +1);
 			if (!Next || LastSelectSize < 0)
 				LastSelectSize = SelectSize = -1;
-			StartSearchPos = LastSelectPos = (ReverseSearch ? EndOfScreen(0) : BegOfScreen());
+			StartSearchPos = LastSelectPos = (SearchOptions.Reverse ? EndOfScreen(0) : BegOfScreen());
 		break;
 	}
-	LastSearchDirection = search_direction;
+	LastSearchOptions.Reverse = SearchOptions.Reverse;
 
-	if (!sd.search_len || static_cast<long long>(sd.search_len) > FileSize)
+	if (!sd.search_len || !FileSize)
 		return;
+	const auto can_be_found = ((SearchOptions.Regexp || SearchOptions.Fuzzy) && !SearchOptions.SearchHex) || static_cast<long long>(sd.search_len) <= FileSize;
 
 	sd.CurPos = LastSelectPos;
 	{
@@ -3337,7 +3369,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 
 		for (;;)
 		{
-			const auto found = std::invoke(searcher, this, &sd);
+			const auto found = can_be_found ? (this->*searcher)(&sd) : Search_NotFound;
 			if (found == Search_Found)
 				break;
 
@@ -3349,7 +3381,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 				Message(MSG_WARNING,
 					msg(lng::MViewSearchTitle),
 					{
-						msg(SearchHex? lng::MViewSearchCannotFindHex : lng::MViewSearchCannotFind),
+						msg(SearchOptions.SearchHex? lng::MViewSearchCannotFindHex : lng::MViewSearchCannotFind),
 						strMsgStr
 					},
 					{ lng::MOk });
@@ -3391,7 +3423,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 				if ( total > 0 )
 				{
 					long long done;
-					if ( !ReverseSearch )
+					if (!SearchOptions.Reverse)
 					{
 						if ( sd.CurPos >= StartSearchPos )
 							done = sd.CurPos - StartSearchPos;
@@ -3409,7 +3441,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 				}
 
 				if (!Progress)
-					Progress.emplace(msg(lng::MViewSearchTitle), concat(msg(SearchHex? lng::MViewSearchingHex : lng::MViewSearchingFor), L' ', strMsgStr), 0);
+					Progress.emplace(msg(lng::MViewSearchTitle), concat(msg(SearchOptions.SearchHex? lng::MViewSearchingHex : lng::MViewSearchingFor), L' ', strMsgStr), 0);
 
 				Progress->update(percent);
 			}
@@ -3418,7 +3450,7 @@ void Viewer::Search(int Next,const Manager::Key* FirstChar)
 
 	if ( sd.MatchPos >= 0 )
 	{
-		DWORD flags = ReverseSearch ? 0x2 : 0;
+		DWORD flags = SearchOptions.Reverse ? 0x2 : 0;
 
 		if (sd.search_len < 0
 		 || (sd.MatchPos >= BegOfScreen() && sd.MatchPos + sd.search_len <= EndOfScreen(0)))
@@ -3923,7 +3955,7 @@ void Viewer::SetFileSize()
 	// BUGBUG check result
 	if (!ViewFile.GetSize(uFileSize))
 	{
-		LOGWARNING(L"GetSize({}): {}"sv, ViewFile.GetName(), last_error());
+		LOGWARNING(L"GetSize({}): {}"sv, ViewFile.GetName(), os::last_error());
 	}
 
 	FileSize=uFileSize;
@@ -4265,12 +4297,10 @@ int Viewer::ProcessTypeWrapMode(int newMode, bool isRedraw)
 
 uintptr_t Viewer::GetDefaultCodePage()
 {
-	auto cp = encoding::codepage::normalise(Global->Opt->ViOpt.DefaultCodePage);
-
-	if (cp == CP_DEFAULT || !IsCodePageSupported(cp))
-		cp = encoding::codepage::ansi();
-
-	return cp;
+	const auto cp = encoding::codepage::normalise(Global->Opt->ViOpt.DefaultCodePage);
+	return cp == CP_DEFAULT || !IsCodePageSupported(cp)?
+		encoding::codepage::ansi() :
+		cp;
 }
 
 void Viewer::ReadEvent()

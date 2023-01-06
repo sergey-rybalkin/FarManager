@@ -36,7 +36,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "platform.process.hpp"
 
 // Internal:
-#include "exception.hpp"
 #include "imports.hpp"
 #include "log.hpp"
 
@@ -435,6 +434,15 @@ namespace os::process
 		m_Offset += Info.NextEntryOffset;
 
 		return true;
+	}
+
+	bool terminate_other(int const Pid)
+	{
+		handle const Process(OpenProcess(PROCESS_TERMINATE, FALSE, Pid));
+		if (!Process)
+			return false;
+
+		return TerminateProcess(Process.native_handle(), ERROR_PROCESS_ABORTED) != FALSE;
 	}
 
 	[[noreturn]]

@@ -59,6 +59,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FarDlgBuilder.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.fs.hpp"
 
 // Common:
@@ -92,7 +93,7 @@ namespace
 
 		bool check(os::chrono::time_point const Time) const
 		{
-			return Time < m_StartTime || contains(m_KnownRecords, Time);
+			return Time < m_StartTime || m_KnownRecords.contains(Time);
 		}
 
 		void add(os::chrono::time_point const Time)
@@ -571,7 +572,7 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 				&& RetCode != HRT_CTRLENTER && ((m_TypeHistory == HISTORYTYPE_FOLDER && SelectedRecord.uuid.empty()) || m_TypeHistory == HISTORYTYPE_VIEW) && !os::fs::exists(SelectedRecord.name))
 			{
 				SetLastError(ERROR_FILE_NOT_FOUND);
-				const auto ErrorState = last_error();
+				const auto ErrorState = os::last_error();
 
 				if (SelectedRecord.type == HR_EDITOR && m_TypeHistory == HISTORYTYPE_VIEW) // Edit? тогда спросим и если надо создадим
 				{
@@ -738,7 +739,7 @@ bool History::GetSimilar(string &strStr, int LastCmdPartLength, bool bAppend)
 			continue;
 
 		if (bAppend)
-			strStr.append(strName, Length, string::npos); // gcc 7.3-8.1 bug: npos required. TODO: Remove after we move to 8.2 or later
+			strStr.append(strName, Length);
 		else
 			strStr = strName;
 

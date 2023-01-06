@@ -22,7 +22,7 @@ const wchar_t* GetMsg(int MsgId)
 
 std::pair<string_view, string_view> ParseParam(string_view Str)
 {
-	if (!starts_with(Str, L'|'))
+	if (!Str.starts_with(L'|'))
 		return {};
 
 	auto Param = Str.substr(1);
@@ -83,6 +83,8 @@ void WFD2FFD(const WIN32_FIND_DATA& wfd, PluginPanelItem& ffd, string* NameData)
 	ffd.LastWriteTime = wfd.ftLastWriteTime;
 	ffd.FileSize = make_integer<unsigned long long>(wfd.nFileSizeLow, wfd.nFileSizeHigh);
 	ffd.AllocationSize = 0;
+	ffd.Reserved[0] = wfd.dwReserved0;
+	ffd.Reserved[1] = wfd.dwReserved1;
 	ffd.AlternateFileName = {};
 
 	if (NameData)
@@ -260,7 +262,7 @@ bool GetFileInfoAndValidate(const string_view FilePath, PluginPanelItem& FindDat
 	const auto FullPath = GetFullPath(FileName);
 	const auto NtPath = FormNtPath(FullPath);
 
-	if (starts_with(FileName, L"\\\\.\\") && FSF.LIsAlpha(FileName[4]) && FileName[5] == L':' && FileName[6] == 0)
+	if (FileName.starts_with(L"\\\\.\\") && FSF.LIsAlpha(FileName[4]) && FileName[5] == L':' && FileName[6] == 0)
 	{
 		FindData.FileAttributes = FILE_ATTRIBUTE_ARCHIVE;
 		NameData = FileName;

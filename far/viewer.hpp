@@ -151,7 +151,7 @@ private:
 	bool veof() const;
 	wchar_t vgetc_prev();
 	void SetFileSize();
-	int GetStrBytesNum(string_view Str) const;
+	int GetStrBytesNum(const wchar_t* Str, int Length) const; // BUGBUG not string_view, could be unrelated 🤦
 	bool isBinaryFile(uintptr_t cp);
 	void SavePosition();
 	intptr_t ViewerSearchDlgProc(Dialog* Dlg, intptr_t Msg,intptr_t Param1,void* Param2);
@@ -193,9 +193,17 @@ private:
 	bool m_DeleteFolder{true};
 
 	string strLastSearchStr;
-	search_case_fold LastSearchCaseFold;
-	bool LastSearchWholeWords, LastSearchReverse, LastSearchHex, LastSearchRegexp;
-	int LastSearchDirection;
+
+	struct SearchOptions
+	{
+		bool CaseSensitive{};
+		bool WholeWords{};
+		bool Reverse{};
+		bool Regexp{};
+		bool Fuzzy{};
+		bool SearchHex{};
+	} LastSearchOptions;
+
 	long long StartSearchPos{};
 
 	uintptr_t m_DefCodepage;

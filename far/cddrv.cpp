@@ -38,11 +38,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cddrv.hpp"
 
 // Internal:
-#include "exception.hpp"
 #include "log.hpp"
 #include "pathmix.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.fs.hpp"
 
 // Common:
@@ -77,12 +77,12 @@ enum cdrom_device_capabilities
 	CAPABILITIES_HDDVDRAM = 13_bit,
 };
 
-static auto operator | (cdrom_device_capabilities const This, cdrom_device_capabilities const Rhs)
+static auto operator|(cdrom_device_capabilities const This, cdrom_device_capabilities const Rhs)
 {
 	return static_cast<cdrom_device_capabilities>(std::to_underlying(This) | Rhs);
 }
 
-static auto& operator |= (cdrom_device_capabilities& This, cdrom_device_capabilities const Rhs)
+static auto& operator|=(cdrom_device_capabilities& This, cdrom_device_capabilities const Rhs)
 {
 	return This = This | Rhs;
 }
@@ -90,6 +90,7 @@ static auto& operator |= (cdrom_device_capabilities& This, cdrom_device_capabili
 template<typename T, size_t N, size_t... I>
 static auto write_value_to_big_endian_impl(unsigned char (&Dest)[N], T const Value, std::index_sequence<I...>)
 {
+	static_assert(std::endian::native == std::endian::little, "No way");
 	(..., (Dest[N - I - 1] = (Value >> (8 * I) & 0xFF)));
 }
 
@@ -102,6 +103,7 @@ static auto write_value_to_big_endian(unsigned char (&Dest)[N], T const Value)
 template<typename T, size_t N, size_t... I>
 static auto read_value_from_big_endian_impl(unsigned char const (&Src)[N], std::index_sequence<I...>)
 {
+	static_assert(std::endian::native == std::endian::little, "No way");
 	static_assert(sizeof(T) >= N);
 	return T((... | (T(Src[I]) << (8 * (N - I - 1)))));
 }
@@ -225,7 +227,7 @@ static auto capatibilities_from_scsi_configuration(const os::fs::file& Device)
 
 	if (!Device.IoControl(IOCTL_SCSI_PASS_THROUGH, &Spt, sizeof(SCSI_PASS_THROUGH), &Spt, sizeof(Spt)) || Spt.ScsiStatus != SCSISTAT_GOOD)
 	{
-		LOGWARNING(L"SCSIOP_GET_CONFIGURATION: {}"sv, last_error());
+		LOGWARNING(L"SCSIOP_GET_CONFIGURATION: {}"sv, os::last_error());
 		return CAPABILITIES_NONE;
 	}
 
@@ -265,7 +267,7 @@ static auto capatibilities_from_scsi_mode_sense(const os::fs::file& Device)
 
 	if (!Device.IoControl(IOCTL_SCSI_PASS_THROUGH, &Spt, sizeof(SCSI_PASS_THROUGH), &Spt, sizeof(Spt)) || Spt.ScsiStatus != SCSISTAT_GOOD)
 	{
-		LOGWARNING(L"SCSIOP_MODE_SENSE: {}"sv, last_error());
+		LOGWARNING(L"SCSIOP_MODE_SENSE: {}"sv, os::last_error());
 		return CAPABILITIES_NONE;
 	}
 
@@ -342,14 +344,14 @@ static auto product_id_to_capatibilities(const char* const ProductId)
 		if (
 			const auto Prefix = Id.substr(0, Pos);
 			std::any_of(ALL_CONST_RANGE(i.AntipatternsBefore),
-				[&](string_view const Str){ return ends_with(Prefix, Str); })
+				[&](string_view const Str){ return Prefix.ends_with(Str); })
 		)
 			return Value;
 
 		if (
 			const auto Suffix = Id.substr(Pos + i.Pattern.size());
 			std::any_of(ALL_CONST_RANGE(i.AntipatternsAfter),
-				[&](string_view const Str){ return starts_with(Suffix, Str); })
+				[&](string_view const Str){ return Suffix.starts_with(Str); })
 		)
 			return Value;
 
@@ -364,14 +366,14 @@ static auto capatibilities_from_product_id(const os::fs::file& Device)
 
 	if (!Device.IoControl(IOCTL_STORAGE_QUERY_PROPERTY, &PropertyQuery, sizeof(PropertyQuery), &DescriptorHeader, sizeof(DescriptorHeader)) || !DescriptorHeader.Size)
 	{
-		LOGWARNING(L"IOCTL_STORAGE_QUERY_PROPERTY: {}"sv, last_error());
+		LOGWARNING(L"IOCTL_STORAGE_QUERY_PROPERTY: {}"sv, os::last_error());
 		return CAPABILITIES_NONE;
 	}
 
 	const char_ptr_n<os::default_buffer_size> Buffer(DescriptorHeader.Size);
 	if (!Device.IoControl(IOCTL_STORAGE_QUERY_PROPERTY, &PropertyQuery, sizeof(PropertyQuery), Buffer.data(), static_cast<DWORD>(Buffer.size())))
 	{
-		LOGWARNING(L"IOCTL_STORAGE_QUERY_PROPERTY: {}"sv, last_error());
+		LOGWARNING(L"IOCTL_STORAGE_QUERY_PROPERTY: {}"sv, os::last_error());
 		return CAPABILITIES_NONE;
 	}
 
@@ -439,7 +441,7 @@ cd_type get_cdrom_type(string_view RootDir)
 	string VolumePath(RootDir);
 	DeleteEndSlash(VolumePath);
 
-	if (starts_with(VolumePath, L"\\\\?\\"sv))
+	if (VolumePath.starts_with(L"\\\\?\\"sv))
 	{
 		VolumePath[2] = L'.';
 	}
@@ -468,14 +470,14 @@ bool is_removable_usb(string_view RootDir)
 	os::fs::file const Device(drive, STANDARD_RIGHTS_READ, os::fs::file_share_all, nullptr, OPEN_EXISTING);
 	if (!Device)
 	{
-		LOGWARNING(L"CreateFile({}): {}"sv, drive, last_error());
+		LOGWARNING(L"CreateFile({}): {}"sv, drive, os::last_error());
 		return false;
 	}
 
 	DISK_GEOMETRY DiskGeometry;
 	if (!Device.IoControl(IOCTL_DISK_GET_DRIVE_GEOMETRY, nullptr, 0, &DiskGeometry, sizeof(DiskGeometry)))
 	{
-		LOGWARNING(L"IOCTL_DISK_GET_DRIVE_GEOMETRY({}): {}"sv, drive, last_error());
+		LOGWARNING(L"IOCTL_DISK_GET_DRIVE_GEOMETRY({}): {}"sv, drive, os::last_error());
 		return false;
 	}
 
@@ -486,7 +488,7 @@ bool is_removable_usb(string_view RootDir)
 
 #include "testing.hpp"
 
-TEST_CASE("product_id_to_capatibilities")
+TEST_CASE("cddrv.product_id_to_capatibilities")
 {
 	static const struct
 	{
@@ -516,4 +518,16 @@ TEST_CASE("product_id_to_capatibilities")
 		REQUIRE(i.Result == product_id_to_capatibilities(i.Src));
 	}
 }
+
+TEST_CASE("cddrv.big_endian")
+{
+	std::uint32_t const Value = 0x123456;
+	unsigned char Buffer[3];
+	write_value_to_big_endian(Buffer, Value);
+	REQUIRE((Buffer[0] == 0x12 && Buffer[1] == 0x34 && Buffer[2] == 0x56));
+
+	const auto ValueCopy = read_value_from_big_endian<decltype(Value)>(Buffer);
+	REQUIRE(ValueCopy == Value);
+}
+
 #endif

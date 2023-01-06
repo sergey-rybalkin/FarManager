@@ -44,6 +44,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cvtname.hpp"
 #include "filelist.hpp"
 #include "plugin.hpp"
+#include "datetime.hpp"
 
 // Platform:
 #include "platform.fs.hpp"
@@ -183,9 +184,9 @@ bool IsAbsolutePath(const string_view Path)
 bool HasPathPrefix(const string_view Path)
 {
 	return
-		starts_with(Path, L"\\\\?\\"sv) ||
-		starts_with(Path, L"\\\\.\\"sv) ||
-		starts_with(Path, L"\\??\\"sv);
+		Path.starts_with(L"\\\\?\\"sv) ||
+		Path.starts_with(L"\\\\.\\"sv) ||
+		Path.starts_with(L"\\??\\"sv);
 }
 
 string_view ExtractPathPrefix(const string_view Path)
@@ -253,7 +254,7 @@ bool IsParentDirectory(const PluginPanelItem& Data)
 
 bool IsCurrentDirectory(string_view const Str)
 {
-	return starts_with(Str, L"."sv) && (Str.size() == 1 || (Str.size() == 2 && path::is_separator(Str[1])));
+	return Str.starts_with(L"."sv) && (Str.size() == 1 || (Str.size() == 2 && path::is_separator(Str[1])));
 }
 
 string_view PointToName(string_view const Path)
@@ -501,6 +502,18 @@ string ExtractFilePath(string_view const Path)
 	return string(Path.substr(0, p));
 }
 
+string unique_name()
+{
+	auto [Date, Time] = format_datetime(os::chrono::now_utc());
+
+	const auto not_digit = [](wchar_t const Char){ return !std::iswdigit(Char); };
+
+	std::erase_if(Date, not_digit);
+	std::erase_if(Time, not_digit);
+
+	return format(FSTR(L"Far_{}_{}_{}"sv), Date, Time, GetCurrentProcessId());
+}
+
 bool IsRootPath(const string_view Path)
 {
 	bool IsRoot = false;
@@ -511,7 +524,7 @@ bool IsRootPath(const string_view Path)
 bool PathStartsWith(const string_view Path, const string_view Start)
 {
 	const auto PathPart = DeleteEndSlash(Start);
-	return starts_with(Path, PathPart) && (Path.size() == PathPart.size() || path::is_separator(Path[PathPart.size()]));
+	return Path.starts_with(PathPart) && (Path.size() == PathPart.size() || path::is_separator(Path[PathPart.size()]));
 }
 
 #ifdef ENABLE_TESTS

@@ -89,6 +89,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "char_width.hpp"
 
 // Platform:
+#include "platform.clipboard.hpp"
 #include "platform.env.hpp"
 
 // Common:
@@ -1775,6 +1776,16 @@ Options::Options():
 		wakeup_for_screensaver(Value);
 	}));
 
+	ClipboardUnicodeWorkaround.SetCallback(option::notifier([](bool const Value)
+	{
+		os::clipboard::enable_ansi_to_unicode_conversion_workaround(Value);
+	}));
+
+	SetPalette.SetCallback(option::notifier([](bool const Value)
+	{
+		::SetPalette();
+	}));
+
 	// По умолчанию - брать плагины из основного каталога
 	LoadPlug.MainPluginDir = true;
 	LoadPlug.PluginsPersonal = true;
@@ -1901,6 +1912,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyInterface,              L"RedrawTimeout"sv,                 RedrawTimeout, 200},
 		{FSSF_PRIVATE,           NKeyInterface,              L"TitleAddons"sv,                   strTitleAddons, L"%Ver %Platform %Admin"sv},
 		{FSSF_PRIVATE,           NKeyInterface,              L"ViewerTitleFormat"sv,             strViewerTitleFormat, L"%Lng %File"sv},
+		{FSSF_PRIVATE,           NKeyInterface,              L"SetPalette"sv,                    SetPalette, true},
 		{FSSF_PRIVATE,           NKeyInterfaceCompletion,    L"Append"sv,                        AutoComplete.AppendCompletion, false},
 		{FSSF_PRIVATE,           NKeyInterfaceCompletion,    L"ModalList"sv,                     AutoComplete.ModalList, false},
 		{FSSF_PRIVATE,           NKeyInterfaceCompletion,    L"ShowList"sv,                      AutoComplete.ShowList, true},
@@ -2003,6 +2015,7 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeySystem,                 L"AutoUpdateRemoteDrive"sv,         AutoUpdateRemoteDrive, true},
 		{FSSF_PRIVATE,           NKeySystem,                 L"BoxSymbols"sv,                    strBoxSymbols, DefaultBoxSymbols},
 		{FSSF_PRIVATE,           NKeySystem,                 L"CASRule"sv,                       CASRule, -1},
+		{FSSF_PRIVATE,           NKeySystem,                 L"ClipboardUnicodeWorkaround"sv,    ClipboardUnicodeWorkaround, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"CmdHistoryRule"sv,                CmdHistoryRule, false},
 		{FSSF_PRIVATE,           NKeySystem,                 L"ConsoleDetachKey"sv,              ConsoleDetachKey, L"CtrlShiftTab"sv},
 		{FSSF_PRIVATE,           NKeySystem,                 L"CopyBufferSize"sv,                CMOpt.BufferSize, 0},
@@ -2543,10 +2556,10 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 
 	case DN_CONTROLINPUT:
 		{
-			const auto record = static_cast<const INPUT_RECORD*>(Param2);
-			if (Param1 == ac_item_listbox && record->EventType==KEY_EVENT)
+			const auto& record = *static_cast<INPUT_RECORD const*>(Param2);
+			if (Param1 == ac_item_listbox && record.EventType==KEY_EVENT)
 			{
-				switch (InputRecordToKey(record))
+				switch (InputRecordToKey(&record))
 				{
 				case KEY_SHIFTF1:
 					{
@@ -2585,7 +2598,7 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 					{
 						SCOPED_ACTION(Dialog::suppress_redraw)(Dlg);
 
-						static bool HideUnchanged = true;
+						m_HideUnchanged = !m_HideUnchanged;
 
 						FarListInfo ListInfo{ sizeof(ListInfo) };
 						Dlg->SendMessage(DM_LISTINFO, Param1, &ListInfo);
@@ -2598,7 +2611,7 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 								continue;
 
 							bool NeedUpdate = false;
-							if(HideUnchanged)
+							if(m_HideUnchanged)
 							{
 								if(!(Item.Item.Flags&LIF_CHECKED))
 								{
@@ -2620,7 +2633,6 @@ intptr_t Options::AdvancedConfigDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Para
 								Dlg->SendMessage(DM_LISTUPDATE, Param1, &UpdatedItem);
 							}
 						}
-						HideUnchanged = !HideUnchanged;
 					}
 					break;
 				}
@@ -2664,7 +2676,9 @@ bool Options::AdvancedConfig(config_type Mode)
 
 	AdvancedConfigDlg[ac_item_listbox].ListItems = &Items;
 
-	const auto Dlg = Dialog::create(AdvancedConfigDlg, &Options::AdvancedConfigDlgProc, &Strings);
+	m_HideUnchanged = false;
+
+	const auto Dlg = Dialog::create(AdvancedConfigDlg, std::bind_front(&Options::AdvancedConfigDlgProc, this), &Strings);
 	Dlg->SetHelp(L"FarConfig"sv);
 	Dlg->SetPosition({ -1, -1, DlgWidth, DlgHeight });
 	Dlg->SetId(AdvancedConfigId);

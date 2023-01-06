@@ -60,6 +60,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.env.hpp"
 #include "platform.fs.hpp"
 
@@ -145,6 +146,8 @@ namespace tokens
 	const auto
 		passive_panel                = L"!#"sv,
 		active_panel                 = L"!^"sv,
+		left_panel                   = L"!["sv,
+		right_panel                  = L"!]"sv,
 		exclamation                  = L"!!"sv,
 		name_extension               = L"!.!"sv,
 		short_name                   = L"!~"sv,
@@ -169,12 +172,12 @@ namespace tokens
 	{
 	public:
 		skip(string_view const Str, string_view const Test) :
-			m_Tail(starts_with(Str, Test) ? Str.substr(Test.size()) : string_view{})
+			m_Tail(Str.starts_with(Test)? Str.substr(Test.size()) : string_view{})
 		{
 		}
 
 		explicit operator bool() const { return m_Tail.data() != nullptr; }
-		operator string_view() const { assert(*this); return m_Tail; }
+		explicit(false) operator string_view() const { assert(*this); return m_Tail; }
 
 	private:
 		string_view m_Tail;
@@ -356,7 +359,7 @@ static void MakeListFile(panel_ptr const& Panel, string& ListFileName, bool cons
 	{
 		if (!os::fs::delete_file(ListFileName)) // BUGBUG
 		{
-			LOGWARNING(L"delete_file({}): {}"sv, ListFileName, last_error());
+			LOGWARNING(L"delete_file({}): {}"sv, ListFileName, os::last_error());
 		}
 	};
 
@@ -397,9 +400,21 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 		return Tail;
 	}
 
+	if (const auto Tail = tokens::skip(CurStr, tokens::left_panel))
+	{
+		SubstData.PassivePanel = SubstData.This.Panel->Parent()->IsRightActive();
+		return Tail;
+	}
+
+	if (const auto Tail = tokens::skip(CurStr, tokens::right_panel))
+	{
+		SubstData.PassivePanel = SubstData.This.Panel->Parent()->IsLeftActive();
+		return Tail;
+	}
+
 	if (const auto Tail = tokens::skip(CurStr, tokens::exclamation))
 	{
-		if (!starts_with(Tail, L'?'))
+		if (!string_view(Tail).starts_with(L'?'))
 		{
 			Out.push_back(L'!');
 			return Tail;
@@ -408,7 +423,7 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 
 	if (const auto Tail = tokens::skip(CurStr, tokens::name_extension))
 	{
-		if (!starts_with(Tail, L'?'))
+		if (!string_view(Tail).starts_with(L'?'))
 		{
 			append_with_escape(Out, SubstData.Default().Normal.Name);
 			return Tail;
@@ -441,8 +456,8 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 
 	const auto CollectNames = [&SubstData, &append_with_escape](string_view const Tail, string& Str, auto const Selector)
 	{
-		const auto ExplicitQuote = starts_with(Tail, L'Q');
-		const auto ExplicitNoQuote = starts_with(Tail, L'q');
+		const auto ExplicitQuote = Tail.starts_with(L'Q');
+		const auto ExplicitNoQuote = Tail.starts_with(L'q');
 
 		const auto Quote = ExplicitQuote || !ExplicitNoQuote;
 
@@ -465,7 +480,7 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 
 	if (const auto Tail = tokens::skip(CurStr, tokens::short_list))
 	{
-		if (!starts_with(Tail, L'?'))
+		if (!string_view(Tail).starts_with(L'?'))
 		{
 			return CollectNames(Tail, Out, &os::fs::find_data::AlternateFileName);
 		}
@@ -473,7 +488,7 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 
 	if (const auto Tail = tokens::skip(CurStr, tokens::list))
 	{
-		if (!starts_with(Tail, L'?'))
+		if (!string_view(Tail).starts_with(L'?'))
 		{
 			return CollectNames(Tail, Out, &os::fs::find_data::FileName);
 		}
@@ -482,7 +497,7 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 	const auto GetListName = [&Out, &append_with_escape](string_view const Tail, subst_data& Data, bool Short)
 	{
 		const auto ExclPos = Tail.find(L'!');
-		if (ExclPos == Tail.npos || starts_with(Tail.substr(ExclPos + 1), L'?'))
+		if (ExclPos == Tail.npos || Tail.substr(ExclPos + 1).starts_with(L'?'))
 			return size_t{};
 
 		const auto Modifiers = Tail.substr(0, ExclPos);
@@ -520,7 +535,7 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 
 	if (const auto Tail = tokens::skip(CurStr, tokens::short_name_extension))
 	{
-		if (!starts_with(Tail, L'?'))
+		if (!string_view(Tail).starts_with(L'?'))
 		{
 			append_with_escape(Out, SubstData.Default().Short.Name);
 			return Tail;
@@ -529,7 +544,7 @@ static string_view ProcessMetasymbol(string_view const CurStr, subst_data& Subst
 
 	if (const auto Tail = tokens::skip(CurStr, tokens::short_name_extension_safe))
 	{
-		if (!starts_with(Tail, L'?'))
+		if (!string_view(Tail).starts_with(L'?'))
 		{
 			append_with_escape(Out, SubstData.Default().Short.Name);
 			SubstData.PreserveLFN = true;
@@ -673,7 +688,7 @@ static string process_subexpression(const subst_strings::item& Item, subst_data&
 	return Processed == Item.Sub?
 		string(Item.All) :
 		concat(Item.prefix(), Processed, Item.suffix());
-};
+}
 
 static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_view const DlgTitle)
 {

@@ -55,7 +55,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/2d/algorithm.hpp"
 #include "common/algorithm.hpp"
 #include "common/enum_substrings.hpp"
-#include "common/function_traits.hpp"
 #include "common/io.hpp"
 #include "common/range.hpp"
 #include "common/scope_exit.hpp"
@@ -68,6 +67,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define ESC L"\u001b"
 #define CSI ESC L"["
+#define OSC ESC L"]"
+#define ST ESC L"\\"
+#define ANSISYSSC CSI "s"
+#define ANSISYSRC CSI "u"
 
 static bool sWindowMode;
 static bool sEnableVirtualTerminal;
@@ -222,7 +225,7 @@ bool get_console_screen_buffer_info(HANDLE ConsoleOutput, CONSOLE_SCREEN_BUFFER_
 {
 	if (!GetConsoleScreenBufferInfo(ConsoleOutput, ConsoleScreenBufferInfo))
 	{
-		LOGERROR(L"GetConsoleScreenBufferInfo(): {}"sv, last_error());
+		LOGERROR(L"GetConsoleScreenBufferInfo(): {}"sv, os::last_error());
 		return false;
 	}
 
@@ -250,13 +253,13 @@ bool get_console_screen_buffer_info(HANDLE ConsoleOutput, CONSOLE_SCREEN_BUFFER_
 
 		if (!SetConsoleWindowInfo(ConsoleOutput, true, &NewWindow))
 		{
-			LOGERROR(L"SetConsoleWindowInfo(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleWindowInfo(): {}"sv, os::last_error());
 			return false;
 		}
 
 		if (!GetConsoleScreenBufferInfo(ConsoleOutput, ConsoleScreenBufferInfo))
 		{
-			LOGERROR(L"GetConsoleScreenBufferInfo(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleScreenBufferInfo(): {}"sv, os::last_error());
 			return false;
 		}
 	}
@@ -308,16 +311,203 @@ namespace console_detail
 		public:
 #define DECLARE_IMPORT_FUNCTION(name, ...) os::rtdl::function_pointer<__VA_ARGS__> p ## name{ m_Module, #name }
 
-			DECLARE_IMPORT_FUNCTION(ReadOutput,           BOOL(WINAPI*)(FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT* ReadRegion));
-			DECLARE_IMPORT_FUNCTION(WriteOutput,          BOOL(WINAPI*)(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT* WriteRegion));
-			DECLARE_IMPORT_FUNCTION(Commit,               BOOL(WINAPI*)());
-			DECLARE_IMPORT_FUNCTION(GetTextAttributes,    BOOL(WINAPI*)(FarColor* Attributes));
-			DECLARE_IMPORT_FUNCTION(SetTextAttributes,    BOOL(WINAPI*)(const FarColor* Attributes));
-			DECLARE_IMPORT_FUNCTION(ClearExtraRegions,    BOOL(WINAPI*)(const FarColor* Color, int Mode));
+			DECLARE_IMPORT_FUNCTION(ReadOutput,           BOOL WINAPI(FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT* ReadRegion));
+			DECLARE_IMPORT_FUNCTION(WriteOutput,          BOOL WINAPI(const FAR_CHAR_INFO* Buffer, COORD BufferSize, COORD BufferCoord, SMALL_RECT* WriteRegion));
+			DECLARE_IMPORT_FUNCTION(Commit,               BOOL WINAPI());
+			DECLARE_IMPORT_FUNCTION(GetTextAttributes,    BOOL WINAPI(FarColor* Attributes));
+			DECLARE_IMPORT_FUNCTION(SetTextAttributes,    BOOL WINAPI(const FarColor* Attributes));
+			DECLARE_IMPORT_FUNCTION(ClearExtraRegions,    BOOL WINAPI(const FarColor* Color, int Mode));
 
 #undef DECLARE_IMPORT_FUNCTION
 		}
 		Imports;
+	};
+
+	enum
+	{
+		BufferSize = 8192
+	};
+
+	static bool is_redirected(int const HandleType)
+	{
+		DWORD Mode;
+		return !GetConsoleMode(GetStdHandle(HandleType), &Mode);
+	}
+
+	class consolebuf final: public std::wstreambuf
+	{
+	public:
+		NONCOPYABLE(consolebuf);
+
+		explicit(false) consolebuf(int const Type):
+			m_Type(Type),
+			m_Redirected(is_redirected(Type)),
+			m_InBuffer(BufferSize, {}),
+			m_OutBuffer(BufferSize, {})
+		{
+			setg(m_InBuffer.data(), m_InBuffer.data() + m_InBuffer.size(), m_InBuffer.data() + m_InBuffer.size());
+			setp(m_OutBuffer.data(), m_OutBuffer.data() + m_OutBuffer.size());
+		}
+
+		void color(const FarColor& Color)
+		{
+			m_Colour = Color;
+		}
+
+protected:
+		int_type underflow() override
+		{
+			const auto Size = read(m_InBuffer);
+			if (!Size)
+				return traits_type::eof();
+
+			setg(m_InBuffer.data(), m_InBuffer.data(), m_InBuffer.data() + Size);
+			return m_InBuffer[0];
+		}
+
+		int_type overflow(int_type Ch) override
+		{
+			write({ pbase(), static_cast<size_t>(pptr() - pbase()) });
+
+			setp(m_OutBuffer.data(), m_OutBuffer.data() + m_OutBuffer.size());
+
+			if (traits_type::eq_int_type(Ch, traits_type::eof()))
+			{
+				flush();
+			}
+			else
+			{
+				sputc(Ch);
+			}
+
+			return 0;
+		}
+
+		int sync() override
+		{
+			overflow(traits_type::eof());
+			return 0;
+		}
+
+	private:
+		size_t read(span<wchar_t> const Str) const
+		{
+			if (m_Redirected)
+			{
+				DWORD BytesRead;
+				if (!ReadFile(GetStdHandle(m_Type), Str.data(), static_cast<DWORD>(Str.size() * sizeof(wchar_t)), &BytesRead, {}))
+					throw MAKE_FAR_FATAL_EXCEPTION(L"File read error"sv);
+
+				return BytesRead / sizeof(wchar_t);
+			}
+
+			size_t Size;
+			if (!::console.Read(Str, Size))
+				throw MAKE_FAR_FATAL_EXCEPTION(L"Console read error"sv);
+
+			return Size;
+		}
+
+		void write(string_view const Str) const
+		{
+			if (Str.empty())
+				return;
+
+			if (m_Redirected)
+			{
+				const auto write = [&](void const* Data, size_t const Size)
+				{
+					DWORD BytesWritten;
+					if (!WriteFile(GetStdHandle(m_Type), Data, static_cast<DWORD>(Size), &BytesWritten, {}))
+						throw MAKE_FAR_FATAL_EXCEPTION(L"File write error"sv);
+				};
+
+				if constexpr (constexpr auto UseUtf8Output = true)
+				{
+					const auto Utf8Str = encoding::utf8::get_bytes(Str);
+					write(Utf8Str.data(), Utf8Str.size());
+				}
+				else
+				{
+					write(Str.data(), Str.size() * sizeof(wchar_t));
+				}
+
+				return;
+			}
+
+			FarColor CurrentColor;
+			const auto ChangeColour = m_Colour && ::console.GetTextAttributes(CurrentColor);
+
+			if (ChangeColour)
+			{
+				::console.SetTextAttributes(colors::merge(CurrentColor, *m_Colour));
+			}
+
+			SCOPE_EXIT{ if (ChangeColour) ::console.SetTextAttributes(CurrentColor); };
+
+			if (!::console.Write(Str))
+				throw MAKE_FAR_FATAL_EXCEPTION(L"Console write error"sv);
+		}
+
+		void flush() const
+		{
+			if (m_Redirected)
+			{
+				FlushFileBuffers(GetStdHandle(m_Type));
+				return;
+			}
+
+			::console.Commit();
+		}
+
+		int m_Type;
+		bool m_Redirected;
+		string m_InBuffer, m_OutBuffer;
+		std::optional<FarColor> m_Colour;
+	};
+
+	class stream_buffer_overrider
+	{
+	public:
+		NONCOPYABLE(stream_buffer_overrider);
+
+		stream_buffer_overrider(std::wios& Stream, int const HandleType, std::optional<FarColor> const Color = {}):
+			m_Buf(HandleType),
+			m_Override(Stream, m_Buf)
+		{
+			if (Color)
+				m_Buf.color(*Color);
+		}
+
+	private:
+		consolebuf m_Buf;
+		io::wstreambuf_override m_Override;
+	};
+
+	class console_detail::console::stream_buffers_overrider
+	{
+	public:
+		NONCOPYABLE(stream_buffers_overrider);
+
+		stream_buffers_overrider():
+			m_ErrorColor(fg_color(F_LIGHTRED)),
+			m_In(std::wcin, STD_INPUT_HANDLE),
+			m_Out(std::wcout, STD_OUTPUT_HANDLE),
+			m_Err(std::wcerr, STD_ERROR_HANDLE, m_ErrorColor),
+			m_Log(std::wclog, STD_ERROR_HANDLE, m_ErrorColor)
+		{
+		}
+
+	private:
+		static FarColor fg_color(int const NtColor)
+		{
+			auto Color = colors::NtColorToFarColor(NtColor);
+			colors::make_transparent(Color.BackgroundColor);
+			return Color;
+		}
+
+		FarColor m_ErrorColor;
+		stream_buffer_overrider m_In, m_Out, m_Err, m_Log;
 	};
 
 	static nifty_counter::buffer<external_console> Storage;
@@ -332,9 +522,6 @@ namespace console_detail
 
 	console::~console()
 	{
-		if (m_FileHandle != -1)
-			_close(m_FileHandle);
-
 		placement::destruct(ExternalConsole);
 	}
 
@@ -342,7 +529,7 @@ namespace console_detail
 	{
 		if (!AllocConsole())
 		{
-			LOGERROR(L"AllocConsole(): {}"sv, last_error());
+			LOGERROR(L"AllocConsole(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -353,7 +540,7 @@ namespace console_detail
 	{
 		if (!FreeConsole())
 		{
-			LOGERROR(L"FreeConsole(): {}"sv, last_error());
+			LOGERROR(L"FreeConsole(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -382,7 +569,19 @@ namespace console_detail
 
 	HWND console::GetWindow() const
 	{
-		return GetConsoleWindow();
+		const auto Window = GetConsoleWindow();
+
+		wchar_t ClassName[MAX_PATH];
+		if (const auto Size = GetClassName(Window, ClassName, static_cast<int>(std::size(ClassName))); Size)
+		{
+			if (string_view(ClassName, Size) == L"PseudoConsoleWindow"sv)
+			{
+				if (const auto Owner = ::GetWindow(Window, GW_OWNER))
+					return Owner;
+			}
+		}
+
+		return Window;
 	}
 
 	bool console::GetSize(point& Size) const
@@ -464,7 +663,7 @@ namespace console_detail
 						}
 					))
 					{
-						LOGERROR(L"SetConsoleCursorPosition(): {}"sv, last_error());
+						LOGERROR(L"SetConsoleCursorPosition(): {}"sv, os::last_error());
 						return false;
 					}
 				}
@@ -487,7 +686,7 @@ namespace console_detail
 
 		if (!SetConsoleScreenBufferSize(Out, make_coord(Size)))
 		{
-			LOGERROR(L"SetConsoleScreenBufferSize(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleScreenBufferSize(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -519,7 +718,7 @@ namespace console_detail
 		const auto Rect = make_rect(ConsoleWindow);
 		if (!SetConsoleWindowInfo(GetOutputHandle(), true, &Rect))
 		{
-			LOGERROR(L"SetConsoleWindowInfo(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleWindowInfo(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -545,7 +744,7 @@ namespace console_detail
 		string Title;
 		if (!os::GetWindowText(GetWindow(), Title))
 		{
-			LOGERROR(L"GetWindowText(): {}"sv, last_error());
+			LOGERROR(L"GetWindowText(): {}"sv, os::last_error());
 		}
 
 		return Title;
@@ -561,7 +760,7 @@ namespace console_detail
 		m_Title = Title;
 		if (!SetConsoleTitle(m_Title.c_str()))
 		{
-			LOGERROR(L"SetConsoleTitle(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleTitle(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -573,7 +772,7 @@ namespace console_detail
 		wchar_t Buffer[KL_NAMELENGTH];
 		if (!imports.GetConsoleKeyboardLayoutNameW(Buffer))
 		{
-			LOGERROR(L"GetConsoleKeyboardLayoutNameW(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleKeyboardLayoutNameW(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -590,7 +789,7 @@ namespace console_detail
 	{
 		if (!SetConsoleCP(Codepage))
 		{
-			LOGERROR(L"SetConsoleCP(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleCP(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -606,7 +805,7 @@ namespace console_detail
 	{
 		if (!SetConsoleOutputCP(Codepage))
 		{
-			LOGERROR(L"SetConsoleOutputCP(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleOutputCP(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -617,7 +816,7 @@ namespace console_detail
 	{
 		if (!SetConsoleCtrlHandler(HandlerRoutine, Add))
 		{
-			LOGERROR(L"SetConsoleCtrlHandler(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleCtrlHandler(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -628,7 +827,7 @@ namespace console_detail
 	{
 		if (!GetConsoleMode(ConsoleHandle, &Mode))
 		{
-			LOGERROR(L"GetConsoleMode(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleMode(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -639,7 +838,7 @@ namespace console_detail
 	{
 		if (!SetConsoleMode(ConsoleHandle, Mode))
 		{
-			LOGERROR(L"SetConsoleMode(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleMode(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -677,7 +876,7 @@ namespace console_detail
 	{
 		if (!GetCurrentConsoleFont(OutputHandle, FALSE, &FontInfo))
 		{
-			LOGERROR(L"GetCurrentConsoleFont(): {}"sv, last_error());
+			LOGERROR(L"GetCurrentConsoleFont(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -701,7 +900,7 @@ namespace console_detail
 		POINT CursorPos;
 		if (!GetCursorPos(&CursorPos))
 		{
-			LOGWARNING(L"GetCursorPos(): {}"sv, last_error());
+			LOGWARNING(L"GetCursorPos(): {}"sv, os::last_error());
 			return;
 		}
 
@@ -710,7 +909,7 @@ namespace console_detail
 		auto RelativePos = CursorPos;
 		if (!ScreenToClient(WindowHandle, &RelativePos))
 		{
-			LOGWARNING(L"ScreenToClient(): {}"sv, last_error());
+			LOGWARNING(L"ScreenToClient(): {}"sv, os::last_error());
 			return;
 		}
 
@@ -761,7 +960,7 @@ namespace console_detail
 		DWORD dwNumberOfEventsRead = 0;
 		if (!PeekConsoleInput(GetInputHandle(), Buffer.data(), static_cast<DWORD>(Buffer.size()), &dwNumberOfEventsRead))
 		{
-			LOGERROR(L"PeekConsoleInput(): {}"sv, last_error());
+			LOGERROR(L"PeekConsoleInput(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -785,7 +984,7 @@ namespace console_detail
 		DWORD dwNumberOfEventsRead = 0;
 		if (!ReadConsoleInput(GetInputHandle(), Buffer.data(), static_cast<DWORD>(Buffer.size()), &dwNumberOfEventsRead))
 		{
-			LOGERROR(L"ReadConsoleInput(): {}"sv, last_error());
+			LOGERROR(L"ReadConsoleInput(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -824,7 +1023,7 @@ namespace console_detail
 
 		if (!WriteConsoleInput(GetInputHandle(), Buffer.data(), static_cast<DWORD>(Buffer.size()), &dwNumberOfEventsWritten))
 		{
-			LOGERROR(L"WriteConsoleInput(): {}"sv, last_error());
+			LOGERROR(L"WriteConsoleInput(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -838,7 +1037,7 @@ namespace console_detail
 
 		if (!ReadConsoleOutput(::console.GetOutputHandle(), Buffer, make_coord(BufferSize), {}, &Rect))
 		{
-			LOGERROR(L"ReadConsoleOutput(): {}"sv, last_error());
+			LOGERROR(L"ReadConsoleOutput(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -914,10 +1113,10 @@ namespace console_detail
 		return true;
 	}
 
-	static constexpr wchar_t vt_color_index(int const Index)
+	static constexpr uint8_t vt_base_color_index(uint8_t const Index)
 	{
 		// NT is RGB, VT is BGR
-		constexpr int Table[]
+		constexpr uint8_t Table[]
 		{
 			//BGR     RGB
 			0b000, // 000
@@ -930,10 +1129,15 @@ namespace console_detail
 			0b111, // 111
 		};
 
-		return L'0' + Table[Index & 0b111];
+		return Table[Index & 0b111];
 	}
 
-	static const struct
+	static constexpr uint8_t vt_color_index(uint8_t const Index)
+	{
+		return (Index & 0b11111000) | vt_base_color_index(Index);
+	}
+
+	static constexpr struct
 	{
 		string_view Normal, Intense, ExtendedColour;
 		COLORREF FarColor::* Color;
@@ -945,7 +1149,7 @@ namespace console_detail
 		{ L"4"sv, L"10"sv, L"48"sv, &FarColor::BackgroundColor, FCF_BG_INDEX },
 	};
 
-	static const struct
+	static constexpr struct
 	{
 		FARCOLORFLAGS Style;
 		string_view On, Off;
@@ -964,45 +1168,111 @@ namespace console_detail
 		{ FCF_FG_INVISIBLE,    L"8"sv,     L"28"sv },
 	};
 
-	static void make_vt_attributes(const FarColor& Attributes, string& Str, std::optional<FarColor> const& LastColor)
+	static const size_t UnderlineIndex = 2;
+	static_assert(StyleMapping[UnderlineIndex].Style == FCF_FG_UNDERLINE);
+	static_assert(StyleMapping[UnderlineIndex + 1].Style == FCF_FG_UNDERLINE2);
+
+	static void make_vt_color(const FarColor& Attributes, string& Str, size_t const MappingIndex)
 	{
-		append(Str, CSI ""sv);
+		const auto& Mapping = ColorsMapping[MappingIndex];
+		const auto ColorPart = std::invoke(Mapping.Color, Attributes);
 
-		for (const auto& i: ColorsMapping)
+		if (Attributes.Flags & Mapping.Flags)
 		{
-			const auto ColorPart = std::invoke(i.Color, Attributes);
-
-			if (Attributes.Flags & i.Flags)
-			{
-				const auto Index = colors::index_value(ColorPart);
-				if (Index < 16)
-					append(Str, ColorPart & FOREGROUND_INTENSITY? i.Intense : i.Normal, vt_color_index(Index));
-				else
-					format_to(Str, FSTR(L"{};5;{}"sv), i.ExtendedColour, Index);
-			}
+			const auto Index = colors::index_value(ColorPart);
+			if (Index < 16)
+				append(Str, ColorPart & FOREGROUND_INTENSITY? Mapping.Intense : Mapping.Normal, static_cast<wchar_t>(L'0' + vt_base_color_index(Index)));
 			else
-			{
-				const auto RGBA = colors::to_rgba(ColorPart);
-				format_to(Str, FSTR(L"{};2;{};{};{}"sv), i.ExtendedColour, RGBA.r, RGBA.g, RGBA.b);
-			}
-
-			Str += L';';
+				format_to(Str, FSTR(L"{};5;{}"sv), Mapping.ExtendedColour, Index);
 		}
+		else
+		{
+			const auto RGBA = colors::to_rgba(ColorPart);
+			format_to(Str, FSTR(L"{};2;{};{};{}"sv), Mapping.ExtendedColour, RGBA.r, RGBA.g, RGBA.b);
+		}
+	}
 
-		Str.pop_back();
+	static void make_vt_style(const FarColor& Attributes, string& Str, std::optional<FarColor> const& LastColor)
+	{
+		auto UnderlineSet = false;
 
 		for (const auto& i: StyleMapping)
 		{
 			if (Attributes.Flags & i.Style)
 			{
 				if (!LastColor.has_value() || !(LastColor->Flags & i.Style))
-					append(Str, L';', i.On);
+				{
+					append(Str, i.On, L';');
+
+					// See below
+					if (i.Style == FCF_FG_UNDERLINE)
+						UnderlineSet = true;
+				}
 			}
 			else
 			{
 				if (LastColor.has_value() && LastColor->Flags & i.Style)
-					append(Str, L';', i.Off);
+				{
+					if (i.Style == FCF_FG_UNDERLINE2 && Attributes.Flags & FCF_FG_UNDERLINE)
+					{
+						// Both Underline and Double Underline have the same off code. 🤦
+						// VT is a bloody joke. Whoever invented it should be punished.
+
+						// D is checked after U.
+						// We're dropping D now, so, if we have already enabled U on the previous iteration, this will kill it.
+						// To address this, we undo U if needed, emit the off code and enable U.
+						constexpr auto UnderlineOn = StyleMapping[UnderlineIndex].On;
+
+						if (UnderlineSet)
+							Str.resize(Str.size() - UnderlineOn.size() - 1);
+
+						append(Str, i.Off, L';', UnderlineOn, L';');
+						continue;
+					}
+
+					append(Str, i.Off, L';');
+				}
 			}
+		}
+
+		// We should only enter this function if the style has changed and it should add or remove at least something,
+		// so no need to check before pop:
+		Str.pop_back();
+	}
+
+	static void make_vt_attributes(const FarColor& Attributes, string& Str, std::optional<FarColor> const& LastColor)
+	{
+		const auto SameFgColor = LastColor && LastColor->IsFgIndex() == Attributes.IsFgIndex() && LastColor->ForegroundColor == Attributes.ForegroundColor;
+		const auto SameBgColor = LastColor && LastColor->IsBgIndex() == Attributes.IsBgIndex() && LastColor->BackgroundColor == Attributes.BackgroundColor;
+		const auto SameStyle = LastColor && ((LastColor->Flags & FCF_STYLEMASK) == (Attributes.Flags & FCF_STYLEMASK));
+
+		if (SameFgColor && SameBgColor && SameStyle)
+		{
+			assert(false);
+			return;
+		}
+
+		Str += CSI ""sv;
+
+		if (!SameFgColor)
+		{
+			make_vt_color(Attributes, Str, 0);
+		}
+
+		if (!SameBgColor)
+		{
+			if (!SameFgColor)
+				Str += L';';
+
+			make_vt_color(Attributes, Str, 1);
+		}
+
+		if (!SameStyle)
+		{
+			if (!SameFgColor || !SameBgColor)
+				Str += L';';
+
+			make_vt_style(Attributes, Str, LastColor);
 		}
 
 		Str += L'm';
@@ -1010,8 +1280,12 @@ namespace console_detail
 
 	static bool is_same_color(FarColor const& a, FarColor const& b)
 	{
+		// FCF_RAWATTR_MASK contains non-VT stuff we don't care about.
+		// FCF_INHERIT_STYLE only affects logical composition.
+		constexpr auto IgnoredFlags = FCF_RAWATTR_MASK | FCF_INHERIT_STYLE;
+
 		return
-			a.Flags == b.Flags &&
+			(a.Flags & ~IgnoredFlags) == (b.Flags & ~IgnoredFlags) &&
 			a.ForegroundColor == b.ForegroundColor &&
 			a.BackgroundColor == b.BackgroundColor &&
 			// Reserved[0] contains non-BMP codepoints and is of no interest here.
@@ -1164,19 +1438,6 @@ WARNING_POP()
 					::console.SetWindowRect(csbi.srWindow);
 			};
 
-			point CursorPosition{ WriteRegion.left, WriteRegion.top };
-
-			if (sWindowMode)
-			{
-				CursorPosition.y -= ::GetDelta(csbi);
-
-				if (CursorPosition.y < 0)
-				{
-					// Drawing above the viewport
-					CursorPosition.y = 0;
-				}
-			}
-
 			string Str;
 
 			// The idea is to reduce the number of reallocations,
@@ -1187,8 +1448,13 @@ WARNING_POP()
 			std::optional<FarColor> LastColor;
 
 			point ViewportSize;
-			if (!::console.GetSize(ViewportSize))
-				return false;
+			{
+				rectangle WindowRect;
+				if (!::console.GetWindowRect(WindowRect))
+					return false;
+
+				ViewportSize = { WindowRect.width(), WindowRect.height() };
+			}
 
 			// If SubRect is too tall (e.g. when we flushing the old content of console resize), the rest will be dropped.
 			// VT is a bloody joke.
@@ -1196,18 +1462,34 @@ WARNING_POP()
 			{
 				if (SubrectOffset)
 				{
-					// Move the viewport down
-					if (!::console.SetCursorRealPosition({0, csbi.dwSize.Y - 1}))
+					// Move the viewport one "page" down
+					if (!::console.SetCursorRealPosition({0, std::min(csbi.dwSize.Y - 1, WriteRegion.top + SubrectOffset + ViewportSize.y - 1)}))
 						return false;
 					// Set cursor position within the viewport
 					if (!::console.SetCursorRealPosition({ WriteRegion.left, WriteRegion.top + SubrectOffset }))
 						return false;
 				}
 
+				// Don't do CUP here: the viewport origin is too unstable to rely on it, especially since we touch it just above.
+				// Saving, restoring and moving down seems to be more reliable.
+				// Words cannot describe how much I despise VT.
+
+				// Save cursor position
+				Str = ANSISYSSC ""sv;
+
 				for (const auto& i: irange(SubRect.top + SubrectOffset, std::min(SubRect.top + SubrectOffset + ViewportSize.y, SubRect.bottom + 1)))
 				{
 					if (i != SubRect.top + SubrectOffset)
-						format_to(Str, FSTR(CSI L"{};{}H"sv), CursorPosition.y + 1 + (i - SubrectOffset - SubRect.top), CursorPosition.x + 1);
+					{
+						Str +=
+							ANSISYSRC // Restore cursor position
+							CSI L"1B" // Move cursor down
+							ANSISYSSC // Save again
+							""sv;
+
+						// For some reason restoring the cursor position affects colors
+						LastColor.reset();
+					}
 
 					make_vt_sequence(Buffer[i].subspan(SubRect.left, SubRect.width()), Str, LastColor);
 				}
@@ -1275,7 +1557,7 @@ WARNING_POP()
 			auto SysWriteRegion = make_rect(WriteRegion);
 			if (!WriteConsoleOutput(::console.GetOutputHandle(), Buffer, make_coord(BufferSize), {}, &SysWriteRegion))
 			{
-				LOGERROR(L"WriteConsoleOutput(): {}"sv, last_error());
+				LOGERROR(L"WriteConsoleOutput(): {}"sv, os::last_error());
 				return false;
 			}
 
@@ -1405,12 +1687,59 @@ WARNING_POP()
 		{
 			if (!SetConsoleTextAttribute(::console.GetOutputHandle(), colors::FarColorToConsoleColor(Attributes)))
 			{
-				LOGERROR(L"SetConsoleTextAttribute(): {}"sv, last_error());
+				LOGERROR(L"SetConsoleTextAttribute(): {}"sv, os::last_error());
 				return false;
 			}
 
 			return true;
 		}
+
+		static bool SetPaletteVT(std::array<COLORREF, 16> const& Palette)
+		{
+			string Str;
+			Str.reserve(OSC L"4;15;rgb:ff/ff/ff" ST ""sv.size() * 16);
+
+			for (const auto& [Color, i] : enumerate(Palette))
+			{
+				const union { COLORREF Color; rgba RGBA; } Value{ Color };
+				format_to(Str, FSTR(OSC L"4;{};rgb:{:02x}/{:02x}/{:02x}" ST ""sv), vt_color_index(i), Value.RGBA.r, Value.RGBA.g, Value.RGBA.b);
+			}
+
+			return ::console.Write(Str);
+		}
+
+		static bool SetPaletteNT(std::array<COLORREF, 16> const& Palette)
+		{
+			if (!imports.GetConsoleScreenBufferInfoEx)
+				return false;
+
+			const auto Output = ::console.GetOutputHandle();
+
+			CONSOLE_SCREEN_BUFFER_INFOEX csbi{ sizeof(csbi) };
+			if (!imports.GetConsoleScreenBufferInfoEx(Output, &csbi))
+			{
+				LOGERROR(L"GetConsoleScreenBufferInfoEx(): {}"sv, os::last_error());
+				return false;
+			}
+
+			if (std::equal(ALL_CONST_RANGE(Palette), ALL_CONST_RANGE(csbi.ColorTable)))
+				return true;
+
+			std::copy(ALL_CONST_RANGE(Palette), std::begin(csbi.ColorTable));
+
+			if (!imports.SetConsoleScreenBufferInfoEx(Output, &csbi))
+			{
+				LOGERROR(L"SetConsoleScreenBufferInfoEx(): {}"sv, os::last_error());
+				return false;
+			}
+
+			// Get + Set screws up the window size 🤦
+			if (!SetConsoleWindowInfo(Output, true, &csbi.srWindow))
+				LOGWARNING(L"SetConsoleWindowInfo(): {}"sv, os::last_error());
+
+			return true;
+		}
+
 	};
 
 	bool console::WriteOutput(matrix<FAR_CHAR_INFO>& Buffer, point BufferCoord, const rectangle& WriteRegionRelative) const
@@ -1435,33 +1764,16 @@ WARNING_POP()
 			BufferCoord.y + WriteRegion.height() - 1
 		};
 
-		return (IsVtEnabled()? implementation::WriteOutputVT : implementation::WriteOutputNT)(Buffer, SubRect, WriteRegion);
+		return (IsVtActive()? implementation::WriteOutputVT : implementation::WriteOutputNT)(Buffer, SubRect, WriteRegion);
 	}
 
-	bool console::Read(string& Buffer, size_t& Size) const
+	bool console::Read(span<wchar_t> const Buffer, size_t& Size) const
 	{
-		const auto InputHandle = GetInputHandle();
-
 		DWORD NumberOfCharsRead;
-
-		DWORD Mode;
-		if (GetMode(InputHandle, Mode))
+		if (!ReadConsole(GetInputHandle(), Buffer.data(), static_cast<DWORD>(Buffer.size()), &NumberOfCharsRead, {}))
 		{
-			if (!ReadConsole(InputHandle, Buffer.data(), static_cast<DWORD>(Buffer.size()), &NumberOfCharsRead, nullptr))
-			{
-				LOGERROR(L"ReadConsole(): {}"sv, last_error());
-				return false;
-			}
-		}
-		else
-		{
-			if (!ReadFile(InputHandle, Buffer.data(), static_cast<DWORD>(Buffer.size() * sizeof(wchar_t)), &NumberOfCharsRead, nullptr))
-			{
-				LOGERROR(L"ReadFile(): {}"sv, last_error());
-				return false;
-			}
-
-			NumberOfCharsRead /= sizeof(wchar_t);
+			LOGERROR(L"ReadConsole(): {}"sv, os::last_error());
+			return false;
 		}
 
 		Size = NumberOfCharsRead;
@@ -1471,36 +1783,13 @@ WARNING_POP()
 	bool console::Write(const string_view Str) const
 	{
 		DWORD NumberOfCharsWritten;
-		const auto OutputHandle = GetOutputHandle();
-
-		DWORD Mode;
-		if (GetMode(OutputHandle, Mode))
+		if (!WriteConsole(GetOutputHandle(), Str.data(), static_cast<DWORD>(Str.size()), &NumberOfCharsWritten, {}))
 		{
-			if (!WriteConsole(OutputHandle, Str.data(), static_cast<DWORD>(Str.size()), &NumberOfCharsWritten, nullptr))
-			{
-				LOGERROR(L"WriteConsole(): {}"sv, last_error());
-				return false;
-			}
-
-			return true;
+			LOGERROR(L"WriteConsole(): {}"sv, os::last_error());
+			return false;
 		}
 
-		// Redirected output
-
-		if (m_FileHandle == -1)
-		{
-			HANDLE OsHandle;
-			if (!DuplicateHandle(GetCurrentProcess(), OutputHandle, GetCurrentProcess(), &OsHandle, 0, FALSE, DUPLICATE_SAME_ACCESS))
-				return false;
-
-			m_FileHandle = _open_osfhandle(reinterpret_cast<intptr_t>(OsHandle), _O_U8TEXT);
-			if (m_FileHandle == -1)
-				return false;
-
-			_setmode(m_FileHandle, _O_U8TEXT);
-		}
-
-		return _write(m_FileHandle, Str.data(), static_cast<unsigned int>(Str.size() * sizeof(wchar_t))) != -1;
+		return true;
 	}
 
 	bool console::Commit() const
@@ -1530,14 +1819,14 @@ WARNING_POP()
 		if (ExternalConsole.Imports.pSetTextAttributes)
 			return ExternalConsole.Imports.pSetTextAttributes(&Attributes) != FALSE;
 
-		return (IsVtEnabled()? implementation::SetTextAttributesVT : implementation::SetTextAttributesNT)(Attributes);
+		return (IsVtActive()? implementation::SetTextAttributesVT : implementation::SetTextAttributesNT)(Attributes);
 	}
 
 	bool console::GetCursorInfo(CONSOLE_CURSOR_INFO& ConsoleCursorInfo) const
 	{
 		if (!GetConsoleCursorInfo(GetOutputHandle(), &ConsoleCursorInfo))
 		{
-			LOGERROR(L"GetConsoleCursorInfo(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleCursorInfo(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -1548,7 +1837,7 @@ WARNING_POP()
 	{
 		if (!SetConsoleCursorInfo(GetOutputHandle(), &ConsoleCursorInfo))
 		{
-			LOGERROR(L"SetConsoleCursorInfo(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleCursorInfo(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -1622,15 +1911,15 @@ WARNING_POP()
 		});
 	}
 
-	console::console_aliases::console_aliases() = default;
-	console::console_aliases::~console_aliases() = default;
-
 	struct console::console_aliases::data
 	{
 		// We only use it to bulk copy the aliases from one console to another,
 		// so no need to care about case insensitivity and fancy lookup.
 		std::vector<std::pair<string, std::vector<std::pair<string, string>>>> Aliases;
 	};
+
+	console::console_aliases::console_aliases() = default;
+	console::console_aliases::~console_aliases() = default;
 
 	console::console_aliases console::GetAllAliases() const
 	{
@@ -1641,7 +1930,7 @@ WARNING_POP()
 		std::vector<wchar_t> ExeBuffer(ExeLength / sizeof(wchar_t) + 1); // +1 for double \0
 		if (!GetConsoleAliasExes(ExeBuffer.data(), ExeLength))
 		{
-			LOGERROR(L"GetConsoleAliasExes(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleAliasExes(): {}"sv, os::last_error());
 			return {};
 		}
 
@@ -1656,7 +1945,7 @@ WARNING_POP()
 			AliasesBuffer.resize(AliasesLength / sizeof(wchar_t) + 1); // +1 for double \0
 			if (!GetConsoleAliases(AliasesBuffer.data(), AliasesLength, ExeNamePtr))
 			{
-				LOGERROR(L"GetConsoleAliases(): {}"sv, last_error());
+				LOGERROR(L"GetConsoleAliases(): {}"sv, os::last_error());
 				continue;
 			}
 
@@ -1698,21 +1987,54 @@ WARNING_POP()
 	{
 		if (!GetConsoleDisplayMode(&Mode))
 		{
-			LOGERROR(L"GetConsoleDisplayMode(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleDisplayMode(): {}"sv, os::last_error());
 			return false;
 		}
 
 		return true;
 	}
 
-	point console::GetLargestWindowSize() const
+	static bool validate_console_size(point const Size)
 	{
-		point Result = GetLargestConsoleWindowSize(GetOutputHandle());
+		// https://github.com/microsoft/terminal/issues/10337
+
+		// As of 7 Oct 2022 GetLargestConsoleWindowSize is broken in WT.
+		// It takes the current screen resolution and divides it by an inadequate font size, e.g. 1x16.
+
+		// It is unlikely that it is ever gonna be fixed, so we do a few very basic checks here to filter out obvious rubbish.
+
+		if (Size.x <= 0 || Size.y <= 0)
+			return false;
+
+		// A typical screen ratio these days is roughly 2:1.
+		// A typical font cell is about 1:2, so the expected screen ratio in cells
+		// is around 4 for the landscape and around 1 for the portrait, give or take.
+		// Anything twice larger than that is likely rubbish.
+		if (Size.x >= 8 * Size.y || Size.y >= 2 * Size.x)
+			return false;
+
+		// The API works with SHORTs, anything larger than that makes no sense.
+		if (Size.x >= std::numeric_limits<SHORT>::max() || Size.y >= std::numeric_limits<SHORT>::max())
+			return false;
+
+		return true;
+	}
+
+	point console::GetLargestWindowSize(HANDLE const ConsoleOutput) const
+	{
+		point Result = GetLargestConsoleWindowSize(ConsoleOutput);
+
+		if (!validate_console_size(Result))
+		{
+			LOGERROR(L"GetLargestConsoleWindowSize(): the reported size {{{}, {}}} makes no sense. Talk to your terminal or OS vendor."sv, Result.x, Result.y);
+			return {};
+		}
+
 		CONSOLE_SCREEN_BUFFER_INFO csbi;
-		if (get_console_screen_buffer_info(GetOutputHandle(), &csbi) && csbi.dwSize.Y > Result.y)
+		if (get_console_screen_buffer_info(ConsoleOutput, &csbi) && csbi.dwSize.Y > Result.y)
 		{
 			CONSOLE_FONT_INFO FontInfo;
-			if (get_current_console_font(GetOutputHandle(), FontInfo))
+			if (get_current_console_font(ConsoleOutput, FontInfo))
 			{
 				Result.x -= Round(GetSystemMetrics(SM_CXVSCROLL), static_cast<int>(FontInfo.dwFontSize.X));
 			}
@@ -1724,7 +2046,7 @@ WARNING_POP()
 	{
 		if (!SetConsoleActiveScreenBuffer(ConsoleOutput))
 		{
-			LOGERROR(L"SetConsoleActiveScreenBuffer(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleActiveScreenBuffer(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -1856,7 +2178,7 @@ WARNING_POP()
 		CONSOLE_SCREEN_BUFFER_INFOEX csbiex{ sizeof(csbiex) };
 		if (!imports.GetConsoleScreenBufferInfoEx(GetOutputHandle(), &csbiex))
 		{
-			LOGWARNING(L"GetConsoleScreenBufferInfoEx(): {}"sv, last_error());
+			LOGWARNING(L"GetConsoleScreenBufferInfoEx(): {}"sv, os::last_error());
 			return true;
 		}
 
@@ -1887,6 +2209,12 @@ WARNING_POP()
 			GetWindowRect(WindowRect) &&
 			SetCursorPosition({}) &&
 			SetCursorPosition({ 0, WindowRect.height() - 1 });
+	}
+
+	bool console::IsVtEnabled() const
+	{
+		DWORD Mode;
+		return GetMode(GetOutputHandle(), Mode) && Mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 	}
 
 	short console::GetDelta() const
@@ -1990,10 +2318,9 @@ WARNING_POP()
 		return GetDelta() != 0;
 	}
 
-	bool console::IsVtEnabled() const
+	bool console::IsVtActive() const
 	{
-		DWORD Mode;
-		return sEnableVirtualTerminal && GetMode(GetOutputHandle(), Mode) && Mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+		return sEnableVirtualTerminal && IsVtEnabled();
 	}
 
 	bool console::ExternalRendererLoaded() const
@@ -2013,18 +2340,18 @@ WARNING_POP()
 			const SMALL_RECT WindowInfo{ 0, 0, TestScreenX - 1, TestScreenY - 1 };
 			if (!SetConsoleWindowInfo(m_WidthTestScreen.native_handle(), true, &WindowInfo))
 			{
-				LOGWARNING(L"SetConsoleWindowInfo(): {}"sv, last_error());
+				LOGWARNING(L"SetConsoleWindowInfo(): {}"sv, os::last_error());
 			}
 
 			if (!SetConsoleScreenBufferSize(m_WidthTestScreen.native_handle(), { TestScreenX, TestScreenY }))
 			{
-				LOGWARNING(L"SetConsoleScreenBufferSize(): {}"sv, last_error());
+				LOGWARNING(L"SetConsoleScreenBufferSize(): {}"sv, os::last_error());
 			}
 		}
 
 		if (!SetConsoleCursorPosition(m_WidthTestScreen.native_handle(), {}))
 		{
-			LOGWARNING(L"SetConsoleCursorPosition(): {}"sv, last_error());
+			LOGWARNING(L"SetConsoleCursorPosition(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -2033,7 +2360,7 @@ WARNING_POP()
 		const std::array Chars{ Pair.first, Pair.second };
 		if (!WriteConsole(m_WidthTestScreen.native_handle(), Chars.data(), Pair.second? 2 : 1, &Written, {}))
 		{
-			LOGWARNING(L"WriteConsole(): {}"sv, last_error());
+			LOGWARNING(L"WriteConsole(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -2057,13 +2384,38 @@ WARNING_POP()
 		CONSOLE_SCREEN_BUFFER_INFOEX csbi{ sizeof(csbi) };
 		if (!imports.GetConsoleScreenBufferInfoEx(GetOutputHandle(), &csbi))
 		{
-			LOGERROR(L"GetConsoleScreenBufferInfoEx(): {}"sv, last_error());
+			LOGERROR(L"GetConsoleScreenBufferInfoEx(): {}"sv, os::last_error());
 			return false;
 		}
 
 		std::copy(ALL_CONST_RANGE(csbi.ColorTable), Palette.begin());
 
 		return true;
+	}
+
+	bool console::SetPalette(std::array<COLORREF, 16> const& Palette) const
+	{
+		// Happy path
+		if (IsVtEnabled())
+			return implementation::SetPaletteVT(Palette);
+
+		// Legacy console
+		if (!IsVtSupported())
+			return implementation::SetPaletteNT(Palette);
+
+		// These methods are currently not synchronized in WT 🤦
+		// As of 8 Oct 2022 NT method doesn't affect the display, only the array returned in CSBI.
+		// VT does and updates the CSBI too.
+
+		// If VT is not enabled, we enable it temporarily and use VT method if we can:
+		if (std::pair<HANDLE, DWORD> Data{ GetOutputHandle(), 0 }; GetMode(Data.first, Data.second) && SetMode(Data.first, Data.second | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
+		{
+			SCOPE_EXIT { SetMode(Data.first, Data.second); };
+			return implementation::SetPaletteVT(Palette);
+		}
+
+		// Otherwise fallback to NT
+		return implementation::SetPaletteNT(Palette);
 	}
 
 	void console::EnableWindowMode(bool const Value)
@@ -2090,7 +2442,7 @@ WARNING_POP()
 	{
 		if (!SetConsoleCursorPosition(GetOutputHandle(), make_coord(Position)))
 		{
-			LOGERROR(L"SetConsoleCursorPosition(): {}"sv, last_error());
+			LOGERROR(L"SetConsoleCursorPosition(): {}"sv, os::last_error());
 			return false;
 		}
 
@@ -2100,108 +2452,87 @@ WARNING_POP()
 
 NIFTY_DEFINE(console_detail::console, console);
 
-enum
+#ifdef ENABLE_TESTS
+
+#include "testing.hpp"
+
+TEST_CASE("console.vt_color")
 {
-	BufferSize = 8192
-};
+	const auto I = FCF_INDEXMASK;
 
-class consolebuf final: public std::wstreambuf
+	static const struct
+	{
+		FarColor Color;
+		string_view Fg, Bg;
+	}
+	Tests[]
+	{
+		{ { I, { 0x0      }, { 0x0      } }, L"30"sv,               L"40"sv,               },
+		{ { I, { 0x1      }, { 0x1      } }, L"34"sv,               L"44"sv,               },
+		{ { I, { 0x7      }, { 0x7      } }, L"37"sv,               L"47"sv,               },
+		{ { I, { 0x8      }, { 0x8      } }, L"90"sv,               L"100"sv,              },
+		{ { I, { 0x9      }, { 0x9      } }, L"94"sv,               L"104"sv,              },
+		{ { I, { 0xF      }, { 0xF      } }, L"97"sv,               L"107"sv,              },
+		{ { I, { 0x10     }, { 0x10     } }, L"38;5;16"sv,          L"48;5;16"sv,          },
+		{ { I, { 0xC0     }, { 0xC0     } }, L"38;5;192"sv,         L"48;5;192"sv,         },
+		{ { I, { 0xFF     }, { 0xFF     } }, L"38;5;255"sv,         L"48;5;255"sv,         },
+		{ { 0, { 0x000000 }, { 0x000000 } }, L"38;2;0;0;0"sv,       L"48;2;0;0;0"sv,       },
+		{ { 0, { 0x123456 }, { 0x654321 } }, L"38;2;86;52;18"sv,    L"48;2;33;67;101"sv,   },
+		{ { 0, { 0x00D5FF }, { 0xBB5B00 } }, L"38;2;255;213;0"sv,   L"48;2;0;91;187"sv,    },
+		{ { 0, { 0xABCDEF }, { 0xFEDCBA } }, L"38;2;239;205;171"sv, L"48;2;186;220;254"sv, },
+		{ { 0, { 0xFFFFFF }, { 0xFFFFFF } }, L"38;2;255;255;255"sv, L"48;2;255;255;255"sv, },
+	};
+
+	for (const auto& i: Tests)
+	{
+		string Str[2];
+		console_detail::make_vt_color(i.Color, Str[0], 0);
+		console_detail::make_vt_color(i.Color, Str[1], 1);
+		REQUIRE(Str[0] == i.Fg);
+		REQUIRE(Str[1] == i.Bg);
+	}
+}
+
+TEST_CASE("console.vt_sequence")
 {
-public:
-	NONCOPYABLE(consolebuf);
-
-	consolebuf():
-		m_InBuffer(BufferSize, {}),
-		m_OutBuffer(BufferSize, {})
 	{
-		setg(m_InBuffer.data(), m_InBuffer.data() + m_InBuffer.size(), m_InBuffer.data() + m_InBuffer.size());
-		setp(m_OutBuffer.data(), m_OutBuffer.data() + m_OutBuffer.size());
+		FAR_CHAR_INFO Buffer[3]{};
+		Buffer[0].Char = L' ';
+		Buffer[0].Attributes.Flags = FCF_BG_INDEX | FCF_FG_INDEX | FCF_FG_BOLD;
+		Buffer[0].Attributes.BackgroundColor = 1;
+		Buffer[0].Attributes.ForegroundColor = 10;
+
+		Buffer[1] = Buffer[0];
+
+		Buffer[2] = Buffer[1];
+		flags::clear(Buffer[2].Attributes.Flags, FCF_FG_BOLD);
+
+		string Str;
+		std::optional<FarColor> LastColor;
+		console_detail::make_vt_sequence(Buffer, Str, LastColor);
+
+		REQUIRE(Str == CSI L"92;44;1m" L"  " CSI "22m" L" "sv);
 	}
 
-	void color(const FarColor& Color)
 	{
-		m_Colour = Color;
+		FAR_CHAR_INFO Buffer[3]{};
+		Buffer[0].Char = L' ';
+		Buffer[0].Attributes.Flags = FCF_BG_INDEX | FCF_FG_INDEX | FCF_FG_UNDERLINE2;
+		Buffer[0].Attributes.BackgroundColor = 1;
+		Buffer[0].Attributes.ForegroundColor = 10;
+
+		Buffer[1] = Buffer[0];
+
+		Buffer[2] = Buffer[1];
+		flags::clear(Buffer[2].Attributes.Flags, FCF_FG_UNDERLINE2);
+		flags::set(Buffer[2].Attributes.Flags, FCF_FG_UNDERLINE);
+
+		string Str;
+		std::optional<FarColor> LastColor;
+		console_detail::make_vt_sequence(Buffer, Str, LastColor);
+
+		REQUIRE(Str == CSI L"92;44;21m" L"  " CSI "24;4m" L" "sv);
 	}
+}
 
-protected:
-	int_type underflow() override
-	{
-		size_t Read;
-		if (!console.Read(m_InBuffer, Read))
-			throw MAKE_FAR_FATAL_EXCEPTION(L"Console read error"sv);
-
-		if (!Read)
-			return traits_type::eof();
-
-		setg(m_InBuffer.data(), m_InBuffer.data(), m_InBuffer.data() + Read);
-		return m_InBuffer[0];
-	}
-
-	int_type overflow(int_type Ch) override
-	{
-		if (!Write({ pbase(), static_cast<size_t>(pptr() - pbase()) }))
-			return traits_type::eof();
-
-		setp(m_OutBuffer.data(), m_OutBuffer.data() + m_OutBuffer.size());
-
-		if (traits_type::eq_int_type(Ch, traits_type::eof()))
-		{
-			console.Commit();
-		}
-		else
-		{
-			sputc(Ch);
-		}
-
-		return 0;
-	}
-
-	int sync() override
-	{
-		overflow(traits_type::eof());
-		return 0;
-	}
-
-private:
-	bool Write(string_view Str)
-	{
-		if (Str.empty())
-			return true;
-
-		FarColor CurrentColor;
-		const auto ChangeColour = m_Colour && console.GetTextAttributes(CurrentColor);
-
-		if (ChangeColour)
-		{
-			console.SetTextAttributes(colors::merge(CurrentColor, *m_Colour));
-		}
-
-		SCOPE_EXIT{ if (ChangeColour) console.SetTextAttributes(CurrentColor); };
-
-		return console.Write(Str);
-	}
-
-	string m_InBuffer, m_OutBuffer;
-	std::optional<FarColor> m_Colour;
-};
-
-class console_detail::console::stream_buffers_overrider
-{
-public:
-	NONCOPYABLE(stream_buffers_overrider);
-
-	stream_buffers_overrider():
-		m_In(std::wcin, m_BufIn),
-		m_Out(std::wcout, m_BufOut),
-		m_Err(std::wcerr, m_BufErr),
-		m_Log(std::wclog, m_BufLog)
-	{
-		auto Color = colors::NtColorToFarColor(F_LIGHTRED);
-		colors::make_transparent(Color.BackgroundColor);
-		m_BufErr.color(Color);
-	}
-
-private:
-	consolebuf m_BufIn, m_BufOut, m_BufErr, m_BufLog;
-	io::wstreambuf_override m_In, m_Out, m_Err, m_Log;
-};
+#endif

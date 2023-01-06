@@ -75,14 +75,13 @@ private:
 	template<const os::rtdl::module imports::* ModuleAccessor, auto Name, auto StubFunction>
 	class unique_function_pointer
 	{
-		// The indirection is a workaround for MSVC
-		using function_type = std::enable_if_t<true, decltype(StubFunction)>;
+		using function_type = decltype(StubFunction);
 
 	public:
 		unique_function_pointer() = default;
 		NONCOPYABLE(unique_function_pointer);
 
-		operator function_type() const { return get_pointer(); }
+		explicit(false) operator function_type() const { return get_pointer(); }
 		explicit operator bool() const noexcept { return get_pointer() != StubFunction; }
 
 	private:
@@ -146,6 +145,7 @@ public: \
 	DEFINE_IMPORT_FUNCTION(kernel32, le, false,   WINAPI,  BOOL,    GetNamedPipeServerProcessId, HANDLE Pipe, PULONG ServerProcessId); // Vista
 	DEFINE_IMPORT_FUNCTION(kernel32, le, false,   WINAPI,  BOOL,    CancelSynchronousIo, HANDLE Thread); // Vista
 	DEFINE_IMPORT_FUNCTION(kernel32, le, false,   WINAPI,  BOOL,    GetConsoleScreenBufferInfoEx, HANDLE ConsoleOutput, PCONSOLE_SCREEN_BUFFER_INFOEX ConsoleScreenBufferInfoEx); // Vista
+	DEFINE_IMPORT_FUNCTION(kernel32, le, false,   WINAPI,  BOOL,    SetConsoleScreenBufferInfoEx, HANDLE ConsoleOutput, PCONSOLE_SCREEN_BUFFER_INFOEX ConsoleScreenBufferInfoEx); // Vista
 	DEFINE_IMPORT_FUNCTION(kernel32, le, false,   WINAPI,  BOOL,    QueryFullProcessImageNameW, HANDLE Process, DWORD Flags, LPWSTR ExeName, PDWORD Size); // Vista
 	DEFINE_IMPORT_FUNCTION(kernel32, le, void,    WINAPI,  void,    InitializeSRWLock, PSRWLOCK SRWLock); // Vista
 	DEFINE_IMPORT_FUNCTION(kernel32, le, void,    WINAPI,  void,    AcquireSRWLockExclusive, PSRWLOCK SRWLock); // Vista
@@ -190,11 +190,18 @@ public: \
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymGetSymFromAddr64, HANDLE Process, DWORD64 Addr, PDWORD64 Displacement, PIMAGEHLP_SYMBOL64 Symbol); // 2k
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymGetLineFromAddr64, HANDLE Process, DWORD64 Addr, PDWORD Displacement, PIMAGEHLP_LINE64 Line); // 2k
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, zero,    WINAPI, DWORD,   UnDecorateSymbolName, PCSTR Name, PSTR OutputString, DWORD MaxStringLength, DWORD Flags); // 2k
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymRegisterCallback64, HANDLE Process, PSYMBOL_REGISTERED_CALLBACK64 CallbackFunction, ULONG64 UserContext); // 2k
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    MiniDumpWriteDump, HANDLE Process, DWORD ProcessId, HANDLE File, MINIDUMP_TYPE DumpType, PMINIDUMP_EXCEPTION_INFORMATION ExceptionParam, PMINIDUMP_USER_STREAM_INFORMATION UserStreamParam, PMINIDUMP_CALLBACK_INFORMATION CallbackParam); // XP
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymInitializeW, HANDLE Process, PCWSTR UserSearchPath, BOOL InvadeProcess); // Vista
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymFromAddrW, HANDLE Process, DWORD64 Address, PDWORD64 Displacement, PSYMBOL_INFOW Symbol); // Vista
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymGetLineFromAddrW64, HANDLE Process, DWORD64 Addr, PDWORD Displacement, PIMAGEHLP_LINEW64 Line); // Vista
 	DEFINE_IMPORT_FUNCTION(dbghelp, le, zero,    WINAPI, DWORD,   UnDecorateSymbolNameW, PCWSTR Name, PWSTR OutputString, DWORD MaxStringLength, DWORD Flags); // Vista
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymRegisterCallbackW64, HANDLE Process, PSYMBOL_REGISTERED_CALLBACK64 CallbackFunction, ULONG64 UserContext); // Vista
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    StackWalkEx, DWORD MachineType, HANDLE Process, HANDLE Thread, LPSTACKFRAME_EX StackFrame, PVOID ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 ReadMemoryRoutine, PFUNCTION_TABLE_ACCESS_ROUTINE64 FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 GetModuleBaseRoutine, PTRANSLATE_ADDRESS_ROUTINE64 TranslateAddress, DWORD Flags); // 8
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymFromInlineContextW, HANDLE Process, DWORD64 Address, ULONG InlineContext, PDWORD64 Displacement, PSYMBOL_INFOW Symbol); // 8
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymGetLineFromInlineContextW, HANDLE Process, DWORD64 Address, ULONG InlineContext, DWORD64 ModuleBaseAddress, PDWORD Displacement, PIMAGEHLP_LINEW64 Line); // 8
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, zero,    WINAPI, DWORD,   SymAddrIncludeInlineTrace, HANDLE Process, DWORD64 Address); // 8
+	DEFINE_IMPORT_FUNCTION(dbghelp, le, false,   WINAPI, BOOL,    SymQueryInlineTrace, HANDLE Process, DWORD64 StartAddress, DWORD StartContext, DWORD64 StartRetAddress, DWORD64 CurAddress, LPDWORD CurContext, LPDWORD CurFrameIndex); // 8
 
 	DEFINE_IMPORT_FUNCTION(dwmapi, nop, hr, WINAPI, HRESULT, DwmGetWindowAttribute, HWND Hwnd, DWORD dwAttribute, PVOID pvAttribute, DWORD cbAttribute); // Vista
 
@@ -228,7 +235,11 @@ namespace imports_detail
 	{
 		static const auto Pointer = [&]
 		{
-			if (const auto DynamicPointer = std::invoke(ModuleAccessor, ::imports).GetProcAddress<function_type>(Name))
+			const auto& Module = std::invoke(ModuleAccessor, ::imports);
+			if (!Module)
+				return StubFunction;
+
+			if (const auto DynamicPointer = Module.GetProcAddress<function_type>(Name))
 				return DynamicPointer;
 
 			return StubFunction;

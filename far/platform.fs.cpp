@@ -313,7 +313,7 @@ namespace os::fs
 	// Some other buggy implementations just set the first char of AlternateFileName to '\0' to make it "empty", leaving rubbish in others. Double facepalm.
 	static auto empty_if_zero(string_view const Str)
 	{
-		return starts_with(Str, L'\0')? string_view{} : Str;
+		return Str.starts_with(L'\0')? string_view{} : Str;
 	}
 
 	static void DirectoryInfoToFindData(const FILE_ID_BOTH_DIR_INFORMATION& DirectoryInfo, find_data& FindData, bool IsExtended)
@@ -436,10 +436,10 @@ namespace os::fs
 		if (!QueryResult)
 			return nullptr;
 
-		const auto DirectoryInfo = view_as<const FILE_ID_BOTH_DIR_INFORMATION*>(Handle->BufferBase.data());
-		DirectoryInfoToFindData(*DirectoryInfo, FindData, Handle->Extended);
+		const auto& DirectoryInfo = view_as<FILE_ID_BOTH_DIR_INFORMATION>(Handle->BufferBase.data());
+		DirectoryInfoToFindData(DirectoryInfo, FindData, Handle->Extended);
 		fill_allocation_size_alternative(FindData, Directory);
-		Handle->NextOffset = DirectoryInfo->NextEntryOffset;
+		Handle->NextOffset = DirectoryInfo.NextEntryOffset;
 		return find_file_handle(Handle.release());
 	}
 
@@ -658,11 +658,11 @@ namespace os::fs
 		if (!Handle->NextOffset)
 			return false;
 
-		const auto StreamInfo = view_as<const FILE_STREAM_INFORMATION*>(Handle->BufferBase.data() + Handle->NextOffset);
-		Handle->NextOffset = StreamInfo->NextEntryOffset? Handle->NextOffset + StreamInfo->NextEntryOffset : 0;
+		const auto& StreamInfo = view_as<FILE_STREAM_INFORMATION>(Handle->BufferBase.data() + Handle->NextOffset);
+		Handle->NextOffset = StreamInfo.NextEntryOffset? Handle->NextOffset + StreamInfo.NextEntryOffset : 0;
 		const auto StreamData = static_cast<WIN32_FIND_STREAM_DATA*>(FindStreamData);
 
-		return FileStreamInformationToFindStreamData(*StreamInfo, *StreamData);
+		return FileStreamInformationToFindStreamData(StreamInfo, *StreamData);
 	}
 
 	enum_streams::enum_streams(const string_view Object):
@@ -711,6 +711,24 @@ namespace os::fs
 	}
 
 	//-------------------------------------------------------------------------
+
+	file::file():
+		m_Pointer(),
+		m_NeedSyncPointer(),
+		m_ShareMode()
+	{
+	}
+
+	file::file(handle&& Handle):
+		m_Handle(std::move(Handle)),
+		m_Pointer(),
+		m_NeedSyncPointer(),
+		m_ShareMode()
+	{
+		LARGE_INTEGER NewPointer;
+		SetFilePointerEx(m_Handle.native_handle(), {}, &NewPointer, FILE_CURRENT);
+		m_Pointer = NewPointer.QuadPart;
+	}
 
 	file::operator bool() const noexcept
 	{
@@ -836,41 +854,39 @@ namespace os::fs
 
 	bool file::GetTime(os::chrono::time_point* CreationTime, os::chrono::time_point* LastAccessTime, os::chrono::time_point* LastWriteTime, os::chrono::time_point* ChangeTime) const
 	{
+		const auto convert_time = [](LARGE_INTEGER const& From, os::chrono::time_point* const To)
+		{
+			if (To)
+				*To = os::chrono::nt_clock::from_hectonanoseconds(From.QuadPart);
+		};
+
 		FILE_BASIC_INFORMATION fbi;
 
 		if (!NtQueryInformationFile(&fbi, sizeof fbi, FileBasicInformation))
 			return false;
 
-		if (CreationTime)
-			*CreationTime = os::chrono::nt_clock::from_hectonanoseconds(fbi.CreationTime.QuadPart);
-
-		if (LastAccessTime)
-			*LastAccessTime = os::chrono::nt_clock::from_hectonanoseconds(fbi.LastAccessTime.QuadPart);
-
-		if (LastWriteTime)
-			*LastWriteTime = os::chrono::nt_clock::from_hectonanoseconds(fbi.LastWriteTime.QuadPart);
-
-		if (ChangeTime)
-			*ChangeTime = os::chrono::nt_clock::from_hectonanoseconds(fbi.ChangeTime.QuadPart);
+		convert_time(fbi.CreationTime, CreationTime);
+		convert_time(fbi.LastAccessTime, LastAccessTime);
+		convert_time(fbi.LastWriteTime, LastWriteTime);
+		convert_time(fbi.ChangeTime, ChangeTime);
 
 		return true;
 	}
 
 	bool file::SetTime(const os::chrono::time_point* CreationTime, const os::chrono::time_point* LastAccessTime, const os::chrono::time_point* LastWriteTime, const os::chrono::time_point* ChangeTime) const
 	{
+		const auto convert_time = [](os::chrono::time_point const* const From, LARGE_INTEGER& To)
+		{
+			if (From)
+				To.QuadPart = os::chrono::nt_clock::to_hectonanoseconds(*From);
+		};
+
 		FILE_BASIC_INFORMATION fbi{};
 
-		if (CreationTime)
-			fbi.CreationTime.QuadPart = os::chrono::nt_clock::to_hectonanoseconds(*CreationTime);
-
-		if (LastAccessTime)
-			fbi.LastAccessTime.QuadPart = os::chrono::nt_clock::to_hectonanoseconds(*LastAccessTime);
-
-		if (LastWriteTime)
-			fbi.LastWriteTime.QuadPart = os::chrono::nt_clock::to_hectonanoseconds(*LastWriteTime);
-
-		if (ChangeTime)
-			fbi.ChangeTime.QuadPart = os::chrono::nt_clock::to_hectonanoseconds(*ChangeTime);
+		convert_time(CreationTime, fbi.CreationTime);
+		convert_time(LastAccessTime, fbi.LastAccessTime);
+		convert_time(LastWriteTime, fbi.LastWriteTime);
+		convert_time(ChangeTime, fbi.ChangeTime);
 
 		IO_STATUS_BLOCK IoStatusBlock;
 		const auto Status = imports.NtSetInformationFile(m_Handle.native_handle(), &IoStatusBlock, &fbi, sizeof fbi, FileBasicInformation);
@@ -1030,7 +1046,7 @@ namespace os::fs
 
 		const auto ReplaceRoot = [&](const auto& OldRoot, const auto& NewRoot)
 		{
-			if (!starts_with(NtPath, OldRoot))
+			if (!NtPath.starts_with(OldRoot))
 				return false;
 
 			FinalFilePath = NtPath.replace(0, OldRoot.size(), NewRoot);
@@ -1047,7 +1063,7 @@ namespace os::fs
 			const auto Device = drive::get_device_path(i);
 			if (const auto Len = MatchNtPathRoot(NtPath, Device))
 			{
-				FinalFilePath = starts_with(NtPath, L"\\Device\\WinDfs"sv)? NtPath.replace(0, Len, 1, L'\\') : NtPath.replace(0, Len, Device);
+				FinalFilePath = NtPath.starts_with(L"\\Device\\WinDfs"sv)? NtPath.replace(0, Len, 1, L'\\') : NtPath.replace(0, Len, Device);
 				return true;
 			}
 		}
@@ -1828,15 +1844,15 @@ namespace os::fs
 		if (auto Handle = handle(low::create_file(strObject.c_str(), DesiredAccess, ShareMode, SecurityAttributes, CreationDistribution, FlagsAndAttributes, TemplateFile)))
 			return Handle;
 
-		const auto LastError = GetLastError();
+		const auto LastError = last_error();
 
-		if (STATUS_STOPPED_ON_SYMLINK == get_last_nt_status() && ERROR_STOPPED_ON_SYMLINK != LastError)
+		if (LastError.NtError == STATUS_STOPPED_ON_SYMLINK && LastError.Win32Error != ERROR_STOPPED_ON_SYMLINK)
 		{
 			SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
 			return nullptr;
 		}
 
-		if (LastError == ERROR_FILE_NOT_FOUND || LastError == ERROR_PATH_NOT_FOUND)
+		if (LastError.Win32Error == ERROR_FILE_NOT_FOUND || LastError.Win32Error == ERROR_PATH_NOT_FOUND)
 		{
 			FlagsAndAttributes &= ~FILE_FLAG_POSIX_SEMANTICS;
 			if (auto Handle = handle(low::create_file(strObject.c_str(), DesiredAccess, ShareMode, SecurityAttributes, CreationDistribution, FlagsAndAttributes, TemplateFile)))
@@ -1871,7 +1887,31 @@ namespace os::fs
 		return false;
 	}
 
-	bool copy_file(const string_view ExistingFileName, const string_view NewFileName, const LPPROGRESS_ROUTINE ProgressRoutine, void* const Data, BOOL* const Cancel, const DWORD CopyFlags)
+	static DWORD WINAPI progress_routine_wrapper(
+		LARGE_INTEGER const TotalFileSize,
+		LARGE_INTEGER const TotalBytesTransferred,
+		LARGE_INTEGER const StreamSize,
+		LARGE_INTEGER const StreamBytesTransferred,
+		DWORD const StreamNumber,
+		DWORD const CallbackReason,
+		HANDLE const SourceFile,
+		HANDLE const DestinationFile,
+		void* const Data)
+	{
+		const auto Routine = view_as<progress_routine>(Data);
+		return Routine(
+			TotalFileSize.QuadPart,
+			TotalBytesTransferred.QuadPart,
+			StreamSize.QuadPart,
+			StreamBytesTransferred.QuadPart,
+			StreamNumber,
+			CallbackReason,
+			SourceFile,
+			DestinationFile
+		);
+	}
+
+	bool copy_file(const string_view ExistingFileName, const string_view NewFileName, progress_routine ProgressRoutine, BOOL* const Cancel, const DWORD CopyFlags)
 	{
 		const NTPath strFrom(ExistingFileName);
 		NTPath strTo(NewFileName);
@@ -1881,23 +1921,28 @@ namespace os::fs
 			append(strTo, PointToName(strFrom));
 		}
 
-		if (low::copy_file(strFrom.c_str(), strTo.c_str(), ProgressRoutine, Data, Cancel, CopyFlags))
+		const auto RoutinePtr = ProgressRoutine? &progress_routine_wrapper : nullptr;
+		const auto DataPtr = ProgressRoutine? &ProgressRoutine : nullptr;
+
+		if (low::copy_file(strFrom.c_str(), strTo.c_str(), RoutinePtr, DataPtr, Cancel, CopyFlags))
 			return true;
 
-		if (STATUS_STOPPED_ON_SYMLINK == get_last_nt_status() && ERROR_STOPPED_ON_SYMLINK != GetLastError())
+		const auto LastError = last_error();
+
+		if (LastError.NtError == STATUS_STOPPED_ON_SYMLINK && LastError.Win32Error != ERROR_STOPPED_ON_SYMLINK)
 		{
 			SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
 			return false;
 		}
 
-		if (STATUS_FILE_IS_A_DIRECTORY == get_last_nt_status())
+		if (LastError.NtError == STATUS_FILE_IS_A_DIRECTORY)
 		{
 			SetLastError(ERROR_FILE_EXISTS);
 			return false;
 		}
 
 		if (ElevationRequired(ELEVATION_MODIFY_REQUEST)) //BUGBUG, really unknown
-			return elevation::instance().copy_file(strFrom, strTo, ProgressRoutine, Data, Cancel, CopyFlags);
+			return elevation::instance().copy_file(strFrom, strTo, RoutinePtr, DataPtr, Cancel, CopyFlags);
 
 		return false;
 	}
@@ -1915,7 +1960,9 @@ namespace os::fs
 		if (low::move_file(strFrom.c_str(), strTo.c_str(), Flags))
 			return true;
 
-		if (STATUS_STOPPED_ON_SYMLINK == get_last_nt_status() && ERROR_STOPPED_ON_SYMLINK != GetLastError())
+		const auto LastError = last_error();
+
+		if (LastError.NtError == STATUS_STOPPED_ON_SYMLINK && LastError.Win32Error != ERROR_STOPPED_ON_SYMLINK)
 		{
 			SetLastError(ERROR_CALL_NOT_IMPLEMENTED);
 			return false;

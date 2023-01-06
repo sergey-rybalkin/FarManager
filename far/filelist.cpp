@@ -79,6 +79,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "panelmix.hpp"
 #include "processname.hpp"
 #include "mix.hpp"
+#include "notification.hpp"
 #include "elevation.hpp"
 #include "uuids.far.hpp"
 #include "uuids.far.dialogs.hpp"
@@ -102,11 +103,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.fs.hpp"
 
 // Common:
 #include "common/enum_tokens.hpp"
-#include "common/rel_ops.hpp"
 #include "common/scope_exit.hpp"
 #include "common/string_utils.hpp"
 #include "common/utility.hpp"
@@ -360,7 +361,7 @@ DWORD FileListItem::NumberOfLinks(const FileList* Owner) const
 	{
 		SCOPED_ACTION(elevation::suppress);
 		const auto Hardlinks = GetNumberOfLinks(GetItemFullName(*this, Owner));
-		static_assert(std::is_same_v<decltype(m_NumberOfLinks), DWORD>);
+		static_assert(std::same_as<decltype(m_NumberOfLinks), DWORD>);
 		m_NumberOfLinks = Hardlinks? static_cast<DWORD>(*Hardlinks) : values::unknown(m_NumberOfLinks);
 	}
 
@@ -381,7 +382,7 @@ static void GetStreamsCountAndSize(const FileList* Owner, const FileListItem& It
 		size_t StreamsCount = 0;
 		if (EnumStreams(GetItemFullName(Item, Owner), StreamsSize, StreamsCount))
 		{
-			static_assert(std::is_same_v<decltype(NumberOfStreams), DWORD&>);
+			static_assert(std::same_as<decltype(NumberOfStreams), DWORD&>);
 			NumberOfStreams = static_cast<DWORD>(StreamsCount);
 		}
 		else
@@ -485,6 +486,36 @@ struct FileList::PrevDataItem
 	string strPrevName;
 	list_data PrevListData;
 	int PrevTopFile;
+};
+
+class FileList::background_updater
+{
+public:
+	explicit background_updater(FileList* const Owner):
+		m_Owner(Owner)
+	{
+	}
+
+	const auto& event_id() const
+	{
+		return m_Listener.GetEventName();
+	}
+
+private:
+	listener m_Listener{[this]
+	{
+		if (Global->WindowManager->IsPanelsActive() && m_Owner->IsVisible())
+		{
+			m_Owner->UpdateIfChanged(true);
+			m_Owner->Redraw();
+		}
+		else
+		{
+			m_Owner->m_UpdatePending = true;
+		}
+	}};
+
+	FileList* m_Owner;
 };
 
 file_panel_ptr FileList::create(window_ptr Owner)
@@ -765,7 +796,6 @@ private:
 			return compare_numbers(a.StreamsSize(m_Owner), b.StreamsSize(m_Owner));
 
 		default:
-			assert(false);
 			UNREACHABLE;
 		}
 	}
@@ -1101,7 +1131,7 @@ long long FileList::VMProcess(int OpCode,void *vParam,long long iParam)
 	return 0;
 }
 
-class file_state: public rel_ops<file_state>
+class file_state
 {
 public:
 	static auto get(string_view const Filename)
@@ -1884,7 +1914,7 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 							// BUGBUG check result
 							if (!os::fs::remove_directory(TemporaryDirectory))
 							{
-								LOGWARNING(L"remove_directory({}): {}"sv, TemporaryDirectory, last_error());
+								LOGWARNING(L"remove_directory({}): {}"sv, TemporaryDirectory, os::last_error());
 							}
 							return true;
 						}
@@ -2681,7 +2711,7 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 			// BUGBUG check result
 			if (!os::fs::create_directory(strTempDir))
 			{
-				LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+				LOGWARNING(L"create_directory({}): {}"sv, strTempDir, os::last_error());
 			}
 
 			PluginPanelItemHolderHeap PanelItem;
@@ -2692,7 +2722,7 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 				// BUGBUG check result
 				if (!os::fs::remove_directory(strTempDir))
 				{
-					LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+					LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, os::last_error());
 				}
 
 				return;
@@ -2896,6 +2926,11 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 		  + Если у плагина нет OPIF_REALNAMES, то история папок не пишется в реестр */
 		string strInfoCurDir = NullToEmpty(m_CachedOpenPanelInfo.CurDir);
 		string strInfoHostFile = NullToEmpty(m_CachedOpenPanelInfo.HostFile);
+		if (m_CachedOpenPanelInfo.Flags & OPIF_SHORTCUT)
+		{
+			const auto strInfoData = NullToEmpty(m_CachedOpenPanelInfo.ShortcutData);
+			Global->CtrlObject->FolderHistory->AddToHistory(strInfoCurDir, HR_DEFAULT, &PluginManager::GetUUID(GetPluginHandle()), strInfoHostFile, strInfoData);
+		}
 
 		/* $ 25.04.01 DJ
 		   при неудаче SetDirectory не сбрасываем выделение
@@ -2951,6 +2986,9 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 	}
 	else
 	{
+		if (!equal_icase(ConvertNameToFull(strSetDir), m_CurDir))
+			Global->CtrlObject->FolderHistory->AddToHistory(m_CurDir);
+
 		if (IsParent)
 		{
 			if (RootPath)
@@ -4163,7 +4201,7 @@ void FileList::UpdateViewPanel()
 		// BUGBUG check result
 		if (!os::fs::create_directory(strTempDir))
 		{
-			LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+			LOGWARNING(L"create_directory({}): {}"sv, strTempDir, os::last_error());
 		}
 
 		PluginPanelItemHolderHeap PanelItem;
@@ -4176,7 +4214,7 @@ void FileList::UpdateViewPanel()
 			// BUGBUG check result
 			if (!os::fs::remove_directory(strTempDir))
 			{
-				LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+				LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, os::last_error());
 			}
 
 			return;
@@ -4563,23 +4601,19 @@ static void edit_sort_layers(int MenuPos)
 	SortLayersMenu->Run([&](const Manager::Key& RawKey)
 	{
 		const auto Pos = SortLayersMenu->GetSelectPos();
-		if (!Pos)
-			return false;
 
 		switch (const auto Key = RawKey())
 		{
 		case KEY_INS:
 		case KEY_NUMPAD0:
-			if (Pos > 0)
+			if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
 			{
-				if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
-				{
-					const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i) { return i.MenuPosition == Result; }) - SortModes;
-					const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
-					SortLayersMenu->AddItem(MenuItemEx{ msg(SortModes[NewSortModeIndex].Label), MIF_CHECKED | order_indicator(Order) }, Pos);
-					SortLayersMenu->SetSelectPos(Pos);
-					SortLayers.emplace(SortLayers.begin() + Pos, static_cast<panel_sort>(NewSortModeIndex), Order);
-				}
+				const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i) { return i.MenuPosition == Result; }) - SortModes;
+				const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
+				const auto InsertPos = Pos > 0? Pos : 1;
+				SortLayersMenu->AddItem(MenuItemEx{ msg(SortModes[NewSortModeIndex].Label), MIF_CHECKED | order_indicator(Order) }, InsertPos);
+				SortLayersMenu->SetSelectPos(InsertPos);
+				SortLayers.emplace(SortLayers.begin() + InsertPos, static_cast<panel_sort>(NewSortModeIndex), Order);
 			}
 			break;
 
@@ -4593,29 +4627,35 @@ static void edit_sort_layers(int MenuPos)
 			break;
 
 		case KEY_F4:
-			if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
+			if (Pos > 0)
 			{
-				const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i) { return i.MenuPosition == Result; }) - SortModes;
-				const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
-				SortLayersMenu->at(Pos).Name = msg(SortModes[NewSortModeIndex].Label);
-				SortLayersMenu->at(Pos).SetCustomCheck(order_indicator(Order));
-				SortLayers[Pos] = { static_cast<panel_sort>(NewSortModeIndex), Order };
-				SortLayersMenu->Redraw();
+				if (const auto Result = select_sort_layer(SortLayers); Result >= 0)
+				{
+					const auto NewSortModeIndex = std::find_if(CONST_RANGE(SortModes, i) { return i.MenuPosition == Result; }) - SortModes;
+					const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
+					SortLayersMenu->at(Pos).Name = msg(SortModes[NewSortModeIndex].Label);
+					SortLayersMenu->at(Pos).SetCustomCheck(order_indicator(Order));
+					SortLayers[Pos] = { static_cast<panel_sort>(NewSortModeIndex), Order };
+					SortLayersMenu->Redraw();
+				}
 			}
 			break;
 
 		case L'+':
 		case KEY_ADD:
-			SetCheck(Pos, sort_order::ascend);
+			if (Pos > 0)
+				SetCheck(Pos, sort_order::ascend);
 			break;
 
 		case L'-':
 		case KEY_SUBTRACT:
-			SetCheck(Pos, sort_order::descend);
+			if (Pos > 0)
+				SetCheck(Pos, sort_order::descend);
 			break;
 
 		case L'*':
 		case KEY_MULTIPLY:
+			if (Pos > 0)
 			{
 				const auto CurrentOrder = SortLayers[Pos].second;
 				const auto NewOrder =
@@ -4682,7 +4722,7 @@ void FileList::SelectSortMode()
 	static const menu_item MenuSeparator{ {}, LIF_SEPARATOR };
 
 	OpenMacroPluginInfo ompInfo{ MCT_GETCUSTOMSORTMODES };
-	MacroPluginReturn* mpr{};
+	MacroPluginReturn const* mpr{};
 	size_t extra = 0; // number of additional menu items due to custom sort modes
 	{
 		void *ptr;
@@ -5754,8 +5794,14 @@ FileListItem::FileListItem(const PluginPanelItem& pi)
 	UserData = pi.UserData;
 
 	Attributes = pi.FileAttributes;
-	// we don't really know, but it's better than show it as 'unknown'
-	ReparseTag = (Attributes & FILE_ATTRIBUTE_REPARSE_POINT)? IO_REPARSE_TAG_SYMLINK : 0;
+
+	ReparseTag =
+		Attributes & FILE_ATTRIBUTE_REPARSE_POINT?
+			pi.Reserved[0]?
+				pi.Reserved[0] :
+				// we don't really know, but it's better than show it as 'unknown'
+				IO_REPARSE_TAG_SYMLINK :
+			0;
 
 	if (pi.CustomColumnData && pi.CustomColumnNumber)
 	{
@@ -6018,7 +6064,7 @@ void FileList::PluginToPluginFiles(bool Move)
 	// BUGBUG check result
 	if (!os::fs::create_directory(strTempDir))
 	{
-		LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+		LOGWARNING(L"create_directory({}): {}"sv, strTempDir, os::last_error());
 	}
 
 	{
@@ -6060,7 +6106,7 @@ void FileList::PluginToPluginFiles(bool Move)
 		// BUGBUG check result
 		if (!os::fs::remove_directory(OriginalTempDir))
 		{
-			LOGWARNING(L"remove_directory({}): {}"sv, OriginalTempDir, last_error());
+			LOGWARNING(L"remove_directory({}): {}"sv, OriginalTempDir, os::last_error());
 		}
 	}
 
@@ -6107,7 +6153,7 @@ void FileList::PluginHostGetFiles()
 			continue;
 
 		int OpMode=OPM_TOPLEVEL;
-		if (contains(UsedPlugins, hCurPlugin->plugin()))
+		if (UsedPlugins.contains(hCurPlugin->plugin()))
 			OpMode|=OPM_SILENT;
 
 		span<PluginPanelItem> Items;
@@ -6350,6 +6396,9 @@ int FileList::ProcessOneHostFile(const FileListItem* Item)
 void FileList::SetPluginMode(std::unique_ptr<plugin_panel>&& PluginPanel, string_view const PluginFile, bool SendOnFocus)
 {
 	const auto ParentWindow = Parent();
+
+	if (m_PanelMode != panel_mode::PLUGIN_PANEL)
+		Global->CtrlObject->FolderHistory->AddToHistory(m_CurDir);
 
 	PushPlugin(std::move(PluginPanel), PluginFile);
 
@@ -6658,7 +6707,7 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 		// BUGBUG check result
 		if (!os::fs::get_disk_size(m_CurDir, nullptr, nullptr, &FreeDiskSize))
 		{
-			LOGWARNING(L"get_disk_size({}): {}"sv, m_CurDir, last_error());
+			LOGWARNING(L"get_disk_size({}): {}"sv, m_CurDir, os::last_error());
 		}
 	}
 
@@ -6689,7 +6738,7 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 	// BUGBUG check result
 	if (const auto Root = GetPathRoot(m_CurDir); !os::fs::GetVolumeInformation(Root, nullptr, nullptr, nullptr, &FileSystemFlags, &FileSystemName))
 	{
-		LOGWARNING(L"GetVolumeInformation({}): {}"sv, Root, last_error());
+		LOGWARNING(L"GetVolumeInformation({}): {}"sv, Root, os::last_error());
 	}
 
 	m_HardlinksSupported = true;
@@ -6766,12 +6815,12 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 		}
 	}
 
-	std::optional<error_state> ErrorState;
+	std::optional<os::error_state> ErrorState;
 	const time_check TimeCheck;
 
 	for (const auto& fdata: Find)
 	{
-		ErrorState = last_error();
+		ErrorState = os::last_error();
 
 		const auto IsDirectory = os::fs::is_directory(fdata);
 
@@ -6829,7 +6878,7 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 	}
 
 	if (!ErrorState)
-		ErrorState = last_error();
+		ErrorState = os::last_error();
 
 	if (!(ErrorState->Win32Error == ERROR_SUCCESS || ErrorState->Win32Error == ERROR_NO_MORE_FILES || ErrorState->Win32Error == ERROR_FILE_NOT_FOUND))
 	{
@@ -6856,7 +6905,7 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 		}
 		else
 		{
-			LOGWARNING(L"GetFileTimeSimple({}): {}"sv, m_CurDir, last_error());
+			LOGWARNING(L"GetFileTimeSimple({}): {}"sv, m_CurDir, os::last_error());
 		}
 
 		NewItem.Position = m_ListData.size();
@@ -6972,36 +7021,6 @@ void FileList::UpdateIfChanged(bool Changed)
 	Update(UPDATE_KEEP_SELECTION);
 }
 
-class FileList::background_updater
-{
-public:
-	explicit background_updater(FileList* const Owner):
-		m_Owner(Owner)
-	{
-	}
-
-	const auto& event_id() const
-	{
-		return m_Listener.GetEventName();
-	}
-
-private:
-	listener m_Listener{[this]
-	{
-		if (Global->WindowManager->IsPanelsActive() && m_Owner->IsVisible())
-		{
-			m_Owner->UpdateIfChanged(true);
-			m_Owner->Redraw();
-		}
-		else
-		{
-			m_Owner->m_UpdatePending = true;
-		}
-	}};
-
-	FileList* m_Owner;
-};
-
 void FileList::InitFSWatcher(bool CheckTree)
 {
 	if (m_PanelMode == panel_mode::PLUGIN_PANEL)
@@ -7032,8 +7051,8 @@ struct hash_less
 {
 	struct arg
 	{
-		arg(unsigned long long const Value): m_Value(Value) {}
-		arg(FileListItem const& Value): m_Value(Value.FileId) {}
+		explicit(false) arg(unsigned long long const Value): m_Value(Value) {}
+		explicit(false) arg(FileListItem const& Value): m_Value(Value.FileId) {}
 		unsigned long long m_Value;
 	};
 
@@ -7131,7 +7150,7 @@ void FileList::UpdatePlugin(bool const KeepSelection, bool const UpdateEvenIfPan
 			// BUGBUG check result
 			if (!os::fs::get_disk_size(m_CurDir, nullptr, nullptr, &FreeDiskSize))
 			{
-				LOGWARNING(L"get_disk_size({}): {}"sv, m_CurDir, last_error());
+				LOGWARNING(L"get_disk_size({}): {}"sv, m_CurDir, os::last_error());
 			}
 		}
 		else if (m_CachedOpenPanelInfo.Flags & OPIF_USEFREESIZE)
@@ -7366,7 +7385,7 @@ void FileList::ReadDiz(span<PluginPanelItem> const Items)
 
 					if (!os::fs::create_directory(strTempDir))
 					{
-						LOGWARNING(L"create_directory({}): {}"sv, strTempDir, last_error());
+						LOGWARNING(L"create_directory({}): {}"sv, strTempDir, os::last_error());
 						continue;
 					}
 
@@ -7382,7 +7401,7 @@ void FileList::ReadDiz(span<PluginPanelItem> const Items)
 					// BUGBUG check result
 					if (!os::fs::remove_directory(strTempDir))
 					{
-						LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, last_error());
+						LOGWARNING(L"remove_directory({}): {}"sv, strTempDir, os::last_error());
 					}
 					//ViewPanel->ShowFile(nullptr,FALSE,nullptr);
 				}
@@ -7467,7 +7486,8 @@ void FileList::ShowFileList(bool Fast)
 	}
 	else
 	{
-		UpdateIfChanged(m_UpdatePending);
+		if (Global->WindowManager->IsPanelsActive() && IsVisible())
+			UpdateIfChanged(m_UpdatePending);
 	}
 
 	bool CurFullScreen=IsFullScreen();
@@ -7991,10 +8011,13 @@ bool FileList::ConvertName(const string_view SrcName, string& strDest, const siz
 		const auto VisualExtensionLength = visual_string_length(Extension);
 		const auto AlignedVisualExtensionLength = std::max(size_t{ 3 }, VisualExtensionLength);
 
-		const auto SpacesBetween =
+		auto SpacesBetween =
 			VisualNameLength + AlignedVisualExtensionLength <= MaxLength?
 				MaxLength - VisualNameLength - AlignedVisualExtensionLength:
 				1;
+
+		if (!SpacesBetween && VisualNameLength + VisualExtensionLength < MaxLength)
+			SpacesBetween = MaxLength - VisualNameLength - VisualExtensionLength;
 
 		const auto SpacesAfter = MaxLength - VisualNameLength - SpacesBetween - VisualExtensionLength;
 

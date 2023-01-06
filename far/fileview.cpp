@@ -53,6 +53,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "mix.hpp"
 #include "stddlg.hpp"
 #include "macroopcode.hpp"
+#include "notification.hpp"
 #include "plugins.hpp"
 #include "lang.hpp"
 #include "exitcode.hpp"
@@ -65,6 +66,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "cddrv.hpp"
 
 // Platform:
+#include "platform.hpp"
+#include "platform.concurrency.hpp"
 #include "platform.fs.hpp"
 
 // Common:
@@ -464,7 +467,7 @@ bool FileViewer::ProcessKey(const Manager::Key& Key)
 				const auto strViewFileName = m_View->GetFileName();
 				while (!os::fs::file(strViewFileName, FILE_READ_DATA, FILE_SHARE_READ | FILE_SHARE_DELETE | (Global->Opt->EdOpt.EditOpenedForWrite? FILE_SHARE_WRITE : 0), nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 				{
-					if (OperationFailed(last_error(), strViewFileName, lng::MEditTitle, msg(lng::MEditCannotOpen), false) != operation::retry)
+					if (OperationFailed(os::last_error(), strViewFileName, lng::MEditTitle, msg(lng::MEditCannotOpen), false) != operation::retry)
 						return true;
 				}
 				const auto FilePos = m_View->GetFilePos();
@@ -568,6 +571,10 @@ FileViewer::~FileViewer()
 void FileViewer::OnDestroy()
 {
 	m_bClosing = true;
+
+	if (!m_DisableHistory && (Global->CtrlObject->Cp()->ActivePanel() || m_Name != L"-"sv))
+		Global->CtrlObject->ViewHistory->AddToHistory(m_View->GetFileName(), HR_VIEWER);
+
 	m_View->OnDestroy();
 }
 

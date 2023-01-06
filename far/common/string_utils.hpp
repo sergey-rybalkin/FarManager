@@ -32,7 +32,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#include "compiler.hpp"
 #include "preprocessor.hpp"
 #include "type_traits.hpp"
 #include "utility.hpp"
@@ -110,18 +109,18 @@ using null_terminated = null_terminated_t<wchar_t>;
 class string_copyref
 {
 public:
-	string_copyref(std::wstring_view const Str) noexcept:
+	explicit(false) string_copyref(std::wstring_view const Str) noexcept:
 		m_Str(Str)
 	{
 	}
 
-	string_copyref(std::wstring&& Str) noexcept:
+	explicit(false) string_copyref(std::wstring&& Str) noexcept:
 		m_StrBuffer(std::move(Str)),
 		m_Str(m_StrBuffer)
 	{
 	}
 
-	operator std::wstring_view() const noexcept
+	explicit(false) operator std::wstring_view() const noexcept
 	{
 		return m_Str;
 	}
@@ -201,30 +200,56 @@ namespace detail
 	using char_type = std::remove_const_t<std::remove_pointer_t<raw_string_type>>;
 
 	template<typename raw_string_type>
-	inline constexpr bool is_supported_type = std::conjunction_v<
+	concept supported_type = std::conjunction_v<
 		std::is_pointer<raw_string_type>,
 		is_one_of<char_type<raw_string_type>, wchar_t, char>
 	>;
 }
 
-template<typename raw_string_type, REQUIRES(detail::is_supported_type<raw_string_type>)>
+template<detail::supported_type raw_string_type>
 [[nodiscard]]
 bool contains(raw_string_type const& Str, raw_string_type const& What)
 {
-	if constexpr (std::is_same_v<detail::char_type<raw_string_type>, wchar_t>)
+	if constexpr (std::same_as<detail::char_type<raw_string_type>, wchar_t>)
 		return std::wcsstr(Str, What) != nullptr;
 	else
 		return std::strstr(Str, What) != nullptr;
 }
 
-template<typename raw_string_type, REQUIRES(detail::is_supported_type<raw_string_type>)>
+template<detail::supported_type raw_string_type>
 [[nodiscard]]
 bool contains(raw_string_type const& Str, detail::char_type<raw_string_type> const What)
 {
-	if constexpr (std::is_same_v<detail::char_type<raw_string_type>, wchar_t>)
+	if constexpr (std::same_as<detail::char_type<raw_string_type>, wchar_t>)
 		return std::wcschr(Str, What) != nullptr;
 	else
 		return std::strchr(Str, What) != nullptr;
+}
+
+[[nodiscard]]
+inline bool within(std::wstring_view const Haystack, std::wstring_view const Needle)
+{
+	// Comparing potentially unrelated pointers is, technically, UB.
+	// Integers are always fine.
+
+	const auto HaystackBegin = reinterpret_cast<uintptr_t>(Haystack.data());
+	const auto HaystackEnd = reinterpret_cast<uintptr_t>(Haystack.data() + Haystack.size());
+
+	const auto NeedleBegin = reinterpret_cast<uintptr_t>(Needle.data());
+	const auto NeedleEnd = reinterpret_cast<uintptr_t>(Needle.data() + Needle.size());
+
+	/*
+	HHHHHH
+	NN
+	  NN
+		NN
+	*/
+	return
+		NeedleBegin >= HaystackBegin && NeedleBegin < HaystackEnd&&
+		NeedleEnd > HaystackBegin && NeedleEnd <= HaystackEnd &&
+		// An empty needle could be within the haystack, but who cares.
+		// You can't really break an empty view by invalidating its underlying storage.
+		NeedleEnd > NeedleBegin;
 }
 
 namespace detail
@@ -245,7 +270,7 @@ namespace inplace
 			Str.erase(0, Str.size() - MaxWidth);
 	}
 
-	constexpr inline void cut_left(std::wstring_view& Str, size_t const MaxWidth) noexcept
+	constexpr void cut_left(std::wstring_view& Str, size_t const MaxWidth) noexcept
 	{
 		if (Str.size() > MaxWidth)
 			Str.remove_prefix(Str.size() - MaxWidth);
@@ -257,7 +282,7 @@ namespace inplace
 			Str.resize(MaxWidth);
 	}
 
-	constexpr inline void cut_right(std::wstring_view& Str, size_t const MaxWidth) noexcept
+	constexpr void cut_right(std::wstring_view& Str, size_t const MaxWidth) noexcept
 	{
 		if (Str.size() > MaxWidth)
 			Str.remove_suffix(Str.size() - MaxWidth);
@@ -389,14 +414,14 @@ inline auto cut_right(std::wstring Str, size_t const MaxWidth)
 }
 
 [[nodiscard]]
-constexpr inline auto cut_left(std::wstring_view Str, size_t const MaxWidth) noexcept
+constexpr auto cut_left(std::wstring_view Str, size_t const MaxWidth) noexcept
 {
 	inplace::cut_left(Str, MaxWidth);
 	return Str;
 }
 
 [[nodiscard]]
-constexpr inline auto cut_right(std::wstring_view Str, size_t const MaxWidth) noexcept
+constexpr auto cut_right(std::wstring_view Str, size_t const MaxWidth) noexcept
 {
 	inplace::cut_right(Str, MaxWidth);
 	return Str;
@@ -503,33 +528,9 @@ inline auto quote_space(std::wstring_view const Str)
 }
 
 [[nodiscard]]
-constexpr inline bool equal(const std::wstring_view Str1, const std::wstring_view Str2) noexcept
+constexpr bool equal(const std::wstring_view Str1, const std::wstring_view Str2) noexcept
 {
 	return Str1 == Str2;
-}
-
-[[nodiscard]]
-constexpr inline bool starts_with(const std::wstring_view Str, const std::wstring_view Prefix) noexcept
-{
-	return Str.size() >= Prefix.size() && Str.substr(0, Prefix.size()) == Prefix;
-}
-
-[[nodiscard]]
-constexpr inline bool starts_with(const std::wstring_view Str, wchar_t const Prefix) noexcept
-{
-	return !Str.empty() && Str.front() == Prefix;
-}
-
-[[nodiscard]]
-constexpr inline bool ends_with(const std::wstring_view Str, const std::wstring_view Suffix) noexcept
-{
-	return Str.size() >= Suffix.size() && Str.substr(Str.size() - Suffix.size()) == Suffix;
-}
-
-[[nodiscard]]
-constexpr inline bool ends_with(const std::wstring_view Str, wchar_t const Suffix) noexcept
-{
-	return !Str.empty() && Str.back() == Suffix;
 }
 
 [[nodiscard]]
@@ -656,12 +657,12 @@ auto operator+(T const Lhs, std::basic_string_view<T> const Rhs)
 
 // string_view has iterators, but you cannot construct it from them
 // "Design by committee" *facepalm*
-template <typename T>
+template<typename T>
 [[nodiscard]]
 constexpr auto make_string_view(T const Begin, T const End) noexcept
 {
 	using char_type = typename std::iterator_traits<T>::value_type;
-	static_assert(std::is_same_v<typename std::basic_string_view<char_type>::const_iterator, T>);
+	static_assert(std::same_as<typename std::basic_string_view<char_type>::const_iterator, T>);
 
 	const auto Size = static_cast<size_t>(End - Begin);
 	return std::basic_string_view<char_type>{ Size ? &*Begin : nullptr, Size };
@@ -672,18 +673,18 @@ class lvalue_string_view
 public:
 	lvalue_string_view() = default;
 
-	lvalue_string_view(std::wstring_view const Str):
+	explicit(false) lvalue_string_view(std::wstring_view const Str):
 		m_Str(Str)
 	{
 	}
 
-	lvalue_string_view(std::wstring const& Str):
+	explicit(false) lvalue_string_view(std::wstring const& Str):
 		m_Str(Str)
 	{}
 
-	lvalue_string_view(std::wstring&& Str) = delete;
+	explicit(false) lvalue_string_view(std::wstring&& Str) = delete;
 
-	operator std::wstring_view() const
+	explicit(false) operator std::wstring_view() const
 	{
 		return m_Str;
 	}

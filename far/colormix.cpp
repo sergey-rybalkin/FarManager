@@ -292,12 +292,8 @@ namespace colors
 		return Result;
 	}
 
-	static auto console_palette()
+	std::array<COLORREF, 16> nt_palette()
 	{
-		std::array<COLORREF, 16> Palette;
-		if (console.GetPalette(Palette))
-			return Palette;
-
 		enum
 		{
 			C0 = 0,
@@ -326,6 +322,14 @@ namespace colors
 			RGB(C3, C3, C0), // bright yellow
 			RGB(C3, C3, C3)  // bright white
 		};
+	}
+
+	static auto console_palette()
+	{
+		if (std::array<COLORREF, 16> Palette; console.GetPalette(Palette))
+			return Palette;
+
+		return nt_palette();
 	}
 
 	constexpr unsigned char Index8ToIndex4[]
@@ -625,7 +629,7 @@ string_view ExtractColorInNewFormat(string_view const Str, FarColor& Color, bool
 {
 	Stop = false;
 
-	if (!starts_with(Str, L'('))
+	if (!Str.starts_with(L'('))
 		return Str;
 
 	const auto Token = Str.substr(1, Str.substr(1).find(L')'));

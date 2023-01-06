@@ -43,10 +43,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pathmix.hpp"
 #include "cvtname.hpp"
 #include "global.hpp"
-#include "exception.hpp"
 #include "log.hpp"
 
 // Platform:
+#include "platform.hpp"
 #include "platform.fs.hpp"
 
 // Common:
@@ -204,7 +204,7 @@ bool ScanTree::GetNextName(os::fs::find_data& fdata,string &strFullName)
 				// BUGBUG check result
 				if (!os::fs::get_find_data(strFindPath, fdata))
 				{
-					LOGWARNING(L"get_find_data({}): {}"sv, strFindPath, last_error());
+					LOGWARNING(L"get_find_data({}): {}"sv, strFindPath, os::last_error());
 				}
 
 			}
@@ -232,7 +232,7 @@ bool ScanTree::GetNextName(os::fs::find_data& fdata,string &strFullName)
 				RealPath = NTPath(ConvertNameToReal(RealPath));
 
 			//recursive symlinks guard
-			if (!contains(ScanItems.back().ActiveDirectories, RealPath))
+			if (!ScanItems.back().ActiveDirectories.contains(RealPath))
 			{
 				CutToSlash(strFindPath);
 				path::append(strFindPath, fdata.FileName, strFindMask);

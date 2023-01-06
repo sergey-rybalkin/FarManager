@@ -46,7 +46,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "ctrlobj.hpp"
 #include "constitle.hpp"
 #include "taskbar.hpp"
-#include "message.hpp"
 #include "config.hpp"
 #include "datetime.hpp"
 #include "fileattr.hpp"
@@ -69,6 +68,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "scrbuf.hpp"
 
 // Platform:
+#include "platform.hpp"
+#include "platform.env.hpp"
 #include "platform.fs.hpp"
 
 // Common:
@@ -456,13 +457,13 @@ static intptr_t SetAttrDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* Pa
 			if (Param1 != SA_TEXT_LASTWRITE && Param1 != SA_TEXT_CREATION && Param1 != SA_TEXT_LASTACCESS && Param1 != SA_TEXT_CHANGE)
 				break;
 
-			const auto Record = static_cast<const INPUT_RECORD*>(Param2);
-			if (Record->EventType != MOUSE_EVENT)
+			const auto& Record = *static_cast<INPUT_RECORD const*>(Param2);
+			if (Record.EventType != MOUSE_EVENT)
 				break;
 
 			SCOPED_ACTION(Dialog::suppress_redraw)(Dlg);
 
-			if (Record->Event.MouseEvent.dwEventFlags == DOUBLE_CLICK)
+			if (Record.Event.MouseEvent.dwEventFlags == DOUBLE_CLICK)
 				set_dates_and_times(Dlg, TimeMap[label_to_time_map_index(Param1)], os::chrono::nt_clock::now(), false);
 			else
 				Dlg->SendMessage(DM_SETFOCUS, Param1 + 1, nullptr);
@@ -786,7 +787,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 			// BUGBUG
 			if (!os::fs::get_find_data(*Object, SingleSelFindData))
 			{
-				LOGWARNING(L"get_find_data({}): {}"sv, *Object, last_error());
+				LOGWARNING(L"get_find_data({}): {}"sv, *Object, os::last_error());
 			}
 
 			SingleSelFileName = *Object;
@@ -1189,7 +1190,7 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 				if (!equal_icase(AttrDlg[SA_EDIT_REPARSE_POINT].strData, strLinkName))
 				{
 					bool Dummy = false;
-					retryable_ui_operation([&]{ return ModifyReparsePoint(SingleSelFileName, unquote(AttrDlg[SA_EDIT_REPARSE_POINT].strData)); }, SingleSelFileName, lng::MCopyCannotCreateLink, Dummy);
+					retryable_ui_operation([&]{ return ModifyReparsePoint(SingleSelFileName, os::env::expand(unquote(AttrDlg[SA_EDIT_REPARSE_POINT].strData))); }, SingleSelFileName, lng::MCopyCannotCreateLink, Dummy);
 				}
 
 				if (SingleSelFindData.Attributes == INVALID_FILE_ATTRIBUTES)
@@ -1251,10 +1252,6 @@ static bool ShellSetFileAttributesImpl(Panel* SrcPanel, const string* Object)
 					if(SrcPanel)
 					{
 						Global->CtrlObject->Cp()->GetAnotherPanel(SrcPanel)->CloseFile();
-					}
-
-					if(SrcPanel)
-					{
 						SrcPanel->GetSelName(nullptr);
 					}
 

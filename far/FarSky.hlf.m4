@@ -1562,10 +1562,7 @@ $ #Menu Nastavenia#
 
  #Code pages#            Shows the ~Code pages~@CodePagesMenu@ menu.
 
- #Farby#                 Dovoľuje zmeniť farbu rôznych častí
-                       prostredia, alebo zmeniť celú paletu farieb
-                       Faru na čiernobielu, a taktiež nastaviť farby
-                       ako východzie (základné).
+ #Farby#                 Shows the ~Color groups~@ColorGroups@ menu.
 
  #Zvýraznenie súborov#   Zmení nastavenie ~zvýrazňovania súborov~@Highlight@.
 
@@ -1685,10 +1682,15 @@ prikázať presné porovnávanie veľkých a malých písmen.
 from other text with spaces, tab characters, line breaks or standard
 separators, which by default are: #!%^&*()+|{}:"<>?`-=\\[];',./#.
 
- By checking the #Search for hex# option you can search for the files
-containing hexadecimal sequence of the specified bytes. In this case #Case#
-#sensitive#, #Whole words#, #Using code page# and #Search for folders#
-options are disabled and their values doesn't affect the search process.
+ #Fuzzy search# is diacritical insensitive, treats ligatures equivalent
+to their corresponding multicharacter sequences and fancy numerals
+to corresponding number characters, and ignores some other minor
+differences.
+
+ By selecting #Hex# option you can search for the files containing hexadecimal
+sequence of the specified bytes. In this case, #Case sensitive#, #Whole words#,
+#Fuzzy search#, #Using code page# and #Search for folders# options are disabled
+and their values do not affect the search process.
 
  #Not containing# allows to find files #not# containing the specified text or code.
 
@@ -2309,6 +2311,22 @@ the active panel, !##!\\!^!.! - a file on the passive
 panel with the same name as the name of the current
 file on the active panel.
 
+ #![#
+ "![" prefix forces all subsequent special symbols
+to refer to the left panel (see note 4).
+For example, ![!.! denotes a current file name on
+the left panel, ![!\\!^!.! - a file on the left
+panel with the same name as the name of the current
+file on the active panel.
+
+ #!]#
+ "!]" prefix forces all subsequent special symbols
+to refer to the right panel (see note 4).
+For example, !]!.! denotes a current file name on
+the right panel, !]!\\!^!.! - a file on the right
+panel with the same name as the name of the current
+file on the active panel.
+
  Poznámky:
 
  1. ^<wrap>When handling special characters, Far substitutes only the string
@@ -2338,7 +2356,7 @@ selected file names, in ANSI encoding, with full pathnames, each enclosed in quo
  3. ^<wrap>When there are multiple associations specified, the meta-characters !@@!
 and !$! are shown in the menu as is. Those characters are translated when the command is executed.
 
- 4. ^<wrap>The prefixes "!##" and "!^" work as toggles. The effect
+ 4. ^<wrap>The prefixes "!##", "!^", "![" and "!]" work as toggles. The effect
 of these prefixes continues up to the next similar prefix. For example:
 
     if exist !##!\\!^!.! diff -c -p !##!\\!^!.! !\\!.!
@@ -3054,6 +3072,14 @@ while searching (so, for example, #Text# will not be found when searching for #t
  Enable the use of ~regular expressions~@RegExp@ in the search string.
 The multiline search is not supported.
 
+ #Fuzzy search#
+ The search will be diacritical insensitive (for example, #deja# will be found in #déjà vu#),
+ligatures will be equivalent to corresponding multicharacter sequences (#fluffy# matches #ﬂuﬀy#),
+fancy numbers to corresponding numbers (#42# matches #④②#), and so on.
+
+ Note that case sensitive fuzzy search sometimes may be useful. For example, #Uber# will be found
+in #Überwald# but not in #überwald#. However, #Æther# will match #AEther#, but not #Aether#.
+
 
 @Editor
 $ #Editor#
@@ -3189,6 +3215,14 @@ $ #Editor: search/replace#
  #Regular expressions#
  Treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@).
 Each line is processed individually, so multi-line expressions and line break characters will not be found.
+
+ #Fuzzy search#
+ The search will be diacritical insensitive (for example, #deja# will be found in #déjà vu#),
+ligatures will be equivalent to corresponding multicharacter sequences (#fluffy# matches #ﬂuﬀy#),
+fancy numbers to corresponding numbers (#42# matches #④②#), and so on.
+
+ Note that case sensitive fuzzy search sometimes may be useful. For example, #Uber# will be found
+in #Überwald# but not in #überwald#. However, #Æther# will match #AEther#, but not #Aether#.
 
  ~Preserve style~@PreserveStyle@
  Preserve style (case and delimiters in program source code) of the replaced text.
@@ -4291,6 +4325,33 @@ Far vždy používa skutočné mená (vrátane veľkých/malých písmen).
  See also: common ~menu~@MenuCmd@ keyboard commands.
 
 
+@ColorGroups
+$ #Color groups#
+ Toto menu dovoľuje zmeniť farbu rôznych častí prostredia, a taktiež nastaviť farby ako východzie (základné).
+
+ #Set default colors#
+ Set the colors to default values, expressed as indices in the console palette.
+
+ #Set default colors (RGB)#
+ Set the colors to default values, expressed as colors in RGB space, normally used for the corresponding console palette indices.
+ Unlike the indices in the console palette, the RGB values are device-independent and will look the same in any terminal.
+ For example, the default #index# value of panels background is #1#, which is usually, but not necessarily, mapped to some unspecified shade of blue.
+ The default #RGB# value of panels background, on the contrary, is always exactly #000080#.
+
+ #Note#: RGB colors require Virtual Terminal-based rendering, which can be enabled in ~Interface settings~@InterfSettings@.
+If it is not enabled or if your terminal does not support RGB colors, they will be approximated to the closest console palette indices.
+
+ This is the current palette:
+
+ \00  \10  \20  \30  \40  \50  \60  \70  \-
+ \80  \90  \A0  \B0  \C0  \D0  \E0  \F0  \-
+
+ This is the default RGB representation:
+
+ \(T0:T000000)  \(T0:T000080)  \(T0:T008000)  \(T0:T008080)  \(T0:T800000)  \(T0:T800080)  \(T0:T808000)  \(T0:TC0C0C0)  \-
+ \(T0:T808080)  \(T0:T0000FF)  \(T0:T00FF00)  \(T0:T00FFFF)  \(T0:TFF0000)  \(T0:TFF00FF)  \(T0:TFFFF00)  \(T0:TFFFFFF)  \-
+
+
 @ColorPicker
 $ #Color Picker#
  This dialog allows to define a foreground color, a background color and a text style.
@@ -4826,9 +4887,9 @@ will be executed if “file1” exists, “file2” does not exist, and the
 environment “variable” is defined:
  #if exist file1 if not exist file2 if defined variable command#
 
- #PUSHD path#
- Stores the current path for use by the “POPD” command, then changes
-the current path on the active panel to the specified “path”.
+ #PUSHD [path]#
+ Stores the current path for use by the “POPD” command.
+If “path” is specified, changes the current path on the active panel to it.
 
  #POPD#
  Changes the current path on the active panel to that stored by the “PUSHD” command.
@@ -4931,8 +4992,7 @@ zero-size expression.
  #(?<=pattern)# - ^<wrap>the backward lookup. Unfortunately, the pattern must have fixed length.
  #(?<!pattern)# - ^<wrap>the negation of backward lookup. The same restriction.
 
- #(?{name}pattern)# - group with a name. The name can be empty (in such case you
-cannot refer to this group) or must contain only word characters (#\w#) and spaces (#\s#).
+ #(?{name}pattern)# - group with a name. The name must contain only word characters (#\w#) and spaces (#\s#).
 
  #Quantifiers#
 
@@ -5008,7 +5068,7 @@ big amounts of data are processed.
         ^<wrap>Strings containing "name=", but not containing "value=", are processed (in fact, skipped) faster.
 
  #\NN#  - ^<wrap>reference to earlier matched parentheses. NN is a positive integer.
-Each parentheses except (?:pattern), (?=pattern), (?!pattern), (?<=pattern), (?<!pattern) and (?{name}pattern)
+Each parentheses except (?:pattern), (?=pattern), (?!pattern), (?<=pattern) and (?<!pattern)
 have a number (in the order of appearance).
         Example:
         "(['"])hello\1" matches to "hello" or 'hello'.
@@ -5558,27 +5618,15 @@ If current value of an option is other than the default, the option is marked wi
 
 @Codepages.NoAutoDetectCP
 $ #far:config Codepages.NoAutoDetectCP#
- This string parameter defines the code pages which will be excluded
-from Universal Codepage Detector (UCD) autodetect. Sometimes, especially
-on small files, UCD annoyingly chooses wrong code pages.
+ This parameter allows to exclude specific code pages from the heuristic code page detection results.
+Such detection is unreliable by definition: it depends on statistical data and could guess wrong, especially when the amount of input data is small.
 
- The default value is empty string #""#. In this case all code pages
-detectable by UCD (about 20, much less than there is usually available
-in the system) are enabled.
+ By default the parameter is empty and there are no restrictions which code pages could be detected heuristically.
 
- If this parameter is set to string #"-1"# and the #Other# section
-of the ~Code pages~@CodePagesMenu@ menu is hidden (#Ctrl+H# key
-combination), only #System# (ANSI, OEM), #Unicode#, and #Favorites# code
-pages will be enabled for UCD. If the #Other# section is visible, all
-code pages are enabled.
+ If this parameter is set to #-1#, only the code pages, currenltly visible in the ~Code pages~@CodePagesMenu@ menu, will be accepted.
+You can control which code pages are visible there with the #Ctrl+H# key combination and the #Favorites# section.
 
- Otherwise, this parameter should contain comma separated list
-of code page numbers disabled for UCD. For example,
-#"1250,1252,1253,1255,855,10005,28592,28595,28597,28598,38598"#.
-
- Since Unicode code pages (1200, 1201, 65001) are detected outside
-of UCD, they cannot be disabled even if they appear on the exclusions
-list.
+ If this parameter contains a comma-separated list of code page numbers, all the specified code pages will be excluded from the heuristic detection.
 
  This parameter can be changed via ~far:config~@FarConfig@ only.
 
@@ -5789,7 +5837,7 @@ is not listed in this parameter and the program “date.exe” exists
 in one of the #PATH# directories, the internal command processor’s
 command can never be executed.
 
- Ready-made settings for CMD.EXE, COMMAND.COM, and other well-known
+ Ready-made settings for CMD.EXE and other well-known
 command processors can be found in the
 #Addons\SetUp\Executor.*.farconfig# files.
 

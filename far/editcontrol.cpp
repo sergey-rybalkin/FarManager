@@ -73,7 +73,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-EditControl::EditControl(window_ptr Owner, SimpleScreenObject* Parent, parent_processkey_t&& ParentProcessKey, Callback* aCallback, History* iHistory, FarList* iList, DWORD iFlags):
+EditControl::EditControl(window_ptr Owner, SimpleScreenObject* Parent, parent_processkey_t&& ParentProcessKey, Callback const* aCallback, History* iHistory, FarList* iList, DWORD iFlags):
 	Edit(std::move(Owner)),
 	pHistory(iHistory),
 	pList(iList),
@@ -172,7 +172,7 @@ static bool ParseStringWithQuotes(string_view const Str, string& Start, string& 
 	}
 	else
 	{
-		auto WordDiv = GetSpaces() + Global->Opt->strWordDiv.Get();
+		auto WordDiv = GetBlanks() + Global->Opt->strWordDiv.Get();
 		static const auto NoQuote = L"\":\\/%.-"sv;
 		std::erase_if(WordDiv, [&](wchar_t i){ return contains(NoQuote, i); });
 
@@ -396,7 +396,17 @@ int EditControl::AutoCompleteProc(bool Manual,bool DelBlock,Manager::Key& BackKe
 {
 	int Result=0;
 	static int Reenter=0;
-	if(ECFlags.Check(EC_ENABLEAUTOCOMPLETE) && !m_Str.empty() && !Reenter && is_input_queue_empty() && (Global->CtrlObject->Macro.GetState() == MACROSTATE_NOMACRO || Manual))
+	if(
+		ECFlags.Check(EC_ENABLEAUTOCOMPLETE) &&
+		!m_Str.empty() &&
+		!Reenter &&
+		is_input_queue_empty() &&
+		(
+			Manual ||
+			Global->CtrlObject->Macro.GetState() == MACROSTATE_NOMACRO ||
+			(Area == MACROAREA_DIALOGAUTOCOMPLETION && KeyMacro::IsMacroDialog(GetOwner()))
+		)
+	)
 	{
 		Reenter++;
 		const auto ComplMenu = VMenu2::create({}, {});
@@ -931,6 +941,7 @@ void EditControl::RefreshStrByMask(int InitMode)
 		return;
 
 	m_Str.resize(Mask.size(), L' ');
+	MaxLength = m_Str.size();
 
 	for (const auto& [Str, Msk]: zip(m_Str, Mask))
 	{
