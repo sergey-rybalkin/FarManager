@@ -66,6 +66,10 @@ public:
 	const string& GetSearchString() const { return m_SearchString; }
 	bool GetSearchHex() const { return m_SearchHex; }
 	void StoreSearchString(string_view Str, bool Hex);
+	string GetSearchString(uintptr_t Codepage);
+	void StoreSearchString(string_view Str, uintptr_t Codepage, bool Hex);
+
+	void FolderChanged();
 
 	// BUGBUG
 
@@ -76,7 +80,6 @@ public:
 	bool GlobalSearchCaseSensitive{};
 	bool GlobalSearchFuzzy{};
 	bool GlobalSearchWholeWords{}; // значение "Whole words" для поиска
-	bool GlobalSearchReverse{};
 	std::atomic_size_t SuppressClock{};
 	std::atomic_size_t SuppressIndicators{};
 	bool CloseFAR{}, CloseFARMenu{}, AllowCancelExit{true};

@@ -37,6 +37,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Internal:
 #include "scrobj.hpp"
+#include "stddlg.hpp"
 #include "namelist.hpp"
 #include "poscache.hpp"
 #include "config.hpp"
@@ -135,7 +136,10 @@ private:
 	long long BegOfScreen();
 	long long XYfilepos(int col, int row);
 	void ChangeViewKeyBar();
-	void Search(int Next,const Manager::Key* FirstChar);
+
+	enum class SearchDisposition;
+	SearchDisposition ShowSearchReplaceDialog();
+	void DoSearchReplace(SearchDisposition Disposition);
 	struct search_data;
 	SEARCHER_RESULT search_hex_forward( search_data* sd );
 	SEARCHER_RESULT search_hex_backward( search_data* sd );
@@ -144,6 +148,7 @@ private:
 	SEARCHER_RESULT search_regex_forward( search_data* sd );
 	SEARCHER_RESULT search_regex_backward( search_data* sd );
 	int read_line(wchar_t *buf, wchar_t *tbuf, long long cpos, int adjust, long long& lpos, int &lsize);
+
 	int vread(wchar_t *Buf, int Count, wchar_t *Buf2 = nullptr);
 	bool vseek(long long Offset, int Whence);
 	long long vtell() const;
@@ -154,7 +159,6 @@ private:
 	int GetStrBytesNum(const wchar_t* Str, int Length) const; // BUGBUG not string_view, could be unrelated 🤦
 	bool isBinaryFile(uintptr_t cp);
 	void SavePosition();
-	intptr_t ViewerSearchDlgProc(Dialog* Dlg, intptr_t Msg,intptr_t Param1,void* Param2);
 	int getCharSize() const;
 	int txt_dump(std::string_view Str, size_t ClientWidth, string& OutStr, wchar_t ZeroChar, int tail) const;
 
@@ -192,18 +196,9 @@ private:
 
 	bool m_DeleteFolder{true};
 
-	string strLastSearchStr;
+	SearchReplaceDlgParams LastSearchDlgParams;
 
-	struct SearchOptions
-	{
-		bool CaseSensitive{};
-		bool WholeWords{};
-		bool Reverse{};
-		bool Regexp{};
-		bool Fuzzy{};
-		bool SearchHex{};
-	} LastSearchOptions;
-
+	bool LastSearchBackward{}; // Used to adjust StartSearchPos
 	long long StartSearchPos{};
 
 	uintptr_t m_DefCodepage;

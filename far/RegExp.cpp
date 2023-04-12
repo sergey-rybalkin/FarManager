@@ -851,9 +851,6 @@ void RegExp::InnerCompile(const wchar_t* const start, const wchar_t* src, int sr
 	// current brackets depth
 	// one place reserved for surrounding 'main' brackets
 	int brdepth=1;
-	// compiling interior of lookbehind
-	// used to apply restrictions of lookbehind
-	int lookbehind=0;
 	// counter of normal brackets
 	int brcount=0;
 	// counter of closed brackets
@@ -1145,8 +1142,6 @@ void RegExp::InnerCompile(const wchar_t* const start, const wchar_t* src, int sr
 							}
 							else
 								throw MAKE_REGEX_EXCEPTION(errSyntax, i + (src - start));
-
-							lookbehind++;
 						} break;
 						case L'{':
 						{
@@ -1232,7 +1227,6 @@ void RegExp::InnerCompile(const wchar_t* const start, const wchar_t* src, int sr
 					case opLookBehind:
 					case opNotLookBehind:
 					{
-						lookbehind--;
 						int l=CalcPatternLength(brackets[brdepth] + 1, op - 1);
 
 						if (l == -1)
@@ -3107,7 +3101,7 @@ bool RegExp::InnerMatch(const wchar_t* const start, const wchar_t* str, const wc
 							stack.emplace_back(st);
 						}
 
-						if (op->bracket.index >= 0 && static_cast<size_t>(op->bracket.index) < match.size())
+						if (op->bracket.index >= 0 && static_cast<size_t>(op->bracket.index) < match.size() && inrangebracket < 0)
 						{
 							match[op->bracket.index].start = -1;
 							match[op->bracket.index].end = -1;
@@ -3935,6 +3929,8 @@ TEST_CASE("regex.regression")
 		{ L"([bc]+)|(zz)"sv,                       L"abc"sv,        {{ 1,  3}, { 1,  3}, {-1, -1}} },
 		{ L"(?:abc)"sv,                            L"abc"sv,        {{ 0,  3}} },
 		{ L"a(?!b)d"sv,                            L"ad"sv,         {{ 0,  2}} },
+		{ L"(\\d+)A|(\\d+)"sv,                     L"123"sv,        {{ 0,  3}, {-1, -1}, { 0,  3}} },
+		{ L"(8)+"sv,                               L"88"sv,         {{ 0,  2}, { 1, 2 }} },
 	};
 
 	RegExp re;

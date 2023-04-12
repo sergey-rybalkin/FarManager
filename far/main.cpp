@@ -87,7 +87,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/uuid.hpp"
 
 // External:
-#include <git2.h>
 
 #ifdef ENABLE_TESTS
 #include "testing.hpp"
@@ -956,11 +955,11 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	});
 }
 
-static void configure_exception_handling(int Argc, const wchar_t* const Argv[])
+static void configure_exception_handling(std::span<wchar_t const* const> const Args)
 {
 	os::debug::crt_report_to_ui();
 
-	for (const auto& i : span(Argv + 1, Argc - 1))
+	for (const auto& i: Args)
 	{
 		if (!is_arg(i))
 			continue;
@@ -994,8 +993,9 @@ static int wmain_seh()
 	// wmain is a non-standard extension and not available in gcc.
 	int Argc = 0;
 	const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
+	std::span<wchar_t const* const> const AllArgs(Argv.get(), Argc), Args(AllArgs.subspan(1));
 
-	configure_exception_handling(Argc, Argv.get());
+	configure_exception_handling(Args);
 
 	SCOPED_ACTION(unhandled_exception_filter);
 	SCOPED_ACTION(vectored_exception_handler);
@@ -1004,7 +1004,7 @@ static int wmain_seh()
 	SCOPED_ACTION(new_handler);
 
 #ifdef ENABLE_TESTS
-	if (const auto Result = testing_main(Argc, Argv.get()))
+	if (const auto Result = testing_main(AllArgs))
 	{
 		return *Result;
 	}
@@ -1021,13 +1021,7 @@ static int wmain_seh()
 	{
 		try
 		{
-			git_libgit2_init();
-
-			int retVal = mainImpl({ Argv.get() + 1, Argv.get() + Argc });
-
-			git_libgit2_shutdown();
-
-			return retVal;
+			return mainImpl(Args);
 		}
 		catch (far_known_exception const& e)
 		{
@@ -1048,11 +1042,10 @@ static int wmain_seh()
 
 int main()
 {
-	os::debug::set_thread_name(L"Main Thread");
-
 	return seh_try_with_ui(
 	[]
 	{
+		os::debug::set_thread_name(L"Main Thread");
 		return wmain_seh();
 	},
 	[](DWORD const ExceptionCode) -> int
@@ -1176,19 +1169,20 @@ TEST_CASE("Args")
 
 	for (const auto& i: Tests)
 	{
-		auto Iterator = i.Args.begin();
+		span const Args = i.Args;
+		auto Iterator = Args.begin();
 
 		std::visit(overload
 		{
 			[&](std::function<bool()> const& Validator)
 			{
-				REQUIRE_NOTHROW(parse_argument(Iterator, i.Args.end(), Context));
+				REQUIRE_NOTHROW(parse_argument(Iterator, Args.end(), Context));
 				if (Validator)
 					REQUIRE(Validator());
 			},
 			[&](string_view const& Validator)
 			{
-				REQUIRE_THROWS_MATCHES(parse_argument(Iterator, i.Args.end(), Context), far_known_exception, generic_exception_matcher([Validator](std::any const& e)
+				REQUIRE_THROWS_MATCHES(parse_argument(Iterator, Args.end(), Context), far_known_exception, generic_exception_matcher([Validator](std::any const& e)
 				{
 					return !Validator.empty() && contains(std::any_cast<far_known_exception const&>(e).message(), Validator);
 				}));

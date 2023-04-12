@@ -152,13 +152,13 @@ struct formattable;
 namespace detail
 {
 	template<typename type>
-	concept is_formattable = requires
+	constexpr inline auto is_formattable = requires
 	{
 		formattable<type>{};
 	};
 
 	template<typename type>
-	concept has_to_string = requires(type t)
+	constexpr inline auto has_to_string = requires(type t)
 	{
 		t.to_string();
 	};

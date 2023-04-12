@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Platform:
 
 // Common:
+#include "common/bytes_view.hpp"
 #include "common/function_ref.hpp"
 #include "common/preprocessor.hpp"
 #include "common/utility.hpp"
@@ -54,71 +55,66 @@ enum class lng : int;
 class regex_exception;
 struct error_state_ex;
 
-struct SearchReplaceDlgOptions
+struct SearchReplaceDlgProps
 {
+	bool ReplaceMode{};
+	bool ShowButtonsPrevNext{};
+	bool ShowButtonAll{};
+};
+
+struct SearchReplaceDlgParams
+{
+	string SearchStr;
+	bytes SearchBytes;
+	string ReplaceStr;
+	std::optional<bool> Hex;
 	std::optional<bool> CaseSensitive;
 	std::optional<bool> WholeWords;
-	std::optional<bool> Reverse;
 	std::optional<bool> Regexp;
 	std::optional<bool> Fuzzy;
 	std::optional<bool> PreserveStyle;
 };
 
+enum class SearchReplaceDlgResult
+{
+	Cancel,
+	Ok,
+	Prev,
+	Next,
+	All,
+};
+
 /*
-  Функция GetSearchReplaceString выводит диалог поиска или замены, принимает
-  от пользователя данные и в случае успешного выполнения диалога возвращает
-  TRUE.
-  Параметры:
-    IsReplaceMode
-      true  - если хотим заменять
-      false - если хотим искать
+  Shows Search / Replace dialog, collects user's input, and returns the action selected by the user.
 
-    Title
-      Заголовок диалога.
-      Если пустая строка, то применяется MEditReplaceTitle или MEditSearchTitle в зависимости от параметра IsReplaceMode
+  Parameters:
+    Props
+      Define various aspects of dialog UX
 
-    SearchStr
-      Строка поиска.
-      Результат отработки диалога заносится в нее же.
-
-    ReplaceStr,
-      Строка замены.
-      Результат отработки диалога заносится в нее же.
-      Для случая, если IsReplaceMode=FALSE может быть равна nullptr
+    Params
+      InOut parameter. Specifies which options to show in the dialog and provides initial values.
+      If the dialog was closed by one of the action buttons, contains the values selected by the user.
+      If the dialog was dismissed, the values stay unchanged.
 
     TextHistoryName
       Имя истории строки поиска.
-      Если пустая строка, то принимается значение "SearchText"
 
     ReplaceHistoryName
       Имя истории строки замены.
-      Если пустая строка, то принимается значение "ReplaceText"
-
-    Options
-      InOut parameter. Specifies which options to show in the dialog and provides initial values.
-      On exit, contains the values selected by the user.
 
     HelpTopic
       Имя темы помощи.
       Если пустая строка - тема помощи не назначается.
 
-  Возвращаемое значение:
-  0 - пользователь отказался от диалога (Esc)
-    1 - пользователь подтвердил свои намерения
-    2 - выбран поиск всех вхождений
-
+  Returns the action selected by the user.
 */
-int GetSearchReplaceString(
-	bool IsReplaceMode,
-	string_view Title,
-	string_view SubTitle,
-	string& SearchStr,
-	string& ReplaceStr,
+SearchReplaceDlgResult GetSearchReplaceString(
+	SearchReplaceDlgProps Props,
+	SearchReplaceDlgParams& Params,
 	string_view TextHistoryName,
 	string_view ReplaceHistoryName,
-	SearchReplaceDlgOptions& Options,
+	uintptr_t CodePage,
 	string_view HelpTopic = {},
-	bool HideAll=false,
 	const UUID* Id = nullptr,
 	function_ref<string(bool)> Picker = nullptr
 );

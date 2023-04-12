@@ -56,7 +56,7 @@ namespace
 		static unordered_string_map<std::optional<LUID>> s_Cache;
 		static os::critical_section s_CS;
 
-		SCOPED_ACTION(std::lock_guard)(s_CS);
+		SCOPED_ACTION(std::scoped_lock)(s_CS);
 
 		const auto [Iterator, IsEmplaced] = s_Cache.try_emplace(Name);
 
@@ -173,7 +173,7 @@ namespace os::security
 		block_ptr<TOKEN_PRIVILEGES> Result(1024);
 
 		if (!os::detail::ApiDynamicReceiver(Result,
-			[&](span<TOKEN_PRIVILEGES> Buffer)
+			[&](block_ptr<TOKEN_PRIVILEGES> const& Buffer)
 			{
 				DWORD LengthNeeded = 0;
 				if (!GetTokenInformation(TokenHandle, TokenPrivileges, Buffer.data(), static_cast<DWORD>(Buffer.size()), &LengthNeeded))

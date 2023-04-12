@@ -157,15 +157,13 @@ static bool CASHook(const Manager::Key& key)
 		for (;;)
 		{
 			INPUT_RECORD Record;
+			GetInputRecord(&Record, true, true);
 
-			if (!PeekInputRecord(&Record, true))
+			if (Record.EventType != KEY_EVENT)
 				continue;
 
-			GetInputRecord(&Record, true, true);
 			if (!CasChecker(Record.Event.KeyEvent.dwControlKeyState))
 				break;
-
-			os::chrono::sleep_for(1ms);
 		}
 	};
 
@@ -1223,4 +1221,9 @@ FileEditor* Manager::GetCurrentEditor() const
 Manager::windows::const_iterator Manager::IsSpecialWindow() const
 {
 	return std::find_if(CONST_RANGE(m_windows, i) { return i->IsSpecial(); });
+}
+
+void Manager::FolderChanged()
+{
+	CallbackWindow([](){ Global->CtrlObject->Plugins->ProcessSynchroEvent(SE_FOLDERCHANGED, nullptr); });
 }

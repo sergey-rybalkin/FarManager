@@ -242,11 +242,14 @@ void FilePanels::Init(int DirCount)
 
 void FilePanels::SetPanelPositions(bool LeftFullScreen, bool RightFullScreen) const
 {
-	if (Global->Opt->WidthDecrement < -(ScrX/2-10))
-		Global->Opt->WidthDecrement=-(ScrX/2-10);
+	if (const auto MaxWidth = ScrX / 2; MaxWidth > 10)
+	{
+		if (Global->Opt->WidthDecrement < -MaxWidth)
+			Global->Opt->WidthDecrement = -MaxWidth;
 
-	if (Global->Opt->WidthDecrement > (ScrX/2-10))
-		Global->Opt->WidthDecrement=(ScrX/2-10);
+		if (Global->Opt->WidthDecrement > MaxWidth)
+			Global->Opt->WidthDecrement = MaxWidth;
+	}
 
 	Global->Opt->LeftHeightDecrement = std::max(0ll, std::min(Global->Opt->LeftHeightDecrement.Get(), ScrY - 7ll));
 	Global->Opt->RightHeightDecrement = std::max(0ll, std::min(Global->Opt->RightHeightDecrement.Get(), ScrY - 7ll));
@@ -853,6 +856,7 @@ void FilePanels::SetActivePanel(Panel* ToBeActive)
 {
 	if (ActivePanel().get() != ToBeActive)
 	{
+		Global->FolderChanged();
 		SetPassivePanelInternal(ActivePanel());
 		SetActivePanelInternal(ToBeActive->shared_from_this());
 	}
@@ -1143,6 +1147,14 @@ bool FilePanels::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 {
 	if (!MouseEvent->dwMousePosition.Y)
 	{
+		if (!Global->Opt->ShowColumnTitles) // Sort Mark letter in the menu area
+		{
+			if (ActivePanel()->ProcessMouse(MouseEvent))
+				return true;
+			if (PassivePanel()->ProcessMouse(MouseEvent))
+				return true;
+		}
+
 		if ((MouseEvent->dwButtonState & 3) && !MouseEvent->dwEventFlags)
 		{
 			if (!MouseEvent->dwMousePosition.X)

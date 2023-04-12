@@ -113,6 +113,8 @@ $^#Copyright © 1996-2000 Eugene Roshal#
  ~Маски файлів~@FileMasks@
  ~Клавіатурні макрокоманди~@KeyMacro@
 
+ ~Customizing UI elements~@CustomizingUI@
+
 
 @Help
 $ #Як користуватися допомогою#
@@ -825,7 +827,12 @@ Enter для копіювання поточного елемента у ряд�
  Очищення поточного невідзначеного пункту історії         #Shift+Del#
  у рядках редагування діалогів
 
- Помістити курсор у діалогах на елемент за замовчуванням       #PgDn#
+ Set the dialog focus to the first element                     #Home#
+
+ Помістити курсор у діалогах на елемент за замовчуванням  #PgDn, End#
+
+ The #Home# and #End# keys move the focus if it is currently not
+on a control which handles these keys internally, like edit control.
 
  Наступні комбінації клавіш можуть бути використані в усіх рядках редагування
 крім командного рядка, включаючи діалоги та ~вбудований редактор~@Editor@.
@@ -1569,6 +1576,7 @@ $ #Меню параметрів#
  #Мови#                    Вибір основної мови і мови допомоги.
                          Використайте команду "Зберегти параметри",
                          щоб зберегти вибрані мови.
+                         You can ~customize UI elements~@CustomizingUI@ to you needs and taste.
 
  #Параметри#               Конфігурація параметрів ~зовнішніх модулів~@PluginsConfig@,
  #зовнішніх модулів#       що підключаються.
@@ -2878,8 +2886,8 @@ combinations adjust the number of displayed bytes by 16 at a time.
  #Shift+F4#           Select ~view mode~@ViewerMode@: #text#, #hex#, or #dump#
  #F6#                 Перемкнутися у ~редактор~@Editor@
  #F7#                 ~Пошук~@ViewerSearch@
- #Shift+F7, Space#    Продовжити пошук
- #Alt+F7#             Продовжити пошук у зворотному напрямку
+ #Shift+F7, Space#    Continue searching forward
+ #Alt+F7#             Continue searching backwards
  #F8#                 Перемкнути між OEM та ANSI кодовими сторінками
  #Shift+F8#           Select code page using the ~Code pages~@CodePagesMenu@ menu
  #Alt+F8#             ~Змінити поточну позицію~@ViewerGotoPos@
@@ -2915,26 +2923,23 @@ beginning in the text.
 
  Примітки:
 
- 1. ^<wrap>Для виклику діалогу ~пошуку~@ViewerSearch@ ви також можете просто почати
-вводити призначений для пошуку текст.
-
- 2. ^<wrap>Файл відкривається у програмі перегляду із дозволом на
+ 1. ^<wrap>Файл відкривається у програмі перегляду із дозволом на
 видалення його стороннім процесом. Якщо відбудеться таке
 видалення, то реально файл буде видалений із каталогу тільки
 після закриття програми перегляду, при цьому він не буде
 доступний для обробки із любого процесу - це властивість
 операційної системи Windows.
 
- 3. ^<wrap>The maximum number of columns displayed in the #text#
+ 2. ^<wrap>The maximum number of columns displayed in the #text#
 ~view mode~@ViewerMode@ can be configured in the
 ~Viewer settings~@ViewerSettings@ dialog. The range is between 100 to 100,000,
 the default is 10,000. Рядки довжиною більше цього числа будуть займати
  на екрані не один рядок, а кілька, навіть якщо вимкнений режим переносу рядків.
 
- 4. ^<wrap>Far ~шукає~@ViewerSearch@ перше входження підрядка (#F7#) з початку видимої
+ 3. ^<wrap>Far ~шукає~@ViewerSearch@ перше входження підрядка (#F7#) з початку видимої
  ділянки екрана програми перегляду.
 
- 5. ^<wrap>To auto-scroll a file which is being appended by another
+ 4. ^<wrap>To auto-scroll a file which is being appended by another
 process (conf. Linux “tail”), go to the end of the file (press the #End# key).
 
 
@@ -3134,13 +3139,6 @@ $ #Пошук у програмі перегляду#
  #Тільки цілі слова#
  При пошуку буде проведений пошук тільки цілого слова
 
- #Зворотний пошук#
- Змінити напрямок пошуку на зворотний - шукати від кінця файла до початку.
-
- #Regular expressions#
- Enable the use of ~regular expressions~@RegExp@ in the search string.
-The multiline search is not supported.
-
  #Fuzzy search#
  The search will be diacritical insensitive (for example, #deja# will be found in #déjà vu#),
 ligatures will be equivalent to corresponding multicharacter sequences (#fluffy# matches #ﬂuﬀy#),
@@ -3148,6 +3146,14 @@ fancy numbers to corresponding numbers (#42# matches #④②#), and so on.
 
  Note that case sensitive fuzzy search sometimes may be useful. For example, #Uber# will be found
 in #Überwald# but not in #überwald#. However, #Æther# will match #AEther#, but not #Aether#.
+
+ #Regular expressions#
+ Enable the use of ~regular expressions~@RegExp@ in the search string.
+The multiline search is not supported.
+
+ The #Find next# button starts searching forward.
+
+ The #Find previous# button starts searching backwards.
 
 
 @Editor
@@ -3229,8 +3235,8 @@ behavior can be changed in the ~Editor settings~@EditorSettings@ dialog.
  #F6#                      Перемкнутися у ~програму перегляду~@Viewer@
  #F7#                      ~Пошук~@EditorSearch@
  #Ctrl+F7#                 ~Заміна~@EditorSearch@
- #Shift+F7#                Продовжити пошук/заміну
- #Alt+F7#                  Continue search/replace in "reverse" mode
+ #Shift+F7#                Continue searching or replacing forward
+ #Alt+F7#                  Continue searching or replacing backwards
  #F8#                      Toggle OEM/ANSI code page
  #Shift+F8#                Select code page
  #Alt+F8#                  ~Перейти~@EditorGotoPos@ до вказаного рядка й позиції
@@ -3278,13 +3284,6 @@ $ #Editor: search/replace#
  #Whole words#
  The given text will be found only if it occurs in the text as a whole word.
 
- #Reverse search#
- Change the direction of search (from the end of file towards the beginning)
-
- #Regular expressions#
- Treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@).
-Each line is processed individually, so multi-line expressions and line break characters will not be found.
-
  #Fuzzy search#
  The search will be diacritical insensitive (for example, #deja# will be found in #déjà vu#),
 ligatures will be equivalent to corresponding multicharacter sequences (#fluffy# matches #ﬂuﬀy#),
@@ -3293,8 +3292,16 @@ fancy numbers to corresponding numbers (#42# matches #④②#), and so on.
  Note that case sensitive fuzzy search sometimes may be useful. For example, #Uber# will be found
 in #Überwald# but not in #überwald#. However, #Æther# will match #AEther#, but not #Aether#.
 
+ #Regular expressions#
+ Treat input as Perl regular expression (~search~@RegExp@ and ~replace~@RegExpRepl@).
+Each line is processed individually, so multi-line expressions and line break characters will not be found.
+
  ~Preserve style~@PreserveStyle@
  Preserve style (case and delimiters in program source code) of the replaced text.
+
+ The #Find next# / #Replace next# buttons start searching / replacing forward.
+
+ The #Find previous# / #Replace previous# buttons start searching / replacing backwards.
 
  The #All# button will show All matching entries ~menu~@FindAllMenu@.
 
@@ -3461,7 +3468,7 @@ $ #Editor: All matching entries menu#
  #Ctrl+Up#, #Ctrl+Down#
  Scroll the text in the editor.
 
- #Ctrl+Enter#, #Ctrl+Left#, #mouse click#
+ #Ctrl+Enter#, #Ctrl+Left mouse click#
  Go to the position of the found text.
 
  #Gray +#
@@ -3898,9 +3905,6 @@ $ #Конфігурація програми перегляду#
 @=
  #Persistent selection#
  Do not remove block selection after moving the cursor.
-
- #Search dialog auto-focus#
- Always returns focus to the search text field in the Viewer ~Search~@ViewerSearch@ dialog.
 
  #Розмір табуляції#
  Кількість пробілів при показі символа табуляції.
@@ -5672,6 +5676,41 @@ $ #Version information#
  - Far Manager version and bitness
  - versions of the third-party libraries used in the project
  - names and versions of the active plugins
+
+
+@CustomizingUI
+$ #Customizing UI elements#
+ All Far user interface elements are defined in #.lng# files (e.g., #FarEng.lng#).
+You can customize these elements to your needs. For example, you can
+change hotkeys or labels on a certain Far dialog. To override
+UI elements, create a file with the name #Far<Lng>.lng.custom#
+in #%FARHOME%# or #%FARPROFILE%# directory and provide new values for
+the UI IDs you want to customize.
+
+ For example, to make file system link types on Far panels look like
+in the listing of DIR DOS command, you can create file #FarEng.lng.custom#
+in the #%FARPROFILE%# directory with the following content:
+
+@-
+ \0A┌────────────────────────────┐\-
+ \0A│\30│  │UTF-8│Ln 1/7│Col│8:34 PM\0A│\-
+ \0A│\1b//[MListUp]                 \0A│\-
+ \0A│\1b"..↑"                       \0A│\-
+ \0A│\1b                            \0A│\-
+ \0A│\1bMListFolder   = "<DIR>"     \0A│\-
+ \0A│\1bMListSymlink  = "<SYMLINK>" \0A│\-
+ \0A│\1bMListJunction = "<JUNCTION>"\0A│\-
+ \0A│\071\30Help  \07 2\30Save  \07 3\30      \07 \30    \0A│\-
+ \0A└────────────────────────────┘\-
+@+
+
+ You can specify replacement UI elements in two ways, on two separate
+lines or on a single line. The new value should always be enclosed
+in double quotation marks. You can find UI IDs you want to redefine
+in the original #Far<Lng>.lng# file.
+
+ If custom UI language files exist in both directories, the file
+in #%FARPROFILE%# has precedence over the file in #%FARHOME%#.
 
 
 @FarConfig

@@ -113,6 +113,8 @@ $^#Copyright © 1996-2000 Eugene Roshal#
  ~Maski plików~@FileMasks@
  ~Makropolecenia (sterowanie klawiaturą)~@KeyMacro@
 
+ ~Dostosowywanie elementów interfejsu~@CustomizingUI@
+
 
 @Help
 $ #Far: Jak używać pomocy#
@@ -143,7 +145,7 @@ do poprzedniej wielkości.
 
 
 @About
-$ #Far: O programie#
+$ #Far: o programie#
  #Far# jest menedżerem plików i archiwów dla Windows, działającym w trybie tekstowym.
 Wspiera długie nazwy plików i umożliwia wykonywanie wielu operacji na plikach
 i folderach.
@@ -159,7 +161,7 @@ polecenia na odpowiednie funkcje zewnętrznego archiwizera.
 
 
 @License
-$ #Far: Licencja (po angielsku)#
+$ #Far: licencja (po angielsku)#
  Copyright © 1996 Eugene Roshal
  Copyright © 2000 Far Group
  All rights reserved.
@@ -188,7 +190,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
 @CmdLine
-$ #Far: Przełączniki wiersza poleceń#
+$ #Far: przełączniki wiersza poleceń#
  W wierszu poleceń mogą być użyte następujące przełączniki:
 
  #-e[<linia>[:<poz>]] <nazwa_pliku>#
@@ -762,7 +764,7 @@ zmieniana na tymczasową i wtedy jest usuwany.
 
 
 @ErrCannotExecute
-$ #Błąd: Nie mogę wykonać#
+$ #Błąd: nie można wykonać#
  Program próbuje wykonać wewnętrzne lub zewnętrzne polecenie,
 uruchomić program lub plik wsadowy.
 
@@ -815,7 +817,12 @@ ponieważ będą zapisane w historii.
  Usuń bieżącą pozycję z historii pola edycji              #Shift+Del#
  (jeżeli nie jest zablokowane)
 
- Przeskocz na domyślny element okna dialogowego                #PgDn#
+ Set the dialog focus to the first element                     #Home#
+
+ Przeskocz na domyślny element okna dialogowego           #PgDn, End#
+
+ The #Home# and #End# keys move the focus if it is currently not
+on a control which handles these keys internally, like edit control.
 
  Poniższe kombinacje klawiszy są dostępne dla wszystkich pól edycji
 za wyjątkiem wiersza poleceń, włączając okna dialogowe i ~wewnętrzny edytor~@Editor@.
@@ -858,7 +865,7 @@ $ #Polecenia specjalne#
 
 
 @MsWheel
-$ #Myszka: Obsługa rolki#
+$ #Myszka: obsługa rolki#
  #Panele#
  Obracanie rolki przewija listę plików bez zmiany pozycji kursora na ekranie.
  Wciśnięcie #środkowego przycisku# działa tak samo jak klawisz #Enter#.
@@ -1071,7 +1078,7 @@ lub użyć ~skrótów klawiszowych~@KeyRef@.
 
 
 @FilePanel
-$ #Panele: Panel plików#
+$ #Panele: panel plików#
  Panel plików wyświetla bieżący folder. Można zaznaczać lub odznaczać
 pliki lub foldery, przeprowadzać różne operacje na plikach i archiwach.
 Przeczytaj ~Skróty klawiszowe~@KeyRef@, aby sprawdzić listę poleceń.
@@ -1117,7 +1124,7 @@ plików po pierwszej literze jego nazwy.
 
 
 @TreePanel
-$ #Panele: Drzewo plików#
+$ #Panele: drzewo plików#
  Panel drzewa wyświetla strukturę folderu bieżącego dysku jako drzewo.
 Wewnątrz drzewa można szybko zmieniać foldery lub przeprowadzać operacje na folderach.
 
@@ -1140,7 +1147,7 @@ tego samego poziomu.
 
 
 @InfoPanel
-$ #Panele: Panel informacyjny#
+$ #Panele: panel informacyjny#
  Panel informacyjny zawiera następujące dane:
 
  1. ^<wrap>#Sieciowa# nazwa komputera i bieżący użytkownik (zobacz ~Ustawienia panelu informacyjnego~@InfoPanelSettings@).
@@ -1292,7 +1299,7 @@ Obsługiwane typy: CD-ROM, CD-RW, CD-RW/DVD, DVD-ROM, DVD-RW i DVD-RAM.
 
 
 @QViewPanel
-$ #Panele: Szybki podgląd#
+$ #Panele: szybki podgląd#
  Panel szybkiego podglądu jest używany do pokazania informacji o wybranej
 pozycji z ~panelu plików~@FilePanel@ lub ~panelu drzewa~@TreePanel@.
 
@@ -1320,7 +1327,7 @@ Bieżący tryb - far:config #Panel.ShowBytes# (domyślnie=fałsz).
 
 
 @DragAndDrop
-$ #Kopiowanie: Przeciąganie plików#
+$ #Kopiowanie: przeciąganie plików#
  Istnieje możliwość przeprowadzenia #Kopiowania# i #Przenoszenia# plików
 używając #przeciągania (drag and drop)#. Wystarczy nacisnąć lewy przycisk
 myszy na pliku źródłowym, przeciągnąć go do drugiego panelu i zwolnić przycisk.
@@ -1358,7 +1365,7 @@ do menu pasywnego panelu.
 
 
 @LeftRightMenu
-$ #Menu: Lewe i prawe menu#
+$ #Menu: lewe i prawe menu#
  #Lewe# i #Prawe# menu pozwalają na zmianę odpowiednio lewego i prawego panelu.
 Menu zawiera następujące pozycje:
 
@@ -1403,7 +1410,7 @@ datę ostatniego zapisu, daty utworzenia i ostatniego użycia, atrybuty. Tryb pe
 
 
 @FilesMenu
-$ #Menu: Menu pliki#
+$ #Menu: menu pliki#
  #Podgląd#            ~Podgląd plików~@Viewer@, zliczanie wielkości folderów.
 
  #Edytuj#             ~Edytuje~@Editor@ pliki.
@@ -1452,7 +1459,7 @@ na nazwę tymczasową.
 
 
 @CmdMenu
-$ #Menu: Menu polecenia#
+$ #Menu: menu polecenia#
  #Znajdź plik#          Wyszukuje pliki w drzewie folderów,
                       mogą być używane maski.
                       Więcej informacji: ~Znajdź plik~@FindFile@.
@@ -1509,7 +1516,7 @@ $ #Menu: Menu polecenia#
 
 
 @OptMenu
-$ #Menu: Menu opcje#
+$ #Menu: menu opcje#
  #Ustawienia systemowe#  Pokazuje okno ~Ustawień systemowych~@SystemSettings@.
 
  #Ustawienia panelu#     Pokazuje okno ~Ustawień panelu~@PanelSettings@.
@@ -1522,6 +1529,7 @@ $ #Menu: Menu opcje#
 
  #Język programu#        Wybór języka programu i pomocy. Użyj opcji "Zapisz ustawienia",
                        aby zapamiętać wybrany język
+                       Możesz ~dostosować elementy interfesju~@CustomizingUI@ do własnych potrzeb i wymagań.
 
  #Konfiguracja#          Pokazuje okno ~konfiguracji wtyczek~@PluginsConfig@.
  #wtyczek#
@@ -1736,7 +1744,7 @@ gdzie można rozszerzyć zakres szukania i prezentacji wyników wyszukiwania.
 
 
 @FindFileAdvanced
-$ #Znajdź plik: Zaawansowane opcje#
+$ #Znajdź plik: zaawansowane opcje#
  #Szukaj wyłącznie w pierwszych# - dane wpisane w pole #Tekst#
 (lub #Szesnastkowo#) mogą być wyszukiwane nie tylko
 w całym pliku, ale także w podanym zakresie od początku pliku.
@@ -1832,7 +1840,7 @@ wyszukiwania - należy zostawić puste pole "Typy kolumn".
 
 
 @FindFileResult
-$ #Znajdź plik: Sterowanie klawiszami#
+$ #Znajdź plik: sterowanie klawiszami#
  W trakcie ~wyszukiwania~@FindFile@ lub po jego zakończeniu, można użyć
 klawiszy strzałek, aby przewijać listę plików oraz przycisków do wykonania
 czynności.
@@ -2017,7 +2025,7 @@ odpowiednią opcję w ~Ustawieniach systemowych~@SystemSettings@ programu.
 
 
 @HistoryViews
-$ #Historia: Podgląd i edycja plików#
+$ #Historia: podgląd i edycja plików#
  Plik historii zawiera listy plików, które zostały ostatnio otwarte
 do podglądu lub edycji. Po liście można poruszać się za pomocą klawiszy
 kursorów, dodatkowo dostępne są poniższe skróty klawiszowe:
@@ -2057,7 +2065,7 @@ jest zablokowany lub nie jest dostępny zasób zewnętrzny.
 
 
 @HistoryFolders
-$ #Historia: Foldery#
+$ #Historia: foldery#
  Historia folderów pokazuje listę folderów, które zostały odwiedzone. Po liście można
 poruszać się za pomocą klawiszy kursorów, dodatkowo dostępne są poniższe skróty klawiszowe:
 
@@ -2223,7 +2231,7 @@ różnych poleceń do uruchamiania, podglądu i edycji plików z podaną ~maską
 
 
 @FileAssocModify
-$ #Powiązania plików: Edycja#
+$ #Powiązania plików: edycja#
  Far pozwala określić sześć poleceń powiązanych z każdym typem plików
 określonym za pomocą ~maski~@FileMasks@:
 
@@ -2375,7 +2383,7 @@ należy go ująć w cudzysłów, np. #"!"\#
 
 
 @SystemSettings
-$ #Okno ustawień: System#
+$ #Okno ustawień: system#
  #Usuwaj do kosza#
  Włącza usuwanie pliku do Kosza Windows. Operacja usuwania do kosza może być przeprowadzona
 tylko na lokalnych dyskach twardych.
@@ -2457,7 +2465,7 @@ Opcji tej należy używać z uwagą i ostrożnością.
 
 
 @PanelSettings
-$ #Okno ustawień: Panel#
+$ #Okno ustawień: panel#
  #Pokazuj pliki ukryte i systemowe#
  Włącza wyświetlanie plików z atrybutem Ukryty lub Systemowy. Opcję można także przełączyć naciskając #Ctrl+H#.
 
@@ -2532,7 +2540,7 @@ Jeżeli jest wyłączona, to aby zmienić folder w drugim panelu należy nacisn�
 
 
 @InterfSettings
-$ #Okno ustawień: Interfejs#
+$ #Okno ustawień: interfejs#
  #Zegar#
  Pokazuje zegar w prawym górnym rogu okna.
 
@@ -2606,7 +2614,7 @@ Może zawierać dowolny tekst, w tym zmienne systemowe (np. "%USERDOMAIN%\%USERN
 
 
 @DialogSettings
-$ #Okno ustawień: Okna#
+$ #Okno ustawień: okna#
  #Historia w polach#       Zachowaj historię kontrolek edycji niektórych
  #edycyjnych#              okien dialogowych Far. Listę historii poprzednich
                          wpisów można aktywować za pomocą myszki lub skrótów
@@ -2646,7 +2654,7 @@ $ #Ustawienia menu#
 
 
 @CmdlineSettings
-$ #Okno ustawień: Wiersz poleceń#
+$ #Okno ustawień: wiersz poleceń#
  #Trwałe bloki#
  Nie usuwaj zaznaczenia bloku po przesunięciu kursora w wierszu poleceń.
 
@@ -2771,7 +2779,7 @@ znak opisuje jedną zapisaną ścieżkę.
 
 
 @Viewer
-$ #Podgląd: Sterowanie klawiszami#
+$ #Podgląd: sterowanie klawiszami#
  Klawisze nawigacyjne
 
  Zachowanie klawiszy nawigacyjnych zależy od ~trybu podglądu~@ViewerMode@.
@@ -2812,8 +2820,8 @@ bajtów o 16.
  #Shift+F4#           Wybór ~trybu podglądu~@ViewerMode@: #tekstowy#, #hex# (szesnastkowy) lub #źródło#
  #F6#                 Przełącza na ~edytor~@Editor@
  #F7#                 ~Wyszukiwanie~@ViewerSearch@
- #Shift+F7, Spacja#   Kontynuacja szukania
- #Alt+F7#             Kontynuacja szukania w odwrotnym kierunku
+ #Shift+F7, Spacja#   Kontynuuj szukanie w kierunku końca pliku
+ #Alt+F7#             Kontynuuj szukanie w kierunku początku pliku
  #F8#                 Przełączenie pomiędzy stronami kodowymi OEM i ANSI
  #Shift+F8#           Przełączenie strony kodowej za pomocą menu ~Strony kodowe~@CodePagesMenu@
  #Alt+F8#             ~Zmienia bieżącą pozycję~@ViewerGotoPos@
@@ -2849,30 +2857,28 @@ początkowym.
 
  Uwagi:
 
- 1. ^<wrap>Rozpoczęcie pisania otwiera okno ~wyszukiwania~@ViewerSearch@.
-
- 2. ^<wrap>Przeglądarka otwiera pliki z uprawnieniem do usunięcia.
+ 1. ^<wrap>Przeglądarka otwiera pliki z uprawnieniem do usunięcia.
 Jeżeli inny proces próbuje usunąć plik otwarty do poglądu, zostanie
 on usunięty po zamknięciu podglądu. Każda operacja na pliku oczekującym
 na usunięcie zakończy się niepowodzeniem. Jest to cecha systemu operacyjnego
 Windows.
 
- 3. ^<wrap>Maksymalna liczba kolumn wyświetlanych w ~podglądzie~@ViewerMode@ #tekstowym#
+ 2. ^<wrap>Maksymalna liczba kolumn wyświetlanych w ~podglądzie~@ViewerMode@ #tekstowym#
 można skonfigurować w oknie ~ustawieniach podglądu~@ViewerSettings@. Zakres
 zawiera się między 100 a 100.000, domyślnie ustawione jest 10.000. Linie
 dłuższe niż ustawiony zakres zostaną podzielone kilka wierszy, nawet jeżeli
 opcja zawijania wierszy jest wyłączona.
 
- 4. ^<wrap>Far rozpoczyna ~wyszukiwanie~@ViewerSearch@ (#F7#) od początku
+ 3. ^<wrap>Far rozpoczyna ~wyszukiwanie~@ViewerSearch@ (#F7#) od początku
 aktualnie widocznego obszaru.
 
- 5. ^<wrap>Aby automatycznie przewijać plik, który jest dołączany przez inny
+ 4. ^<wrap>Aby automatycznie przewijać plik, który jest dołączany przez inny
 proces (podobnie jak polecenie Linux "tail"), należy przejść na koniec pliku
 (naciśnięcie klawisza #End#).
 
 
 @ViewerMode
-$ #Podgląd: Tryby widoku#
+$ #Podgląd: tryby widoku#
  Podgląd plików może działać w trzech trybach:
 #tekstowy#, #hex# (szesnastkowy) oraz #źródło# (ang. dump). Wybrany tryb
 jest wskazywany za pomocą znaku w górnej linii statusu, na lewo od informacji
@@ -3028,7 +3034,7 @@ o 16 jednocześnie.
 
 
 @ViewerGotoPos
-$ #Podgląd: Idź do wybranej pozycji#
+$ #Podgląd: idź do wybranej pozycji#
  To okno dialogowe umożliwia zmianę pozycji w wewnętrznej przeglądarce.
 
  Można wprowadzić wartość bezwzględną lub procentową w formacie dziesiętnym
@@ -3047,7 +3053,7 @@ Jeżeli wartość zostanie pominięta, to odpowiadający jej parametr nie zostan
 
 
 @ViewerSearch
-$ #Podgląd: Wyszukiwanie#
+$ #Podgląd: wyszukiwanie#
  Do wyszukiwania w ~Podglądzie~@Viewer@ dostępne są następujące tryby i opcje:
 
  #Tekst#
@@ -3064,13 +3070,6 @@ $ #Podgląd: Wyszukiwanie#
  Wprowadzony tekst zostanie odnaleziony tylko wtedy, gdy wystąpi w tekście
 jako cały wyraz.
 
- #Szukaj w odwrotnym kierunku#
- Odwraca kierunek szukania - szuka od końca pliku do początku.
-
- #Wyrażenie regularne#
- Włącza użycie ~Wyrażeń regularnych~@RegExp@ w szukanym tekście.
-Wyszukiwanie wielowierszowe nie jest obsługiwane.
-
  #Wyszukiwanie rozmyte#
  Wyszukiwanie nie będzie rozróżniać diakrytyki (np. #deja# zostanie znalezione w #déjà vu#),
 ligatury będą równoznaczne z odpowiadającym im sekwencjom wieloznakowym (#fluffy# pasuje do #ﬂuﬀy#),
@@ -3078,6 +3077,14 @@ fantazyjne liczby odpowiadającym im cyfrom (#42# pasuje do #④②#), itd.
 
  Należy zwrócić uwagę na rozróżnianie wielkości znaków. Np. #Uber# zostanie odnaleziony w wyrazie
 #Überwald#, ale nie w wyrazie #überwald#. Natomiast #Æther# będzie pasował do #AEther#, ale nie #Aether#.
+
+ #Wyrażenie regularne#
+ Włącza użycie ~Wyrażeń regularnych~@RegExp@ w szukanym tekście.
+Wyszukiwanie wielowierszowe nie jest obsługiwane.
+
+ Przycisk #Znajdź następne# szuka w kierunku końca pliku.
+
+ Przycisk #Znajdź poprzednie# szuka w kierunku początku pliku.
 
 
 @Editor
@@ -3161,8 +3168,8 @@ kodowa ANSI, ale można zmienić to ustawienie w oknie ~Ustawień edytora~@Edito
  #F6#                      Przełącz na ~podgląd~@Viewer@
  #F7#                      ~Szukaj~@EditorSearch@
  #Ctrl+F7#                 ~Zastąp~@EditorSearch@
- #Shift+F7#                Kontynuuje szukanie/zastępowanie
- #Alt+F7#                  Kontynuuje szukanie/zastępowanie "wstecz"
+ #Shift+F7#                Kontynuuje szukanie lub zastępowanie w kierunku końca pliku
+ #Alt+F7#                  Kontynnuje szukanie lub zastępowanie w kierunku początku pliku
  #F8#                      Przełącza strony kodowe OEM/ANSI
  #Shift+F8#                Wybiera stronę kodową
  #Alt+F8#                  ~Przechodzi do~@EditorGotoPos@ podanej linii i kolumny
@@ -3200,7 +3207,7 @@ bieżącą linię i kopiują ją do schowka.
 
 
 @EditorSearch
-$ #Edytor: Szukaj/zastąp#
+$ #Edytor: szukaj/zastąp#
  Następujące opcje są dostępne przy szukaniu lub zastępowaniu w ~edytorze~@Editor@:
 
  #Uwzględniaj wielkość znaków#
@@ -3210,15 +3217,6 @@ odnaleziony jeżeli wyszukiwany będzie wyraz #tekst#).
  #Tylko całe wyrazy#
  Poszukiwany tekst będzie odnaleziony, tylko gdy wprowadzony tekst będzie całym wyrazem.
 
- #Szukaj w odwrotnym kierunku#
- Zmiana kierunku wyszukiwania (od końca pliku w kierunku początku).
-
- #Wyrażenie regularne#
- Traktuje wprowadzone dane jako wyrażenie regularne języka Perl (~wyszukiwanie~@RegExp@
-i ~zastępowanie~@RegExpRepl@).
-Każda linia jest dekodowana osobno, więc wprowadzanie wyrażeń wieloliniowych i znaki łamania
-linii nie zostaną odnalezione.
-
  #Wyszukiwanie rozmyte#
  Wyszukiwanie nie będzie rozróżniać diakrytyki (np. #deja# zostanie znalezione w #déjà vu#),
 ligatury będą równoznaczne z odpowiadającym im sekwencjom wieloznakowym (#fluffy# pasuje do #ﬂuﬀy#),
@@ -3227,14 +3225,24 @@ fantazyjne liczby odpowiadającym im cyfrom (#42# pasuje do #④②#), itd.
  Należy zwrócić uwagę na rozróżnianie wielkości znaków. Np. #Uber# zostanie odnaleziony w wyrazie
 #Überwald#, ale nie w wyrazie #überwald#. Natomiast #Æther# będzie pasował do #AEther#, ale nie #Aether#.
 
+ #Wyrażenie regularne#
+ Traktuje wprowadzone dane jako wyrażenie regularne języka Perl (~wyszukiwanie~@RegExp@
+i ~zastępowanie~@RegExpRepl@).
+Każda linia jest dekodowana osobno, więc wprowadzanie wyrażeń wieloliniowych i znaki łamania
+linii nie zostaną odnalezione.
+
  ~Zachowaj styl~@PreserveStyle@
  Zachowuje styl (wielkość znaków i ograniczniki w kodzie źródłowym) w zastąpionym tekście.
+
+ Przycisk #Znajdź następne# szuka w kierunku końca pliku.
+
+ Przycisk #Znajdź poprzednie# szuka w kierunku początku pliku.
 
  Przycisk #Wszystko# pokaże WSZYSTKIE wystąpienia tekstu w postaci ~menu~@FindAllMenu@.
 
 
 @PreserveStyle
-$ #Edytor: Tryb zastępowania - Zachowaj styl#
+$ #Edytor: tryb zastępowania - zachowaj styl#
  Tryb #"Zachowaj styl"# podczas ~zastępowania~@EditorSearch@ tekstu
 w oknie ~Edytora~@Editor@ zachowuje styl (wielkość znaków, ograniczniki)
 zastępowanego tekstu. Tryb ten może być przydatny podczas edycji kodu źródłowego.
@@ -3383,7 +3391,7 @@ jest zgodna z odnalezionym ciągiem. Na przykład:
 
 
 @FindAllMenu
-$ #Edytor: Menu wszystkich znalezionych wystąpień#
+$ #Edytor: menu wszystkich znalezionych wystąpień#
  Następujące kombinacje klawiszy są dostępne w tym menu:
 
  #F5#
@@ -3392,7 +3400,7 @@ $ #Edytor: Menu wszystkich znalezionych wystąpień#
  #Ctrl+Góra#, #Ctrl+Dół#
  Przewija tekst w edytorze.
 
- #Ctrl+Enter#, #Ctrl+Lewo#, #kliknięcie myszką#
+ #Ctrl+Enter#, #Ctrl+Kliknięcie lewym przyciskiem myszy#
  Przechodzi do pozycji znalezionego tekstu.
 
  #Szary +#
@@ -3406,7 +3414,7 @@ $ #Edytor: Menu wszystkich znalezionych wystąpień#
 
 
 @FileOpenCreate
-$ #Edytor: Otwórz/Utwórz plik#
+$ #Edytor: otwórz/utwórz plik#
  Kombinacja klawiszy #Shift+F4# otwiera istniejący plik lub tworzy
 nowy plik.
 
@@ -3437,7 +3445,7 @@ zawartości pliku.
 
 
 @FileSaveAs
-$ #Edytor: Zapisz plik jako…#
+$ #Edytor: zapisz plik jako…#
  Aby zapisać edytowany plik pod inną nazwą należy nacisnąć klawisze #Shift+F2#
 i podać nową nazwę, stronę kodową i format znaków końca linii.
 
@@ -3466,7 +3474,7 @@ linii (LF), tak jak w systemach UNIX.
 
 
 @EditorGotoPos
-$ #Edytor: Przejdź do podanej linii i znaku#
+$ #Edytor: przejdź do podanej linii i znaku#
  Ta opcja pozwala zmienić pozycję w wewnętrznym edytorze.
 
  Można podać wartość bezwzględną, względną lub procentową - w formacie dziesiętnym
@@ -3483,7 +3491,7 @@ Jeżeli wartość zostanie pominięta, odpowiadający parametr nie zostanie zmie
 
 
 @EditorReload
-$ #Edytor: Przeładowanie pliku#
+$ #Edytor: przeładowanie pliku#
  Far Manager śledzi wszystkie próby wielokrotnego otwierania do edycji pliku,
 który jest aktualnie edytowany. Zasady ponownego wczytania pliku do edycji
 są następujące:
@@ -3509,7 +3517,7 @@ ponownie otwarta w edytorze.
 
 
 @WarnEditorPath
-$ #Ostrzeżenie: Ścieżka do edytowanego pliku nie istnieje#
+$ #Ostrzeżenie: ścieżka do edytowanego pliku nie istnieje#
  Przy otwarciu nowego pliku do ~edycji~@Editor@, została wprowadzona
 nazwa folderu, który nie istnieje. Przed zapisaniem pliku Far utworzy folder,
 pod warunkiem że ścieżka jest poprawna (np. ścieżka rozpoczynająca się z literą
@@ -3518,12 +3526,12 @@ prawa do utworzenia folderu.
 
 
 @WarnEditorPluginName
-$ #Ostrzeżenie: Nazwa pliku do edycji nie może być pusta#
+$ #Ostrzeżenie: nazwa pliku do edycji nie może być pusta#
  Aby utworzyć nowy plik w panelu wtyczek, należy podać nazwę pliku.
 
 
 @WarnEditorSavedEx
-$ #Ostrzeżenie: Plik został zmieniony przez inny program#
+$ #Ostrzeżenie: plik został zmieniony przez inny program#
  Data i czas zapisu pliku na dysku nie jest taka sama, jak zanotowana
 przez Far przy ostatnim dostępie do pliku. Oznacza to, że inny program
 lub inny użytkownik (lub ten sam użytkownik, ale w innej instancji edytora)
@@ -3818,7 +3826,7 @@ na partycjach ReFS począwszy od Windows Server 2012.
 
 
 @ViewerSettings
-$ #Okno ustawień: Podgląd#
+$ #Okno ustawień: podgląd#
  To okno pozwala zmienić ustawienia wewnętrznego i zewnętrznego ~podglądu~@Viewer@.
 
 @=
@@ -3836,9 +3844,6 @@ Można użyć ~symboli specjalnych~@MetaSymbols@ do wpisania nazwy pliku.
 @=
  #Trwałe zaznaczenie#
  Nie usuwaj zaznaczonego bloku po przesunięciu kursora.
-
- #Auto-focus okna szukania#
- Zawsze przywraca fokus do pola tekstowego wyszukiwania w oknie dialogowym ~Szukaj~@ViewerSearch@.
 
  #Rozmiar tabulatora#
  Liczba znaków spacji na pojedynczy znak tabulacji.
@@ -3897,7 +3902,7 @@ zastosowanie tylko do bieżącej sesji.
 
 
 @EditorSettings
-$ #Okno ustawień: Edytor#
+$ #Okno ustawień: edytor#
  To okno pozwala zmienić ustawienia domyślnego zewnętrznego i ~wewnętrznego edytora~@Editor@.
 
 @=
@@ -4652,7 +4657,7 @@ kryteria filtra, pusty folder docelowy #nie# zostanie utworzony.
 
 
 @CopyAskOverwrite
-$ #Kopiowanie: Okno potwierdzenia#
+$ #Kopiowanie: okno potwierdzenia#
  Jeżeli plik o tej samej nazwie istnieje w folderze docelowym, użytkownik
 zostanie poproszony o wybranie jednej z możliwości:
 
@@ -4675,7 +4680,7 @@ przesuwając kursor na ich nazwy w oknie dialogowym i naciskając klawisz F3.
 
 
 @CopyRule
-$ #Kopiowanie: Zasady#
+$ #Kopiowanie: zasady#
  Podczas ~kopiowania/przenoszenia~@CopyFiles@ folderów i/lub
 ~linków symbolicznych~@HardSymLink@ stosowane są następujące zasady:
 
@@ -4765,7 +4770,7 @@ ale można to zmienić w lokalnych ustawieniach bezpieczeństwa.
 
 
 @ErrCopyItSelf
-$ #Błąd: Kopiowanie/przenoszenie na siebie#
+$ #Błąd: kopiowanie/przenoszenie na siebie#
  Nie można kopiować lub przenosić pliku do siebie samego.
 
  Ten błąd może wystąpić, gdy istnieją dwa foldery, a jeden z nich
@@ -4773,7 +4778,7 @@ to ~link symboliczny~@HardSymLink@ do innego.
 
 
 @WarnCopyEncrypt
-$ #Ostrzeżenie: Utrata szyfrowania pliku#
+$ #Ostrzeżenie: utrata szyfrowania pliku#
  Plik źródłowy jest zaszyfrowany. Kopiowanie lub przenoszenie poza bieżący dysk
 jest możliwe, jeżeli dysk docelowy będzie odszyfrowany.
 
@@ -4785,7 +4790,7 @@ wewnętrzny, bez względu na ustawienie opcji "Używaj systemowej procedury kopi
 
 
 @WarnCopyStream
-$ #Ostrzeżenie: Kopiowanie lub przenoszenie pliku z wieloma strumieniami#
+$ #Ostrzeżenie: kopiowanie lub przenoszenie pliku z wieloma strumieniami#
  Plik źródłowy zawiera więcej niż jeden strumień danych lub plik docelowy
 nie obsługuje plików z wieloma strumieniami.
 
@@ -4806,7 +4811,7 @@ główny.
 
 
 @ErrLoadPlugin
-$ #Błąd: Wtyczka nie załadowana#
+$ #Błąd: wtyczka nie załadowana#
  Ten komunikat o błędzie może pojawić się w następujących przypadkach:
 
  1. ^<wrap>Do poprawnego działania wtyczki jest wymagana biblioteka dołączana dynamicznie,
@@ -5544,7 +5549,7 @@ $ #Makropolecenia: okno pomocy#
 
 
 @KeyMacroOtherList
-$ #Makropolecenia: Inne obszary#
+$ #Makropolecenia: inne obszary#
  Następujące makropolecenia są dostępne w innych obszarach: zrzuty ekranu, menu pionowe.
 
 <!Macro:Common!>
@@ -5584,6 +5589,43 @@ $ #Informacja o wersji#
  - wersję i kompilację Far Manager;
  - wersję dodatkowych bibliotek użytych w projekcie;
  - nazwy i wersje aktywnych wtyczek.
+
+
+@CustomizingUI
+$ #Dostosowywanie elementów interfejsu#
+ Wszystkie elementy interfejsu użytkownika zdefiniowane są w plikach #.lng#
+(np. #FarPol.lng#). Możesz dostosować te elementy do własnych upodobań.
+Np. możesz zmienić skróty klawiszowe lub etykiety w określonych oknach
+dialogowych. Aby zastąpić elementy interfejsu należy utworzyć plik o nazwie
+#Far<Jęz>.lng.custom# (np. #FarPol.lng.custom#) w folderze #%FARHOME%#
+lub #%FARPROFILE%# i utworzyć nowe wartości dla tych identyfikatorów
+interfejsu użytkownika, które chcesz zmienić.
+
+ Dla przykładu, aby typy odnośników do systemu plików w panelu Far
+wyglądały tak jak w poleceniu DIR, należy utworzyć plik #FarPol.lng.custom#
+w folderze #%FARPROFILE%# z następującą zawartością:
+
+@-
+ \0A┌────────────────────────────┐\-
+ \0A│\30│ │UTF-8│Lin 1/7│Kol 1│20:35\0A│\-
+ \0A│\1b//[MListUp]                 \0A│\-
+ \0A│\1b"..↑"                       \0A│\-
+ \0A│\1b                            \0A│\-
+ \0A│\1bMListFolder   = "<DIR>"     \0A│\-
+ \0A│\1bMListSymlink  = "<SYMLINK>" \0A│\-
+ \0A│\1bMListJunction = "<JUNCTION>"\0A│\-
+ \0A│\071\30Pomoc \07 2\30Zapisz\07 3\30      \07 \30    \0A│\-
+ \0A└────────────────────────────┘\-
+@+
+
+ Możesz podać zastępcze elementy interfejsu na dwa sposoby - w jednej
+lub w dwóch liniach. Nowa wartość zawsze musi być ujęta w podwójnych
+znakach cudzysłowowa. Identyfikatory elementów do zmiany można znaleźć
+w oryginalnym pliku #Far<Jęz>.lng#
+
+ Jeżeli dostosowany plik językowy znajduje się w obu folderach,
+to plik z folderu #%FARPROFILE%# ma pierwszeństwo przed plikiem
+z folderu #%FARHOME%#.
 
 
 @FarConfig

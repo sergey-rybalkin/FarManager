@@ -43,6 +43,10 @@
 <?define Guid.RestoreOldPluginSettings.cmd = "4D9EA960-3B1E-4863-AFE3-546899A7C228" ?>
 <?define Guid.SaveOldPluginSettings.cmd = "35434FDB-2080-4442-895E-450D06A4CF3D" ?>
 
+<?define Guid.Far.VisualElementsManifest.xml = "F225BC93-46F4-4D21-B363-3B16DBC8FD9E" ?>
+<?define Guid.VisualElements.large.png = "C523D276-BC8C-48C8-919B-D59B01CB56C1" ?>
+<?define Guid.VisualElements.small.png = "0FED8C62-FB5A-4C1E-9476-EEBC71E46001" ?>
+
 <?define Guid.Descript.ion_1 = "2DA521F1-F2F6-4C10-A436-AA157172F88D" ?>
 <?define Guid.README.TXT_1 = "AA293D7D-E310-41BD-BDF6-6AEA8E791BF2" ?>
 <?define Guid.Descript.ion_3 = "DB61ACFB-A946-49A2-B120-85D4096F4B01" ?>
@@ -74,6 +78,7 @@
 <?define Guid.nc5pal2.farconfig_1 = "E78402C1-1A50-4A50-874B-3CF56BCAF93A" ?>
 <?define Guid.Rodion_Doroshkevich.farconfig_1 = "BDF97489-CD8E-48A4-B15E-55D720B357F9" ?>
 <?define Guid.VaxColors.farconfig_1 = "588D5E71-4AB3-43FA-806E-C866FB992F59" ?>
+<?define Guid.black_and_white.farconfig_2 = "C4FDE6E3-8A09-4E0A-B3F4-CE969A76D929" ?>
 <?define Guid.black_from_Fonarev.farconfig_2 = "AAAC8FD4-897D-4F49-85DC-3117EEFA4485" ?>
 <?define Guid.black_from_july.farconfig_2 = "37583031-F663-4669-82DE-CDB21F8A251B" ?>
 <?define Guid.black_from_Myodov.farconfig_2 = "0808DF91-D816-45A5-994B-7CC3EF461BBD" ?>
@@ -132,6 +137,7 @@
 <?define Guid.View.PgDn.lua = "FB10928A-15AA-43A5-A4D0-8492F6376B72" ?>
 <?define Guid.View.ShiftInsSearch.lua = "5C4AD9EF-1080-4159-892F-8D0EB90AA48A" ?>
 <?define Guid.View.Space.lua = "BD6A2D3D-D42C-42AE-9A47-7B94AD82F5BC" ?>
+<?define Guid.View.TypeToSearch.lua = "D551A72D-1429-4055-B89A-AE6258F63E1B" ?>
 <?define Guid.WheelScreenSwitch.lua = "AEE8AF3C-B032-480D-94BC-D0C1AF851EF7" ?>
 <?define Guid.Editor.ColorWord.moon = "7910F123-8FB0-46FF-B79F-D49A58924984" ?>
 <?define Guid.Default165.farconfig = "1B08A0A2-7B66-4313-9731-1EFA4DA76E96" ?>
@@ -495,6 +501,7 @@
 <?define Guid.ProcHun.hlf = "17187AA3-7041-4F1F-920C-55ECF78262A8" ?>
 <?define Guid.ProcHun.lng = "6B4941E2-D4D6-461A-BB2C-B9C64D1B08C3" ?>
 <?define Guid.ProcLit.lng = "C52B7EFC-3B7A-4831-A4D8-A4EE0C8F798D" ?>
+<?define Guid.ProcSpa.lng = "F30446B3-7D07-4AE8-8943-1C3D3C87413B" ?>
 
 <?define Guid.changelog_17 = "F1119D4B-401C-416C-BE8D-0FB7E7F5DE6A" ?>
 <?define Guid.disks.eng.temp = "342C4454-A24C-4C77-ABFE-3FD95F62AEFD" ?>

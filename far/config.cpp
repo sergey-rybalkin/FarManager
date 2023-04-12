@@ -236,9 +236,9 @@ void Options::PanelSettings()
 
 	auto& AutoUpdateEnabled = Builder.AddCheckbox(lng::MConfigAutoUpdateLimit, AutoUpdate);
 	auto& AutoUpdateLimitItem = Builder.AddIntEditField(AutoUpdateLimit, 6);
-	AutoUpdateLimitItem.Indent(4);
 	Builder.LinkFlags(AutoUpdateEnabled, AutoUpdateLimitItem, DIF_DISABLE, false);
 	Builder.AddTextBefore(AutoUpdateLimitItem, lng::MConfigAutoUpdateLimit2).Indent(4);
+	AutoUpdateLimitItem.Indent(4);
 	Builder.AddCheckbox(lng::MConfigAutoUpdateRemoteDrive, AutoUpdateRemoteDrive);
 
 	Builder.AddSeparator();
@@ -817,7 +817,6 @@ void Options::ViewerConfig(ViewerOptions &ViOptRef, bool Local)
 
 	Builder.StartColumns();
 	Builder.AddCheckbox(lng::MViewConfigPersistentSelection, ViOptRef.PersistentBlocks);
-	Builder.AddCheckbox(lng::MViewConfigEditAutofocus, ViOptRef.SearchEditFocus);
 	const auto& TabSize = Builder.AddIntEditField(ViOptRef.TabSize, 3);
 	Builder.AddTextAfter(TabSize, lng::MViewConfigTabSize);
 	Builder.ColumnBreak();
@@ -2101,7 +2100,6 @@ void Options::InitConfigsData()
 		{FSSF_PRIVATE,           NKeyViewer,                 L"SaveViewerShortPos"sv,            ViOpt.SaveShortPos, true},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"SaveViewerWrapMode"sv,            ViOpt.SaveWrapMode, false},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"SaveViewMode"sv,                  ViOpt.SaveViewMode, true},
-		{FSSF_PRIVATE,           NKeyViewer,                 L"SearchEditFocus"sv,               ViOpt.SearchEditFocus, false},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"SearchRegexp"sv,                  ViOpt.SearchRegexp, false},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"SearchWrapStop"sv,                ViOpt.SearchWrapStop, BSTATE_CHECKED},
 		{FSSF_PRIVATE,           NKeyViewer,                 L"ShowArrows"sv,                    ViOpt.ShowArrows, true},

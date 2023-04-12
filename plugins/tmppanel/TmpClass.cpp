@@ -229,6 +229,7 @@ bool TmpPanel::PutOneFile(const string& SrcPath, const PluginPanelItem& PanelIte
 		NewStr = concat(SrcPath, SrcPath.back() == L'\\'? L""sv : L"\\"sv, PanelItem.FileName);
 
 	NewItem.FileName = NewStr.c_str();
+	NewItem.AlternateFileName = {};
 	NewItem.Owner = m_Panel->OwnerData.emplace_back(NullToEmpty(NewItem.Owner)).c_str();
 	NewItem.UserData.Data = reinterpret_cast<void*>(m_Panel->Items.size() - 1);
 
@@ -389,7 +390,7 @@ void TmpPanel::UpdateItems(const bool ShowOwners, const bool ShowLinks)
 	{
 		const string_view FullName(CurItem->FileName);
 		const auto SlashPos = FullName.rfind(L'\\');
-		const auto Dir = FullName.substr(0, SlashPos == FullName.npos? 0 : SlashPos);
+		const auto Dir = FullName.substr(0, SlashPos == FullName.npos? 0 : SlashPos + 1);
 		size_t SameFolderItems = 1;
 
 		/* $ 23.12.2001 DJ
@@ -537,8 +538,10 @@ bool TmpPanel::ProcessKey(const INPUT_RECORD* Rec)
 
 	const auto Key = Rec->Event.KeyEvent.wVirtualKeyCode;
 	const auto ControlState = Rec->Event.KeyEvent.dwControlKeyState;
+	bool isAltShift = ControlState == (SHIFT_PRESSED | LEFT_ALT_PRESSED) || ControlState == (SHIFT_PRESSED | RIGHT_ALT_PRESSED);
+	bool isCtrl = ControlState == LEFT_CTRL_PRESSED || ControlState == RIGHT_CTRL_PRESSED;
 
-	if (ControlState == (SHIFT_PRESSED | LEFT_ALT_PRESSED) && Key == VK_F3)
+	if (isAltShift && Key == VK_F3)
 	{
 		if (const auto CurFileName = IsCurrentFileCorrect(); !CurFileName.empty())
 		{
@@ -569,7 +572,7 @@ bool TmpPanel::ProcessKey(const INPUT_RECORD* Rec)
 		}
 	}
 
-	if (ControlState != LEFT_CTRL_PRESSED && Key >= VK_F3 && Key <= VK_F8 && Key != VK_F7)
+	if (!isCtrl && Key >= VK_F3 && Key <= VK_F8 && Key != VK_F7)
 	{
 		if (IsCurrentFileCorrect().empty())
 			return true;
@@ -584,7 +587,7 @@ bool TmpPanel::ProcessKey(const INPUT_RECORD* Rec)
 		}
 	}
 
-	if (Opt.SafeModePanel && ControlState == LEFT_CTRL_PRESSED && Key == VK_PRIOR)
+	if (Opt.SafeModePanel && isCtrl && Key == VK_PRIOR)
 	{
 		if (const auto CurFileName = IsCurrentFileCorrect(); !CurFileName.empty())
 		{
@@ -602,14 +605,14 @@ bool TmpPanel::ProcessKey(const INPUT_RECORD* Rec)
 		ProcessRemoveKey();
 		return true;
 	}
-	else if (ControlState == (SHIFT_PRESSED | LEFT_ALT_PRESSED) && Key == VK_F2)
+	else if (isAltShift && Key == VK_F2)
 	{
 		ProcessSaveListKey();
 		return true;
 	}
 	else
 	{
-		if (Opt.CommonPanel && ControlState == (SHIFT_PRESSED | LEFT_ALT_PRESSED))
+		if (Opt.CommonPanel && isAltShift)
 		{
 			if (Key == VK_F12)
 			{

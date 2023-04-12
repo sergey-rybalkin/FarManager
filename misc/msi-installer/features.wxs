@@ -11,6 +11,9 @@
       <ComponentRef Id="File_id.diz" />
       <ComponentRef Id="RestoreOldPluginSettings.cmd" />
       <ComponentRef Id="SaveOldPluginSettings.cmd" />
+      <ComponentRef Id="Far.VisualElementsManifest.xml" />
+      <ComponentRef Id="VisualElements.large.png" />
+      <ComponentRef Id="VisualElements.small.png" />
       <Feature Id="Addons" Level="1" Title="!(loc.Feature.Title.Addons)" AllowAdvertise="no" Description="!(loc.Feature.Description.Addons)">
         <ComponentRef Id="Descript.ion_1" />
         <ComponentRef Id="README.TXT_1" />
@@ -44,6 +47,7 @@
           <ComponentRef Id="nc5pal2.farconfig_1" />
           <ComponentRef Id="Rodion_Doroshkevich.farconfig_1" />
           <ComponentRef Id="VaxColors.farconfig_1" />
+          <ComponentRef Id="black_and_white.farconfig_2" />
           <ComponentRef Id="black_from_Fonarev.farconfig_2" />
           <ComponentRef Id="black_from_july.farconfig_2" />
           <ComponentRef Id="black_from_Myodov.farconfig_2" />
@@ -104,6 +108,7 @@
           <ComponentRef Id="View.PgDn.lua" />
           <ComponentRef Id="View.ShiftInsSearch.lua" />
           <ComponentRef Id="View.Space.lua" />
+          <ComponentRef Id="View.TypeToSearch.lua" />
           <ComponentRef Id="WheelScreenSwitch.lua" />
           <ComponentRef Id="Editor.ColorWord.moon" />
         </Feature>
@@ -984,6 +989,9 @@
           </Feature>
           <Feature Id="Proclist.Lithuanian" Level="1" Display="hidden" AllowAdvertise="no">
             <ComponentRef Id="ProcLit.lng" />
+          </Feature>
+          <Feature Id="Proclist.Spanish" Level="1" Display="hidden" AllowAdvertise="no">
+            <ComponentRef Id="ProcSpa.lng" />
           </Feature>
           <Feature Id="Proclist.MapFiles" Level="1" Display="hidden" AllowAdvertise="no">
             <ComponentRef Id="ProcList.map" />

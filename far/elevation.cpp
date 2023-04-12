@@ -289,7 +289,7 @@ T elevation::RetrieveLastErrorAndResult() const
 template<typename T, typename F1, typename F2>
 auto elevation::execute(lng Why, string_view const Object, T Fallback, const F1& PrivilegedHander, const F2& ElevatedHandler)
 {
-	SCOPED_ACTION(std::lock_guard)(m_CS);
+	SCOPED_ACTION(std::scoped_lock)(m_CS);
 	if (!ElevationApproveDlg(Why, Object))
 		return Fallback;
 
@@ -430,7 +430,7 @@ static os::handle create_elevated_process(const string& Parameters)
 	SHELLEXECUTEINFO info
 	{
 		sizeof(info),
-		SEE_MASK_FLAG_NO_UI | SEE_MASK_UNICODE | SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
+		SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
 		nullptr,
 		L"runas",
 		Global->g_strFarModuleName.c_str(),
@@ -649,7 +649,7 @@ bool elevation::ElevationApproveDlg(lng const Why, string_view const Object)
 		if(!Global->IsMainThread())
 		{
 			os::event SyncEvent(os::event::type::automatic, os::event::state::nonsignaled);
-			listener const Listener([&SyncEvent](const std::any& Payload)
+			listener const Listener(listener::scope{L"Elevation"sv}, [&SyncEvent](const std::any& Payload)
 			{
 				ElevationApproveDlgSync(*std::any_cast<EAData*>(Payload));
 				SyncEvent.set();
@@ -1052,9 +1052,9 @@ public:
 			SE_CREATE_SYMBOLIC_LINK_NAME
 		};
 
-		const auto OptinalPrivilegesCount = 2; // Backup, restore
+		const auto OptionalPrivilegesCount = 2; // Backup, restore
 
-		SCOPED_ACTION(os::security::privilege)((span(Privileges)).subspan(UsePrivileges? 0 : OptinalPrivilegesCount));
+		SCOPED_ACTION(os::security::privilege)((span(Privileges)).subspan(UsePrivileges? 0 : OptionalPrivilegesCount));
 
 		const auto PipeName = concat(L"\\\\.\\pipe\\"sv, Uuid);
 		WaitNamedPipe(PipeName.c_str(), NMPWAIT_WAIT_FOREVER);
@@ -1107,11 +1107,6 @@ private:
 		void* UserData;
 		std::exception_ptr ExceptionPtr;
 	};
-
-	void Write(const void* Data, size_t DataSize) const
-	{
-		pipe::write(m_Pipe, Data, DataSize);
-	}
 
 	template<typename T>
 	T Read() const
@@ -1356,9 +1351,9 @@ private:
 		return cpp_try(
 		[&]
 		{
-			const auto Context = Param->Owner;
+			const auto& Context = *Param->Owner;
 
-			Context->Write(
+			Context.Write(
 				CallbackMagic,
 				TotalFileSize,
 				TotalBytesTransferred,
@@ -1371,13 +1366,13 @@ private:
 
 			for (;;)
 			{
-				const auto Result = Context->Read<int>();
+				const auto Result = Context.Read<int>();
 				if (Result == CallbackMagic)
 				{
-					return Context->Read<int>();
+					return Context.Read<int>();
 				}
 				// nested call from ProgressRoutine()
-				Context->Process(Result);
+				Context.Process(Result);
 			}
 		},
 		[&]
@@ -1424,7 +1419,7 @@ private:
 		}
 		catch (...)
 		{
-			LOGERROR(L"Unknown exception"sv);
+			LOGERROR(L"{}"sv, unknown_exception);
 			return false;
 		}
 	}

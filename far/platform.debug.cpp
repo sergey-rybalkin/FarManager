@@ -41,6 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 #include "map_file.hpp"
 #include "pathmix.hpp"
+#include "string_utils.hpp"
 
 // Platform:
 #include "platform.env.hpp"
@@ -101,6 +102,60 @@ namespace os::debug
 			return {};
 
 		return Name.get();
+	}
+
+	static void** dummy_current_exception(NTSTATUS const Code)
+	{
+		static EXCEPTION_RECORD DummyRecord{};
+
+		DummyRecord.ExceptionCode = static_cast<DWORD>(Code);
+		DummyRecord.ExceptionFlags = EXCEPTION_NONCONTINUABLE;
+
+		static void* DummyRecordPtr = &DummyRecord;
+		return &DummyRecordPtr;
+	}
+
+	static void** dummy_current_exception_context()
+	{
+		static CONTEXT DummyContext{};
+		static void* DummyContextPtr = &DummyContext;
+		return &DummyContextPtr;
+	}
+
+#if IS_MICROSOFT_SDK()
+	extern "C" void** __current_exception();
+	extern "C" void** __current_exception_context();
+#else
+	static void** __current_exception()
+	{
+		return dummy_current_exception(EH_EXCEPTION_NUMBER);
+	}
+
+	static void** __current_exception_context()
+	{
+		return dummy_current_exception_context();
+	}
+#endif
+
+	EXCEPTION_POINTERS exception_information()
+	{
+		if (!std::current_exception())
+			return {};
+
+		return
+		{
+			static_cast<EXCEPTION_RECORD*>(*__current_exception()),
+			static_cast<CONTEXT*>(*__current_exception_context())
+		};
+	}
+
+	EXCEPTION_POINTERS fake_exception_information(unsigned const Code)
+	{
+		return
+		{
+			static_cast<EXCEPTION_RECORD*>(*dummy_current_exception(Code)),
+			static_cast<CONTEXT*>(*dummy_current_exception_context())
+		};
 	}
 
 	std::vector<stack_frame> current_stacktrace(size_t const FramesToSkip, size_t const FramesToCapture)
@@ -281,6 +336,15 @@ namespace os::debug
 		return Result;
 	}
 
+	std::vector<stack_frame> exception_stacktrace()
+	{
+		if (!std::current_exception())
+			return {};
+
+		const auto ExceptionInformation = exception_information();
+		return stacktrace(*ExceptionInformation.ContextRecord, GetCurrentThread());
+	}
+
 	bool is_inline_frame(DWORD const InlineContext)
 	{
 		INLINE_FRAME_CONTEXT const frameContext{ InlineContext };
@@ -368,6 +432,9 @@ namespace os::debug::symbols
 					Buffer = encoding::ansi::get_chars(Event.desc);
 					Message = Buffer;
 				}
+
+				while (IsEol(Message.back()))
+					Message.remove_suffix(1);
 
 				LOG(Level, L"{}"sv, Message);
 				return true;

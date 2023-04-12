@@ -142,7 +142,6 @@ public:
 	void AutoDeleteColors();
 	int GetId() const { return EditorID; }
 
-	static void SetReplaceMode(bool Mode);
 	static eol GetDefaultEOL();
 
 	struct EditorUndoData;
@@ -209,7 +208,6 @@ private:
 	void Down();
 	void ScrollDown();
 	void ScrollUp();
-	bool Search(bool Next);
 	void GoToLine(size_t Line);
 	void GoToLineAndShow(size_t Line);
 	void GoToPosition();
@@ -288,6 +286,12 @@ private:
 	void SwapState(Editor& swap_state);
 	bool ProcessKeyInternal(const Manager::Key& Key, bool& Refresh);
 
+	enum class SearchReplaceDisposition;
+	SearchReplaceDisposition ShowSearchReplaceDialog(bool ReplaceMode);
+	void DoSearchReplace(SearchReplaceDisposition Disposition);
+	int CalculateSearchStartPosition(bool Continue, bool Backward, bool Regex) const;
+	int CalculateSearchNextPositionInTheLine(bool Backward, bool Regex) const;
+
 	template<class F>
 	void UpdateIteratorAndKeepPos(numbered_iterator& Iter, const F& Func);
 
@@ -360,8 +364,8 @@ private:
 	bool NewSessionPos{};
 	std::vector<char> decoded;
 	numbered_iterator m_FoundLine{ EndIterator() };
-	int m_FoundPos{};
-	int m_FoundSize{};
+	int m_FoundPos{ -1 };
+	int m_FoundSize{ -1 };
 	std::unordered_set<Edit*> m_AutoDeletedColors;
 	struct
 	{
@@ -381,8 +385,10 @@ private:
 	Options::EditorOptions EdOpt;
 	int Pasting{};
 	int XX2{}; //scrollbar
-	string strLastSearchStr;
-	SearchReplaceDlgOptions LastSearchDlgOptions;
+
+	SearchReplaceDlgParams LastSearchDlgParams;
+	bool IsReplaceMode{};
+	bool IsReplaceAll{};
 
 	int EditorID{};
 	int EditorControlLock{};

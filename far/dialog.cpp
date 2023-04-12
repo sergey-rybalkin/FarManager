@@ -861,10 +861,6 @@ void Dialog::InitDialogObjects(size_t ID)
 
 			if (Item.Type == DI_FIXEDIT)
 			{
-				//   DIF_HISTORY имеет более высокий приоритет, чем DIF_MASKEDIT
-				if (Item.Flags & DIF_HISTORY)
-					Item.Flags &= ~DIF_MASKEDIT;
-
 				// если DI_FIXEDIT, то курсор сразу ставится на замену...
 				//   ай-ай - было недокументировано :-)
 				DialogEdit->SetMaxLength(Item.X2 - Item.X1 + 1);
@@ -6106,4 +6102,28 @@ Dialog::suppress_redraw::suppress_redraw(Dialog* Dlg):
 Dialog::suppress_redraw::~suppress_redraw()
 {
 	m_Dlg->SendMessage(DM_ENABLEREDRAW, 1, nullptr);
+}
+
+string_view get_dialog_item_text(Dialog* const Dlg, int const Id)
+{
+	FarDialogItemData Item{ sizeof(Item) };
+	Dlg->SendMessage(DM_GETTEXT, Id, &Item);
+
+	return
+	{
+		reinterpret_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, Id, {})),
+		Item.PtrLength
+	};
+}
+
+void set_dialog_item_text(Dialog* const Dlg, int const Id, string_view const Text)
+{
+	FarDialogItemData Item
+	{
+		sizeof(Item),
+		Text.size(),
+		const_cast<wchar_t*>(Text.data())
+	};
+
+	Dlg->SendMessage(DM_SETTEXT, Id, &Item);
 }
