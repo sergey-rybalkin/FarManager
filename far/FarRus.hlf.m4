@@ -47,9 +47,9 @@
 
 @Contents
 $^#Программа управления файлами и архивами#
-`$^#'FULLVERSION`#'
+$^#M4_MACRO_GET(FULLVERSION)#
 $^#Copyright © 1996-2000 Eugene Roshal#
-`$^#Copyright © 2000-'COPYRIGHTYEAR` Far Group#'
+$^#Copyright © 2000-M4_MACRO_GET(COPYRIGHTYEAR) Far Group#
  ~Индекс файла помощи~@Index@
  ~Как пользоваться помощью~@Help@
 
@@ -325,8 +325,35 @@ $ #Клавиатурные команды#
 $ #Команды управления меню#
  #Общие команды для меню и выпадающих списков#
 
- Фильтровать элементы меню или списка               #Ctrl+Alt+F,RAlt#
- Зафиксировать фильтр                                    #Ctrl+Alt+L#
+ #Ctrl+Alt+F,RAlt#
+ Фильтровать элементы меню или списка.
+
+ #Ctrl+Alt+L#
+ Зафиксировать фильтр.
+
+ #Alt+Left#, #Alt+Right#
+ Сдвинуть все элементы горизонтально на одну позицию.
+
+ #Alt+Shift+Left#, #Alt+Shift+Right#
+ Сдвинуть выбранный элемент горизонтально на одну позицию.
+
+ #Ctrl+Alt+Left#, #Ctrl+Alt+Right#
+ Сдвинуть все элементы горизонтально на 20 позиций.
+
+ #Ctrl+Shift+Left#, #Ctrl+Shift+Right#
+ Сдвинуть выбранный элемент горизонтально на 20 позиций.
+
+ #Alt+Home#
+ Выравнять все элементы налево.
+
+ #Alt+End#
+ Выравнять все элементы направо.
+
+ #Alt+Shift+Home#
+ Выравнять выбранный элемент налево.
+
+ #Alt+Shift+End#
+ Выравнять выбранный элемент направо.
 
  См. также список ~макроклавиш~@KeyMacroMenuList@, доступных в меню.
 
@@ -2317,6 +2344,7 @@ $ #Настройка ассоциации файлов#
 позволяют сделать ассоциации более "умными" - если вы назначили несколько
 ассоциаций для одного типа файлов, то в меню попадут только те ассоциации,
 у которых условия будут выполняться.
+ 3. ^<wrap>If the specified mask is a regular expression, its capturing groups can be referenced in the commands as %RegexGroup#N# or %RegexGroup{#Name#}.
 
 
 @MetaSymbols
@@ -3453,8 +3481,8 @@ $ #Редактор: Меню результатов поиска всех вх�
  #F5#
  Переключить размер меню.
 
-#Ctrl+Up#, #Ctrl+Down#
-Прокручивать текст в редакторе.
+ #Ctrl+Up#, #Ctrl+Down#
+ Прокручивать текст в редакторе.
 
  #Ctrl+Enter#, #Ctrl+Щелчок левой кнопки мыши#
  Перейти к позиции найденного текста.
@@ -3468,6 +3496,7 @@ $ #Редактор: Меню результатов поиска всех вх�
  #ЛевыйCtrl+0…9#
  Перейти к позиции закладки 0…9.
 
+ См. также: клавиатурные команды, общие ~для всех меню~@MenuCmd@.
 
 @FileOpenCreate
 $ #Редактор: Открыть/создать файл#
@@ -4434,7 +4463,10 @@ $ #Color Picker#
  - one of the 16 million colors from the RGB color space.
 
  The standard 16-color palette is available in the dialog.
- To access the ~256-color palette~@ColorPicker256@ and the RGB color space use the corresponding buttons.
+ To access the ~256-color palette~@ColorPicker256@ and the ~RGB color space~@ColorPickerRGB@ use the corresponding buttons.
+
+ #Default# is the color used by your terminal when no colors are specified explicitly, e.g. \(800000:800000) C:\> \-.
+ Usually it is one of the palette colors, e.g. \(7:0)silver on black\-, but not necessarily: some terminals could handle it differently, e.g. render as translucent.
 
  The color value is also represented in the hexadecimal form for convenience, where:
  - #AA______# - the alpha channel, representing the degree of transparency from fully transparent (00) to fully opaque (FF).
@@ -4445,6 +4477,18 @@ $ #Color Picker#
 
  The foreground text style can include ANSI/VT100-like attributes listed in the right section.
  When #Inherit# is checked, the previous foreground text style in the logical Z-order is taken into account.
+
+ Default:   \(7:0) Example \-
+ Bold:      \(7:0:bold) Example \-
+ Italic:    \(7:0:italic) Example \-
+ Underline: \(7:0:underline) Example \-
+ Double:    \(7:0:underline2) Example \-
+ Overline:  \(7:0:overline) Example \-
+ Strikeout: \(7:0:strikeout) Example \-
+ Faint:     \(7:0:faint) Example \-
+ Blink:     \(7:0:blink) Example \-
+ Inverse:   \(7:0:inverse) Example \-
+ Invisible: \(7:0:invisible) Example \-
 
  The preview section below displays the final result.
 
@@ -4485,6 +4529,21 @@ $ #256 Color Picker#
  The last 24 colors are usually defined as a grayscale ramp.
 
  \(:E8)  \(:E9)  \(:EA)  \(:EB)  \(:EC)  \(:ED)  \(:EE)  \(:EF)  \(:F0)  \(:F1)  \(:F2)  \(:F3)  \(:F4)  \(:F5)  \(:F6)  \(:F7)  \(:F8)  \(:F9)  \(:FA)  \(:FB)  \(:FC)  \(:FD)  \(:FE)  \(:FF)  \-
+
+
+@ColorPickerRGB
+$ #RGB Color Picker#
+ This dialog allows to pick a color from the RGB color space.
+
+ The 16 777 216 RGB colors are represented as a 16x16x16 hypercube.
+
+ Use the buttons on the right to rotate the cube, access its inner levels or mix the primary colors directly.
+
+ Each of the 4096 cells in the hypercube represents a 16x16x16 cube with RGB colors. To switch between the cubes use the #↔# button.
+
+ The #«# button allows to save the selected color to the custom palette for quick access.
+
+ The #System# button opens the system RGB color picker.
 
 
 @SortGroups
@@ -6508,7 +6567,7 @@ $ #far:config System.MsWheelDelta* & System.MsHWheelDelta*#
  System.MsHWheelDeltaEdit - во встроенном редакторе
  System.MsHWheelDelta     - в прочих областях
 
- Значение по умолчанию: 1 (для всех параметров).
+ Значение по умолчанию для всех параметров: 0 (использовать системные настройки).
 
  Примечание: Поворот или наклон колёсика при нажатой клавише #Alt#
 всегда прокручивает на одну строку или один знак.

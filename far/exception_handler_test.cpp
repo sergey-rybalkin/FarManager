@@ -48,6 +48,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 // Platform:
 #include "platform.concurrency.hpp"
 #include "platform.debug.hpp"
+#include "platform.memory.hpp"
 
 // Common:
 #include "common/preprocessor.hpp"
@@ -225,7 +226,7 @@ namespace tests
 		}
 		catch (far_exception const&)
 		{
-			UNREACHABLE;
+			std::unreachable();
 		}
 	}
 
@@ -290,10 +291,13 @@ namespace tests
 #endif
 	}
 
+WARNING_PUSH()
+WARNING_DISABLE_CLANG("-Wmissing-noreturn")
 	static void cpp_assertion_failure()
 	{
 		assert(true == false);
 	}
+WARNING_POP()
 
 	static void seh_access_violation_read()
 	{
@@ -326,6 +330,15 @@ namespace tests
 		using func_t = void(*)();
 
 		volatile const func_t InvalidAddress = nullptr;
+		InvalidAddress();
+	}
+
+	static void seh_access_violation_ex_np()
+	{
+		using func_t = void(*)();
+
+		volatile const func_t InvalidAddress = reinterpret_cast<func_t>(1);
+		assert(!os::memory::is_pointer(reinterpret_cast<void const*>(InvalidAddress)));
 		InvalidAddress();
 	}
 
@@ -503,7 +516,7 @@ namespace tests
 	WARNING_DISABLE_CLANG("-Wmissing-noreturn")
 	static void debug_reach_unreachable()
 	{
-		UNREACHABLE;
+		std::unreachable();
 	}
 	WARNING_POP()
 
@@ -608,6 +621,7 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::seh_access_violation_write,   L"SEH access violation (write)"sv },
 		{ tests::seh_access_violation_ex_nx,   L"SEH access violation (execute NX)"sv },
 		{ tests::seh_access_violation_ex_nul,  L"SEH access violation (execute nullptr)"sv },
+		{ tests::seh_access_violation_ex_np,   L"SEH access violation (execute non-ptr)"sv },
 		{ tests::seh_access_violation_bad,     L"SEH access violation (malformed)"sv },
 		{ tests::seh_in_page_error,            L"SEH in page error"sv },
 		{ tests::seh_divide_by_zero,           L"SEH divide by zero"sv },

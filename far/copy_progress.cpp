@@ -97,9 +97,9 @@ copy_progress::copy_progress(bool Move, bool Total, bool Time):
 		{ DI_TEXT,      {{ 0, 0 }, { 0,               0 }}, DIF_HIDDEN,    {}, },
 		{ DI_DOUBLEBOX, {{ 3, 1 }, { DlgW - 4, DlgH - 2 }}, DIF_NONE,      msg(m_Move? lng::MMoveDlgTitle : lng::MCopyDlgTitle), },
 		{ DI_TEXT,      {{ 5, 2 }, { DlgW - 6,        2 }}, DIF_NONE,      msg(m_Move? lng::MCopyMoving :lng::MCopyCopying), },
-		{ DI_TEXT,      {{ 5, 3 }, { DlgW - 6,        3 }}, DIF_NONE,      {}, },
+		{ DI_TEXT,      {{ 5, 3 }, { DlgW - 6,        3 }}, DIF_SHOWAMPERSAND, {}, },
 		{ DI_TEXT,      {{ 5, 4 }, { DlgW - 6,        4 }}, DIF_NONE,      msg(lng::MCopyTo), },
-		{ DI_TEXT,      {{ 5, 5 }, { DlgW - 6,        5 }}, DIF_NONE,      {}, },
+		{ DI_TEXT,      {{ 5, 5 }, { DlgW - 6,        5 }}, DIF_SHOWAMPERSAND, {}, },
 		{ DI_TEXT,      {{ 5, 6 }, { DlgW - 6,        6 }}, DIF_NONE,      make_progressbar(CanvasWidth(), 0, true, false) },
 		{ DI_TEXT,      {{-1, 7 }, { DlgW - 6,        7 }}, DIF_SEPARATOR, msg(lng::MCopyDlgTotal), },
 		{ DI_TEXT,      {{ 5, 8 }, { DlgW - 6,        8 }}, DIF_NONE,      {}, },
@@ -139,10 +139,10 @@ size_t copy_progress::CanvasWidth()
 	return DlgW - 10;
 }
 
-void copy_progress::skip()
+void copy_progress::skip(unsigned long long const Size)
 {
 	m_BytesTotal.Copied -= m_BytesCurrent.Copied;
-	m_BytesTotal.Total -= m_BytesCurrent.Total;
+	m_BytesTotal.Total -= m_BytesCurrent.Total? m_BytesCurrent.Total : Size;
 
 	m_BytesCurrent = {};
 
@@ -216,6 +216,12 @@ void copy_progress::Flush()
 
 	const auto CurrentProgress = make_progressbar(m_CurrentBarSize, m_CurrentPercent, true, !m_Total);
 	m_Dialog->SendMessage(DM_SETTEXTPTR, progress_items::pr_current_progress, UNSAFE_CSTR(CurrentProgress));
+
+	if (m_FilesLastRendered != m_Files)
+	{
+		m_FilesCopied = FormatCounter(lng::MCopyFilesTotalInfo, lng::MCopyBytesTotalInfo, m_Files.Copied, m_Files.Total, m_Total, CanvasWidth() - 5);
+		m_FilesLastRendered = m_Files;
+	}
 
 	m_Dialog->SendMessage(DM_SETTEXTPTR, progress_items::pr_total_files, UNSAFE_CSTR(m_FilesCopied));
 
@@ -319,7 +325,6 @@ void copy_progress::SetNames(const string_view Src, const string_view Dst)
 	const auto NameWidth = static_cast<int>(CanvasWidth());
 	m_Src = truncate_path(Src, NameWidth);
 	m_Dst = truncate_path(Dst, NameWidth);
-	m_FilesCopied = FormatCounter(lng::MCopyFilesTotalInfo, lng::MCopyBytesTotalInfo, m_Files.Copied, m_Files.Total, m_Total, CanvasWidth() - 5);
 
 	set_current_total(0);
 	set_current_copied(0);

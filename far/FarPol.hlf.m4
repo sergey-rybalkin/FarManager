@@ -47,9 +47,9 @@
 
 @Contents
 $^#Menedżer plików i archiwów#
-`$^#'FULLVERSION`#'
+$^#M4_MACRO_GET(FULLVERSION)#
 $^#Copyright © 1996-2000 Eugene Roshal#
-`$^#Copyright © 2000-'COPYRIGHTYEAR` Far Group#'
+$^#Copyright © 2000-M4_MACRO_GET(COPYRIGHTYEAR) Far Group#
  ~Indeks pomocy~@Index@
  ~Jak używać pomocy~@Help@
 
@@ -314,8 +314,35 @@ $ #Skróty klawiszowe#
 $ #Polecenia kontroli menu#
  #Ułatwienia w standardowym menu i listach rozwijanych#
 
- Menu filtru lub pozycje listy                      #Ctrl+Alt+F,RAlt#
- Zablokuj filtr                                          #Ctrl+Alt+L#
+ #Ctrl+Alt+F#, #RAlt#
+ Menu filtru lub pozycje listy.
+
+ #Ctrl+Alt+L#
+ Zablokuj filtr.
+
+ #Alt+Left#, #Alt+Right#, #MsWheelLeft#, #MsWheelRight#
+ Przewija wszystkie elementy w poziomie.
+
+ #Alt+Shift+Left#, #Alt+Shift+Right#
+ Przewija zaznaczone elementy w poziomie.
+
+ #Ctrl+Alt+Left#, #Ctrl+Alt+Right#, #Ctrl+MsWheelLeft#, #Ctrl+MsWheelRight#
+ Przewija wszystkie elementy w poziomie o 20 znaków.
+
+ #Ctrl+Shift+Left#, #Ctrl+Shift+Right#
+ Przewija zaznaczone elementy w poziomie o 20 znaków.
+
+ #Alt+Home#
+ Wyrównuje wszystkie elementy do lewej.
+
+ #Alt+End#
+ Wyrównuje wszystkie elementy do prawej.
+
+ #Alt+Shift+Home#
+ Wyrównuje zaznaczone elementy do lewej.
+
+ #Alt+Shift+End#
+ Wyrównuje zaznaczone elementy do prawej.
 
  Zobacz także listę ~klawiszy makropoleceń~@KeyMacroMenuList@, dostępnych w menu.
 
@@ -817,12 +844,13 @@ ponieważ będą zapisane w historii.
  Usuń bieżącą pozycję z historii pola edycji              #Shift+Del#
  (jeżeli nie jest zablokowane)
 
- Set the dialog focus to the first element                     #Home#
+ Ustaw fokus okna dialogowego na pierwszy element              #Home#
 
  Przeskocz na domyślny element okna dialogowego           #PgDn, End#
 
- The #Home# and #End# keys move the focus if it is currently not
-on a control which handles these keys internally, like edit control.
+ Klawisze #Home# i #End# przenoszą fokus, jeżeli nie jest on aktualnie
+na kontrolce, która obsługuje te klawisze wewnętznie, np. kontrolka
+edycji.
 
  Poniższe kombinacje klawiszy są dostępne dla wszystkich pól edycji
 za wyjątkiem wiersza poleceń, włączając okna dialogowe i ~wewnętrzny edytor~@Editor@.
@@ -2267,6 +2295,7 @@ będzie włączona, Far spróbuje do uruchomienia użyć przypisania z systemu W
 oraz "IF DEFINED" (jeżeli zdefiniowano) pozwalają na skonfigurowanie "inteligentniejszych"
 powiązań - jeżeli ustawiono kilka powiązań do danego typu pliku, menu zostanie
 wyświetlone tylko dla powiązań, których warunki zostaną spełnione (wartość TRUE).
+ 3. ^<wrap>If the specified mask is a regular expression, its capturing groups can be referenced in the commands as %RegexGroup#N# or %RegexGroup{#Name#}.
 
 
 @MetaSymbols
@@ -3412,6 +3441,8 @@ $ #Edytor: menu wszystkich znalezionych wystąpień#
  #LewyCtrl+0…9#
  Przechodzi do zakładki 0…9.
 
+ Zobacz także: polecenia ~menu~@MenuCmd@.
+
 
 @FileOpenCreate
 $ #Edytor: otwórz/utwórz plik#
@@ -4373,7 +4404,10 @@ $ #Wybór kolorów#
  - jednym z 16 milionów kolorów z przestrzeni barw RGB.
 
  Standardowa 16-kolorowa paleta jest dostępna w oknie dialogowym.
- Aby skorzystać z ~256-kolorowej palety~@ColorPicker256@ i przestrzeni barw RGB należy użyć odpowiednich przycisków.
+ Aby skorzystać z ~256-kolorowej palety~@ColorPicker256@ i ~przestrzeni barw RGB~@ColorPickerRGB@ należy użyć odpowiednich przycisków.
+
+ #Default# is the color used by your terminal when no colors are specified explicitly, e.g. \(800000:800000) C:\> \-.
+ Usually it is one of the palette colors, e.g. \(7:0)silver on black\-, but not necessarily: some terminals could handle it differently, e.g. render as translucent.
 
  Wartość kolorów jest także przedstawiania w postaci szesnastkowej, gdzie:
  - #AA______# - kanał alfa, oznaczający stopień przezroczystości od pełnej przejrzystości (00) do pełnego koloru (FF).
@@ -4385,6 +4419,18 @@ $ #Wybór kolorów#
  Styl tekstu pierwszoplanowego może zawierać atrybuty podobne do ANSI/VT100 wymienione po prawej stronie.
  Jeżeli opcja #Dziedziczenie# jest zaznaczona, uwzględniany jest poprzedni styl tekstu pierwszoplanowego
  w logicznym porządku Z.
+
+ Default:   \(7:0) Example \-
+ Bold:      \(7:0:bold) Example \-
+ Italic:    \(7:0:italic) Example \-
+ Underline: \(7:0:underline) Example \-
+ Double:    \(7:0:underline2) Example \-
+ Overline:  \(7:0:overline) Example \-
+ Strikeout: \(7:0:strikeout) Example \-
+ Faint:     \(7:0:faint) Example \-
+ Blink:     \(7:0:blink) Example \-
+ Inverse:   \(7:0:inverse) Example \-
+ Invisible: \(7:0:invisible) Example \-
 
  W sekcji podglądu (poniżej opcji) wyświetlany jest wynik końcowy.
 
@@ -4425,6 +4471,21 @@ $ #Wybór z 256 kolorów#
  Ostatnie 24 kolory zwykle zdefiniowane są jako skala szarości.
 
  \(:E8)  \(:E9)  \(:EA)  \(:EB)  \(:EC)  \(:ED)  \(:EE)  \(:EF)  \(:F0)  \(:F1)  \(:F2)  \(:F3)  \(:F4)  \(:F5)  \(:F6)  \(:F7)  \(:F8)  \(:F9)  \(:FA)  \(:FB)  \(:FC)  \(:FD)  \(:FE)  \(:FF)  \-
+
+
+@ColorPickerRGB
+$ #RGB Color Picker#
+ This dialog allows to pick a color from the RGB color space.
+
+ The 16 777 216 RGB colors are represented as a 16x16x16 hypercube.
+
+ Use the buttons on the right to rotate the cube, access its inner levels or mix the primary colors directly.
+
+ Each of the 4096 cells in the hypercube represents a 16x16x16 cube with RGB colors. To switch between the cubes use the #↔# button.
+
+ The #«# button allows to save the selected color to the custom palette for quick access.
+
+ The #System# button opens the system RGB color picker.
 
 
 @SortGroups
@@ -6416,7 +6477,7 @@ obrócić rolkę o jeden przeskok w pionie:
  System.MsHWheelDeltaEdit - w wewnętrznym Edytorze
  System.MsHWheelDelta     - w innych obszarach
 
- Domyślna wartość: 1 (dla wszystkich parametrów).
+ Domyślna wartość: dla wszystkich parametrów: 0 (używa ustawień systemowych).
 
  Uwaga: Rolowanie lub przechylanie rolki myszki przy wciśniętym
 klawiszu #Alt# zawsze przewija o jedną linię lub jeden znak na raz.

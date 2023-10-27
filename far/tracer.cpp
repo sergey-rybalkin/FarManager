@@ -40,8 +40,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Platform:
 #include "platform.fs.hpp"
+#include "platform.memory.hpp"
 
 // Common:
+#include "common.hpp"
 #include "common/string_utils.hpp"
 
 // External:
@@ -62,13 +64,17 @@ static auto format_address(uintptr_t const Value)
 		width_in_hex_chars<decltype(Value)> :
 		width_in_hex_chars<uint32_t>;
 
-	return format(FSTR(L"{:0{}X}"sv), Value, Width);
+	return far::format(L"{:0{}X}"sv, Value, Width);
 }
 
-static auto format_symbol(string_view const ImageName, os::debug::symbols::symbol const Symbol)
+static auto format_symbol(uintptr_t const Address, string_view const ImageName, os::debug::symbols::symbol const Symbol)
 {
-	return format(
-		FSTR(L"{}!{}{}"sv),
+	// If it's not a legit pointer, it's likely a member of a struct at nullptr or something like that, no point in suggesting PDBs.
+	if (ImageName.empty() && Symbol.Name.empty() && !os::memory::is_pointer(ToPtr(Address)))
+		return L""s;
+
+	return far::format(
+		L"{}!{}{}"sv,
 		!ImageName.empty()?
 			PointToName(ImageName):
 			L"<unknown>"sv,
@@ -76,7 +82,7 @@ static auto format_symbol(string_view const ImageName, os::debug::symbols::symbo
 			Symbol.Name :
 			L"<unknown> (get the pdb)"sv,
 		!Symbol.Name.empty()?
-			format(FSTR(L"+0x{:X}"sv), Symbol.Displacement) :
+			far::format(L"+0x{:X}"sv, Symbol.Displacement) :
 			L""s
 	);
 }
@@ -84,7 +90,7 @@ static auto format_symbol(string_view const ImageName, os::debug::symbols::symbo
 static auto format_location(os::debug::symbols::location const Location)
 {
 	return !Location.FileName.empty()?
-		concat(Location.FileName, Location.Line? format(FSTR(L"({})"sv), *Location.Line) : L""s) :
+		concat(Location.FileName, Location.Line? far::format(L"({})"sv, *Location.Line) : L""s) :
 		L""s;
 }
 
@@ -105,9 +111,10 @@ void tracer_detail::tracer::get_symbols(string_view const Module, span<os::debug
 
 		if (Address)
 		{
-			append(Result, InlineFrame? L" I "sv : L"   "sv, format_symbol(ImageName, Symbol));
-			const auto LocationStr = format_location(Location);
-			if (!LocationStr.empty())
+			if (const auto FormattedSymbol = format_symbol(Address, ImageName, Symbol); !FormattedSymbol.empty())
+				append(Result, InlineFrame? L" I "sv : L"   "sv, FormattedSymbol);
+
+			if (const auto LocationStr = format_location(Location); !LocationStr.empty())
 				append(Result, L" ("sv, LocationStr, L')');
 		}
 
@@ -127,7 +134,7 @@ void tracer_detail::tracer::get_symbol(string_view const Module, const void* Ptr
 
 		if (Address)
 		{
-			Name = format_symbol(ImageName, Symbol);
+			Name = format_symbol(Address, ImageName, Symbol);
 			Source = format_location(Location);
 		}
 		else
@@ -163,7 +170,7 @@ void tracer_detail::tracer::current_stacktrace(string_view Module, function_ref<
 {
 	SCOPED_ACTION(with_symbols)(Module);
 
-	return get_symbols(Module, os::debug::current_stacktrace(FramesToSkip, FramesToCapture), Consumer);
+	return get_symbols(Module, os::debug::current_stacktrace(FramesToSkip + 1, FramesToCapture), Consumer);
 }
 
 void tracer_detail::tracer::stacktrace(string_view Module, function_ref<void(string&& Line)> const Consumer, CONTEXT const ContextRecord, HANDLE const ThreadHandle) const

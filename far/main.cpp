@@ -161,11 +161,6 @@ static int MainProcess(
 	int StartChar
 )
 {
-		FarColor InitAttributes;
-		if (!console.GetTextAttributes(InitAttributes))
-			InitAttributes = colors::NtColorToFarColor(F_LIGHTGRAY | B_BLACK);
-		SetRealColor(colors::PaletteColorToFarColor(COL_COMMANDLINEUSERSCREEN));
-
 		string ename(EditName),vname(ViewName), apanel(DestName1),ppanel(DestName2);
 		if (ConfigProvider().ShowProblems())
 		{
@@ -319,9 +314,6 @@ static int MainProcess(
 
 		TreeList::FlushCache();
 
-		// очистим за собой!
-		SetScreen({ 0, 0, ScrX, ScrY }, L' ', colors::PaletteColorToFarColor(COL_COMMANDLINEUSERSCREEN));
-		console.SetTextAttributes(InitAttributes);
 		Global->ScrBuf->ResetLockCount();
 		Global->ScrBuf->Flush();
 
@@ -476,18 +468,6 @@ static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const A
 	return {};
 }
 
-static void UpdateErrorMode()
-{
-	Global->ErrorMode |= SEM_NOGPFAULTERRORBOX;
-
-	if (ConfigProvider().GeneralCfg()->GetValue<bool>(L"System.Exception"sv, L"IgnoreDataAlignmentFaults"sv))
-	{
-		Global->ErrorMode |= SEM_NOALIGNMENTFAULTEXCEPT;
-	}
-
-	os::set_error_mode(Global->ErrorMode);
-}
-
 [[noreturn]]
 static void handle_exception(function_ref<bool()> const Handler)
 {
@@ -516,7 +496,7 @@ static void log_hook_wow64_status()
 		{
 			if (const auto LdrLoadDll = GetProcAddress(NtDll, "LdrLoadDll"))
 			{
-				const auto FunctionData = view_as<std::byte const*>(LdrLoadDll);
+				const auto FunctionData = view_as<std::byte const*>(reinterpret_cast<void const*>(LdrLoadDll));
 				LOGWARNING(L"LdrLoadDll: {}"sv, BlobToHexString({ FunctionData, 32 }));
 			}
 		}
@@ -548,7 +528,7 @@ struct args_context
 [[noreturn]]
 static void invalid_argument(string_view const Argument, string_view const Str)
 {
-	throw MAKE_FAR_KNOWN_EXCEPTION(format(FSTR(L"Error processing \"{}\": {}"sv), Argument, Str));
+	throw MAKE_FAR_KNOWN_EXCEPTION(far::format(L"Error processing \"{}\": {}"sv, Argument, Str));
 }
 
 namespace args
@@ -813,11 +793,14 @@ static int mainImpl(span<const wchar_t* const> const Args)
 {
 	setlocale(LC_ALL, "");
 
+	if (FarColor InitAttributes; console.GetTextAttributes(InitAttributes))
+		colors::store_default_color(InitAttributes);
+
+	SCOPE_EXIT{ console.SetTextAttributes(colors::default_color()); };
+
 	SCOPED_ACTION(global);
 
 	std::optional<elevation::suppress> NoElevationDuringBoot(std::in_place);
-
-	os::set_error_mode(Global->ErrorMode);
 
 	RegisterTestExceptionsHook();
 
@@ -851,7 +834,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	if (const auto Result = ProcessServiceModes(Args))
 		return *Result;
 
-	SCOPED_ACTION(listener)(update_environment, &ReloadEnvironment);
+	SCOPED_ACTION(listener)(update_environment, [] { if (Global->Opt->UpdateEnvironment) ReloadEnvironment(); });
 	SCOPED_ACTION(listener)(update_intl, [] { locale.invalidate(); });
 	SCOPED_ACTION(listener)(update_devices, &UpdateSavedDrives);
 
@@ -924,8 +907,6 @@ static int mainImpl(span<const wchar_t* const> const Args)
 	if (!Global->Opt->LoadPlug.strCustomPluginsPath.empty())
 		Global->Opt->LoadPlug.strCustomPluginsPath = full_path_expanded(Global->Opt->LoadPlug.strCustomPluginsPath);
 
-	UpdateErrorMode();
-
 	ControlObject CtrlObj;
 	Global->CtrlObject = &CtrlObj;
 
@@ -991,6 +972,8 @@ static void handle_exception_final(function_ref<bool()> const Handler)
 
 static int wmain_seh()
 {
+	os::set_error_mode(SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX | SEM_NOALIGNMENTFAULTEXCEPT | SEM_NOGPFAULTERRORBOX);
+
 	// wmain is a non-standard extension and not available in gcc.
 	int Argc = 0;
 	const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));

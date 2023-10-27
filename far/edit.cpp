@@ -145,23 +145,18 @@ void Edit::DisplayObject()
 	   при DropDownBox курсор выключаем
 	   не знаю даже - попробовал но не очень красиво вышло */
 	if (m_Flags.Check(FEDITLINE_DROPDOWNBOX))
-		::SetCursorType(false, 10);
+		HideCursor();
 	else
 	{
-		if (m_Flags.Check(FEDITLINE_OVERTYPE))
+		::SetCursorType(true, [this]
 		{
-			const auto NewCursorSize = IsConsoleFullscreen()?
-			                  (Global->Opt->CursorSize[3]? static_cast<int>(Global->Opt->CursorSize[3]) : 99):
-			                  (Global->Opt->CursorSize[2]? static_cast<int>(Global->Opt->CursorSize[2]) : 99);
-			::SetCursorType(true, GetCursorSize() == -1?NewCursorSize:GetCursorSize());
-		}
-		else
-		{
-			const auto NewCursorSize = IsConsoleFullscreen()?
-			                  (Global->Opt->CursorSize[1]? static_cast<int>(Global->Opt->CursorSize[1]) : 10):
-			                  (Global->Opt->CursorSize[0]? static_cast<int>(Global->Opt->CursorSize[0]) : 10);
-			::SetCursorType(true, GetCursorSize() == -1?NewCursorSize:GetCursorSize());
-		}
+			if (const auto Size = GetCursorSize(); Size != -1)
+				return Size;
+
+			const auto FullScreenShift = IsConsoleFullscreen()? 1 : 0;
+			const auto OvertypeShift = m_Flags.Check(FEDITLINE_OVERTYPE)? 2 : 0;
+			return static_cast<int>(Global->Opt->CursorSize[FullScreenShift + OvertypeShift]);
+		}());
 	}
 
 	MoveCursor({ m_Where.left + GetLineCursorPos() - LeftPos, m_Where.top });
@@ -1611,7 +1606,7 @@ void Edit::SetString(string_view Str, bool const KeepSelection)
 			{
 				bool goLoop = false;
 
-				if (j < Str.size() && CharInMask(Str[j], Mask[m_CurPos]))
+				if (CharInMask(Str[j], Mask[m_CurPos]))
 					InsertKey(Str[j]);
 				else
 					goLoop = true;
@@ -1794,7 +1789,7 @@ bool Edit::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 
 		if (
 			CurrentTime - PrevDoubleClick <= std::chrono::milliseconds(GetDoubleClickTime()) &&
-			MouseEvent->dwEventFlags != MOUSE_MOVED &&
+			IsMouseButtonEvent(MouseEvent->dwEventFlags) &&
 			PrevPosition == MouseEvent->dwMousePosition
 		)
 		{

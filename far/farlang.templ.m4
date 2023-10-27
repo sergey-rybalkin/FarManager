@@ -59,7 +59,7 @@ enum:class lng:int
 
 
 MYes
-`l://Version: 'FULLVERSION`
+l:// Version: M4_MACRO_GET(FULLVERSION)
 l:
 "Да"
 "Yes"
@@ -441,7 +441,7 @@ l:// Panels: functional keys
 "Ayuda"
 "Pomoc"
 "Aiuto"
-"Допомг"
+"Допомога"
 "Дапамога"
 "Pagalb"
 
@@ -455,7 +455,7 @@ MF2
 "Menú"
 "Menu"
 "MenuUt"
-"КорисМ"
+"СвоєМеню"
 "Карыст. меню"
 "Meniu"
 
@@ -469,7 +469,7 @@ MF3
 "Ver"
 "Zobraz"
 "Vista"
-"Перегл"
+"Перегляд"
 "Глядзець"
 "Žiūrėt"
 
@@ -483,7 +483,7 @@ MF4
 "Editar"
 "Uprav"
 "Edita"
-"Редаг"
+"Редагув"
 "Меняць"
 "Redag"
 
@@ -511,7 +511,7 @@ MF6
 "RenMov"
 "Premen"
 "RinSpo"
-"Перем"
+"Перейм"
 "Перанесці"
 "Perkel"
 
@@ -525,7 +525,7 @@ MF7
 "CrDIR"
 "VytvAd"
 "FaiDir"
-"Папка"
+"СтвПапку"
 "Каталог"
 "Katal"
 
@@ -539,7 +539,7 @@ MF8
 "Borrar"
 "Zmazať"
 "Elimin"
-"Видал"
+"Видалити"
 "Выдаліць"
 "Trinti"
 
@@ -610,7 +610,7 @@ l:
 "Añadir"
 "Spakov"
 "Compri"
-"Додав."
+"Додати"
 "Дадаць"
 "Supak"
 
@@ -680,7 +680,7 @@ MShiftF6
 "RenMov"
 "Premen"
 "Rinomi"
-"Перейм"
+"Переймен"
 "Пераназваць"
 "Pervad"
 
@@ -708,7 +708,7 @@ MShiftF8
 "Borrar"
 "Zmazať"
 "Elimin"
-"Видал."
+"Видалити"
 "Выдаліць"
 "Trinti"
 
@@ -736,7 +736,7 @@ MShiftF10
 "Ultimo"
 "Posled"
 "Ultimo"
-"Остан."
+"Останн"
 "Апошні"
 "Paskut"
 
@@ -1278,7 +1278,7 @@ MAltShiftF12
 
 MCtrlShiftF1
 l:
-l://Main CtrlShift
+l:// Main CtrlShift
 ""
 ""
 ""
@@ -2248,7 +2248,7 @@ MConfigAutoSave
 "Auto&guardar configuración"
 "Automaticky ukladať &nastavenia"
 "Salvataggio A&utomatico Impostazioni"
-"Автозапис кон&фігурації"
+"Автозбереження кон&фігурації"
 "А&ўтазапіс наладаў"
 "&Automatiškai išsaugoti nustatymus"
 
@@ -2714,7 +2714,7 @@ MConfigClock
 "&Hodiny"
 "&Orologio"
 "&Годинник"
-"Гадзіннік"
+"&Гадзіннік"
 "&Laikrodis"
 
 MConfigMouse
@@ -2741,7 +2741,7 @@ MConfigKeyBar
 "Mostrar barra de &funciones"
 "Zobrazovať tlačidlá &funkčných klávesov"
 "Mostra &Tasti Funzione"
-"Показувати &лінійку клавіш"
+"Показувати &рядок клавіш"
 "Адлюстроўваць радок к&лавішаў"
 "Rodyti &funkcinių klavišų juostą"
 
@@ -2783,7 +2783,7 @@ MConfigSaverMinutes
 "minutos"
 "minút"
 "Mi&nuti"
-"хв."
+"хвилин"
 "хвілін"
 "minutės"
 
@@ -2867,7 +2867,7 @@ upd:"Fullwidth-aware rendering"
 "R&enderizar ancho completo"
 upd:"Fullwidth-aware rendering"
 upd:"Fullwidth-aware rendering"
-upd:"Fullwidth-aware rendering"
+upd:"Рендерінг з урахуванням повної ширини"
 "Візуалізацыя з улікам поўнай шырыні"
 upd:"Fullwidth-aware rendering"
 
@@ -2881,7 +2881,7 @@ upd:"ClearType-friendly redraw (can be slow)"
 "Limpiar rediseño (puede ser lento)"
 "Použiť &ClearType (pomalšie)"
 "Modalità ClearT&ype (può rallentare)"
-"Перемальовка з підтримкою ClearType (може бути повільною)"
+"Рендерінг з підтримкою ClearType (може бути повільною)"
 "Перамалёўка з падтрымкай ClearType (можа быць марудным)"
 upd:"Cl&earType-friendly redraw (can be slow)"
 
@@ -2922,7 +2922,7 @@ upd:"Far window title addons:"
 "Okno tytułowe &Far:"
 "Título de ventana de Far:"
 "Doplnky názvu okna &Far:"
-"Opzioni Barra Della &Finestra Far"
+"Opzioni Barra Della &Finestra Far:"
 "Додаткова інформація для заголовка вікна:"
 "Дадатковая даведка для на&звы акна:"
 upd:"Far &window title addons:"
@@ -2952,7 +2952,7 @@ MConfigDialogsEditHistory
 "&Historial en controles de diálogo de edición"
 "H&istória v dialógoch"
 "Cronologia Dei &Dati Inseriti"
-"&Історія в рядках введення діалогів"
+"&Історія в полях введення діалогів"
 "Г&історыя ў радках уводу гутаркі"
 "Dialogų teksto &istorija"
 
@@ -2966,7 +2966,7 @@ MConfigDialogsEditBlock
 "&Bloques persistentes en controles de edición"
 "&Trvalé bloky v editačných poliach"
 "Blocchi Persistenti Nei Controlli"
-"&Постійні блоки в рядках введення"
+"&Постійні блоки в полях введення"
 "&Сталыя блокі ў радках уводу"
 upd:"&Persistent blocks in edit controls"
 
@@ -2980,7 +2980,7 @@ MConfigDialogsDelRemovesBlocks
 "&Del remueve bloques en controles de edición"
 "&Del vymaže položky v editačných poliach"
 "&Canc Elimina Blocchi Nei Controlli"
-"Del видаляє б&локи в рядках введення"
+"Del видаляє б&локи в полях введення"
 "Del выдаляе б&локі ў радках уводу"
 upd:"&Del removes blocks in edit controls"
 
@@ -2994,7 +2994,7 @@ MConfigDialogsAutoComplete
 "Autocompl&etar en controles de edición"
 "Automatické dokončovanie v editač&ných poliach"
 "Usa Autocompletamento Dove Possibile"
-"&Автозавершення в рядках введення"
+"&Автозавершення в полях введення"
 "С&амазавяршэнне ў радках уводу"
 upd:"&AutoComplete in edit controls"
 
@@ -3022,7 +3022,7 @@ MConfigDialogsMouseButton
 "Clic de ratón fuera del diálogo, lo cierra"
 "Kl&iknutie myšou mimo dialógového okna ho zavrie"
 "Chiudi &Finestra Se Clicchi Fuori Col Mouse"
-"Клац миші поза діалогом закриває діалог"
+"Клік миші поза діалогом закриває діалог"
 "Пстрычка мышы за межамі гутаркі зачыне гутарку"
 upd:"Mouse click &outside a dialog closes it"
 
@@ -3051,7 +3051,7 @@ upd:"Left mouse click outside a menu"
 "Clic izquierdo de ratón fuera de menú"
 "Kliknutie ľavým tlačidlom myši mimo menu"
 "Tasto Sinistro Clicca Fuori Menu"
-"Клац лівої кнопки миші поза меню"
+"Клік лівої кнопки миші поза меню"
 "Пстрычка левай кнопкі мышы за межамі меню"
 upd:"&Left mouse click outside a menu"
 
@@ -3065,7 +3065,7 @@ upd:"Right mouse click outside a menu"
 "Clic derecho de ratón fuera de menú"
 "Kliknutie pravým tlačidlom myši mimo menu"
 "Tasto Destro Clicca Fuori Menu"
-"Клац правої кнопки миші поза меню"
+"Клік правої кнопки миші поза меню"
 "Пстрычка правай кнопкі мышы за межамі меню"
 upd:"&Right mouse click outside a menu"
 
@@ -3079,7 +3079,7 @@ upd:"Middle mouse click outside a menu"
 "Clic medio de ratón fuera de menú"
 "Kliknutie prostredným tlačidlom myši mimo menu"
 "Tasto Centrale Clicca Fuori Menu"
-"Клац середньої кнопки миші поза меню"
+"Клік середньої кнопки миші поза меню"
 "Пстрычка сярэдняй кнопкі мышы за межамі меню"
 upd:"&Middle mouse click outside a menu"
 
@@ -3093,7 +3093,7 @@ upd:"Cancel menu"
 "Cancelar menú"
 "Zrušiť menu"
 "Annulla Menu"
-"Закрити зі скасуванням"
+"Скасувати та закрити"
 "Закрыць з адменай"
 upd:"Cancel menu"
 
@@ -3164,7 +3164,7 @@ upd:"Del removes blocks"
 "&Del remueve bloques"
 "Del vymaže bloky"
 "&Canc Elimina Blocchi"
-"Del видаляє б&локи"
+"Del видаляє виділені б&локи"
 "Del выдаляе б&локі"
 upd:"&Del removes blocks"
 
@@ -3280,7 +3280,7 @@ upd:"&Append the first matched item"
 "&Anexar primer ítem coincidente"
 "&Pripojiť prvú nájdenú položku"
 "&Accoda Primo Oggetto Corrispondente"
-"&Підставляти перший підхожий варіант"
+"&Підставляти перший відповідний варіант"
 "&Падстаўляць першую прапанову"
 upd:"&Append the first matched item"
 
@@ -3323,7 +3323,7 @@ upd:"Physical NetBIOS"
 "NetBios físico"
 upd:"Physical NetBIOS"
 "NetBIOS"
-"Фізичне NetBIOS"
+"Фізичние ім'я NetBIOS"
 "Фізічны NetBIOS"
 upd:"Physical NetBIOS"
 
@@ -3356,18 +3356,18 @@ upd:"Physical DNS domain"
 upd:"Physical DNS domain"
 
 MConfigInfoPanelCNPhysicalDnsFullyQualified
-"Физическое полное DNS имя"
-"Physical DNS fully-qualified"
-"Fyzická DNS s celým názvem"
-"Physische DNS vollqualifiziert"
-upd:"Physical DNS fully-qualified"
+"Физическое полное DNS имя (FQDN)"
+"Physical DNS fully-qualified (FQDN)"
+"Fyzická DNS s celým názvem (FQDN)"
+"Physische DNS vollqualifiziert (FQDN)"
+upd:"Physical DNS fully-qualified (FQDN)"
 "Fizyczny DNS (FQDN)"
-"DNS calificado físico"
-upd:"Physical DNS fully-qualified"
-"DNS Qualificato"
-"Фізичне повне DNS ім'я"
-"Поўнае фізічнае імя DNS"
-upd:"Physical DNS fully-qualified"
+"DNS calificado físico (FQDN)"
+upd:"Physical DNS fully-qualified (FQDN)"
+"DNS Qualificato (FQDN)"
+"Фізичне повне DNS ім'я (FQDN)"
+"Поўнае фізічнае імя DNS (FQDN)"
+upd:"Physical DNS fully-qualified (FQDN)"
 
 MConfigInfoPanelCNNetBIOS
 "NetBIOS"
@@ -3412,18 +3412,18 @@ MConfigInfoPanelCNDnsDomain
 "DNS domenas"
 
 MConfigInfoPanelCNDnsFullyQualified
-"Полное DNS имя"
-"DNS fully-qualified"
-"DNS s celým názvem"
-"DNS vollqualifiziert"
-upd:"DNS fully-qualified"
+"Полное DNS имя (FQDN)"
+"DNS fully-qualified (FQDN)"
+"DNS s celým názvem (FQDN)"
+"DNS vollqualifiziert (FQDN)"
+upd:"DNS fully-qualified (FQDN)"
 "Wpis z DNS (FQDN)"
-"DNS calificado"
-upd:"DNS fully-qualified"
-"DNS Qualificato"
-"Повне DNS ім'я"
-"Поўнае імя DNS"
-upd:"DNS fully-qualified"
+"DNS calificado (FQDN)"
+upd:"DNS fully-qualified (FQDN)"
+"DNS Qualificato (FQDN)"
+"Повне DNS ім'я (FQDN)"
+"Поўнае імя DNS (FQDN)"
+upd:"DNS fully-qualified (FQDN)"
 
 MConfigInfoPanelUNTitle
 "Формат вывода имени &пользователя"
@@ -3435,7 +3435,7 @@ MConfigInfoPanelUNTitle
 "Formato nombre de &usuario"
 "Formát &užívateľského mena"
 "&Formato Nome Utente"
-"Формат відображення імені &користувача"
+"Формат імені &користувача"
 "Выгляд імені &карыстальніка"
 "Vartotojo vardo formatas"
 
@@ -3454,18 +3454,18 @@ MConfigInfoPanelUNLogon
 upd:"Logon name"
 
 MConfigInfoPanelUNFullyQualifiedDN
-"Полностью определённое имя домена"
-"Fully Qualified Domain Name"
-"Plně kvalifikovaný doménový název"
-"Vollqualifizierte Domain Name"
-upd:"Fully Qualified Domain Name"
+"Полностью определённое имя домена (FQDN)"
+"Fully Qualified Domain Name (FQDN)"
+"Plně kvalifikovaný doménový název (FQDN)"
+"Vollqualifizierte Domain Name (FQDN)"
+upd:"Fully Qualified Domain Name (FQDN)"
 "Pełna nazwa domenowa (FQDN)"
-"Nombre dominio completamente calificado"
-upd:"Fully Qualified Domain Name"
-"Nome Dominio Completo"
-"Повне доменне ім'я"
-"Поўны вызначаны дамен"
-upd:"Fully Qualified Domain Name"
+"Nombre dominio completamente calificado (FQDN)"
+upd:"Fully Qualified Domain Name (FQDN)"
+"Nome Dominio Completo (FQDN)"
+"Повне ім'я домену (FQDN)"
+"Поўны вызначаны дамен (FQDN)"
+upd:"Fully Qualified Domain Name (FQDN)"
 
 MConfigInfoPanelUNSamCompatible
 "Совместимое с Sam"
@@ -3477,7 +3477,7 @@ upd:"Sam Compatible"
 "Compatible con Sam"
 upd:"Sam Compatible"
 "SAM Compatibile"
-"Совмісне з Sam"
+"Сумісне з Sam"
 "Сумяшчальны з Sam"
 upd:"Sam Compatible"
 
@@ -3491,7 +3491,7 @@ upd:"Display Name"
 "Mostrar Nombre"
 upd:"Display Name"
 "Visualizza Nome"
-"Коротке ім'я"
+"Відображуване ім'я"
 "Адлюстраванае імя"
 upd:"Display Name"
 
@@ -3533,7 +3533,7 @@ MConfigInfoPanelUNUserPrincipal
 "Nombre principal usuario"
 "Hlavné meno používateľa"
 "Nome Utente Principale"
-"Основне ім'я користувача"
+"Головне ім'я користувача"
 "Галоўнае імя карыстальніка"
 "Pagrindinis vartotojo vardas"
 
@@ -3547,7 +3547,7 @@ MConfigInfoPanelUNServicePrincipal
 "Servicio principal"
 "Riaditeľ služby"
 "Servizio Principale"
-"Учасник служби"
+"Основне ім'я служби"
 "Суб'ект-служба"
 "Paslaugos vadovas"
 
@@ -3688,7 +3688,7 @@ upd:"Plu&gin panel"
 "Panel de Complemento"
 "Panel modu&lov"
 "&Pannello Plugin"
-"Пла&гінова панель"
+"Панель пла&гіну"
 "Панэл&ь дадаткаў"
 upd:"Plu&gin panel"
 
@@ -3942,7 +3942,7 @@ upd:"Maximum line width"
 "Ancho máximo de &línea"
 "&Maximálna šírka čiary"
 "Lunghezza Ma&ssima Linea"
-"&Максимальна ширина рядка"
+"&Максимальна ширина рядку"
 "Най&большая шырыня радка"
 upd:"&Maximum line width"
 
@@ -4027,7 +4027,7 @@ MEditConfigExpandTabsTitle
 "E&xpandir tabulación a espacios"
 "Rozšíriť ta&bulátory medzerami"
 "Espandi I &TAB:"
-"Перетворення &табуляції:"
+"Перетворювати &табуляцію:"
 "Ператвараць &табуляцыю"
 upd:"Expand &tabs:"
 
@@ -4056,7 +4056,7 @@ MEditConfigExpandTabs
 "Expandir nuevas tabulaciones ingresadas a espacios"
 "Rozšíriť nové tabulátory medzerami"
 "Espandi I Nuovi TAB In &Spazi"
-"Перетворювати нові символи табуляції в пробіли"
+"Заміняти нові символи табуляції пробілами"
 "Ператвараць новыя сімвалы табуляцыі ў прагалы"
 upd:"Expand newly entered tabs to spaces"
 
@@ -4070,7 +4070,7 @@ MEditConfigConvertAllTabsToSpaces
 "Expandir todas las tabulaciones a espacios"
 "Rozšíriť všetky tabulátory medzerami"
 "Converti Tutti I &TAB In Spazi"
-"Перетворювати всі символи табуляції в пробіли"
+"Заміняти всі символи табуляції на пробіли"
 "Ператвараць усе сімвалы табуляцыі ў прагалы"
 upd:"Expand all tabs to spaces"
 
@@ -4425,7 +4425,7 @@ MCopySecurity
 "&Diritti Di Accesso"
 "П&рава доступу:"
 "П&равы доступа:"
-"Kopijuoti &priėjimo teises"
+"Kopijuoti &priėjimo teises:"
 
 MCopySecurityDefault
 "По умол&чанию"
@@ -5157,7 +5157,7 @@ MCopyDecryptAll
 "Desci&frar todo"
 "Dešifrovať všetko"
 "Decripta Tutti"
-"&Все"
+"Розшифрувати &все"
 "Расшыфраваць &усе"
 upd:"Decrypt &all"
 
@@ -5655,7 +5655,7 @@ MCopyEncryptWarn2
 "no puede copiarse o moverse sin perder el cifrado."
 "sa nedá skopírovať ani presunúť bez straty jeho šifrovania."
 "Non Puo' Essere Copiato O Spostato Senza La Perdita Della Criptazione"
-"не можна скопіювати чи перемістити, не втративши його шифрування."
+"не можна скопіювати чи перемістити, не втративши шифрування."
 "Нельга капіяваць ці перанесці, не згубіўшы яго шыфраванне."
 upd:"cannot be copied or moved without losing its encryption."
 
@@ -6619,7 +6619,7 @@ upd:"Fu&zzy search"
 "Búsqueda di&fusa"
 upd:"Fu&zzy search"
 upd:"Fu&zzy search"
-upd:"Fu&zzy search"
+"Нестроги&й пошук"
 "Нястрог&і пошук"
 upd:"Fu&zzy search"
 
@@ -6672,10 +6672,10 @@ upd:"Find next"
 upd:"Find next"
 upd:"Find next"
 "Znajdź &następne"
+"Encontrar siguiente"
 upd:"Find next"
 upd:"Find next"
-upd:"Find next"
-upd:"Find next"
+"Шукати &наступний"
 upd:"Find next"
 upd:"Find next"
 
@@ -6686,10 +6686,10 @@ upd:"Find pre&vious"
 upd:"Find pre&vious"
 upd:"Find pre&vious"
 "Znajdź &poprzednie"
+"Encontrar an&terior"
 upd:"Find pre&vious"
 upd:"Find pre&vious"
-upd:"Find pre&vious"
-upd:"Find pre&vious"
+"Шукати &попередній"
 upd:"Find pre&vious"
 upd:"Find pre&vious"
 
@@ -6714,10 +6714,10 @@ upd:"Replace next"
 upd:"Replace next"
 upd:"Replace next"
 "Zamień &następne"
+"Reemplazar siguiente"
 upd:"Replace next"
 upd:"Replace next"
-upd:"Replace next"
-upd:"Replace next"
+"Замістити &наступний"
 upd:"Replace next"
 upd:"Replace next"
 
@@ -6728,10 +6728,10 @@ upd:"Replace pre&vious"
 upd:"Replace pre&vious"
 upd:"Replace pre&vious"
 "Zamień &poprzednie"
+"Reemplazar an&terior"
 upd:"Replace pre&vious"
 upd:"Replace pre&vious"
-upd:"Replace pre&vious"
-upd:"Replace pre&vious"
+"Замістити &попередній"
 upd:"Replace pre&vious"
 upd:"Replace pre&vious"
 
@@ -7591,7 +7591,7 @@ MEditF12
 
 MEditShiftF1
 l:
-l://Editor: Shift
+l:// Editor: Shift
 ""
 ""
 ""
@@ -7761,7 +7761,7 @@ MEditShiftF12
 
 MEditAltF1
 l:
-l://Editor: Alt
+l:// Editor: Alt
 ""
 ""
 ""
@@ -7931,7 +7931,7 @@ MEditAltF12
 
 MEditCtrlF1
 l:
-l://Editor: Ctrl
+l:// Editor: Ctrl
 ""
 ""
 ""
@@ -8101,7 +8101,7 @@ MEditCtrlF12
 
 MEditAltShiftF1
 l:
-l://Editor: AltShift
+l:// Editor: AltShift
 ""
 ""
 ""
@@ -8271,7 +8271,7 @@ MEditAltShiftF12
 
 MEditCtrlShiftF1
 l:
-l://Editor: CtrlShift
+l:// Editor: CtrlShift
 ""
 ""
 ""
@@ -8890,7 +8890,7 @@ MEditSaveUnix
 "Formato &Unix (LF)"
 "Formát &Unix (LF)"
 "Formato &Unix (LF)"
-"у формат&і UNIX (LF)"
+"у формат&і Unix (LF)"
 "у разметцы UNIX (LF)"
 upd:"&Unix format (LF)"
 
@@ -9597,7 +9597,7 @@ MListEb
 "E"
 
 MListFileSize
-l:{3} replacement field can receive a sum of files & folders
+l:// {3} replacement field can receive a sum of files & folders
 "Байт: {0}, файлов: {1}, папок: {2}"
 "Bytes: {0}, files: {1}, folders: {2}"
 "Bajty: {0}, soubory: {1}, složky: {2}"
@@ -10125,7 +10125,7 @@ MViewF12
 
 MViewShiftF1
 l:
-l://Viewer: Shift
+l:// Viewer: Shift
 ""
 ""
 ""
@@ -10295,7 +10295,7 @@ MViewShiftF12
 
 MViewAltF1
 l:
-l://Viewer: Alt
+l:// Viewer: Alt
 ""
 ""
 ""
@@ -10465,7 +10465,7 @@ MViewAltF12
 
 MViewCtrlF1
 l:
-l://Viewer: Ctrl
+l:// Viewer: Ctrl
 ""
 ""
 ""
@@ -10635,7 +10635,7 @@ MViewCtrlF12
 
 MViewAltShiftF1
 l:
-l://Viewer: AltShift
+l:// Viewer: AltShift
 ""
 ""
 ""
@@ -10805,7 +10805,7 @@ MViewAltShiftF12
 
 MViewCtrlShiftF1
 l:
-l://Viewer: CtrlShift
+l:// Viewer: CtrlShift
 ""
 ""
 ""
@@ -10975,7 +10975,7 @@ MViewCtrlShiftF12
 
 MViewCtrlAltF1
 l:
-l://Viewer: CtrlAlt
+l:// Viewer: CtrlAlt
 ""
 ""
 ""
@@ -11145,7 +11145,7 @@ MViewCtrlAltF12
 
 MViewCtrlAltShiftF1
 l:
-l://Viewer: CtrlAltShift
+l:// Viewer: CtrlAltShift
 ""
 ""
 ""
@@ -11651,7 +11651,7 @@ upd:"Fu&zzy search"
 "Búsqueda di&fusa"
 upd:"Fu&zzy search"
 upd:"Fu&zzy search"
-upd:"Fu&zzy search"
+"Нестроги&й пошук"
 "Нястрог&і пошук"
 upd:"Fu&zzy search"
 
@@ -12202,7 +12202,7 @@ upd:"Favorites"
 "Favoritos"
 "Obľúbené"
 "Preferiti"
-"Вибрані"
+"Обрані"
 "Пераважныя"
 upd:"Favorites"
 
@@ -12881,19 +12881,19 @@ MInfoBDR
 "BD-R"
 "BD-R"
 
-MInfoBDRW
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
+MInfoBDRE
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
 
 MInfoHDDVDROM
 "HDDVD-ROM"
@@ -14367,7 +14367,7 @@ MMenuPluginCommands
 "C&omandos de complemento"
 "Príkazy mo&dulov"
 "Comandi Per I &Plug-IN"
-"Команди зовнішніх мо&дулів"
+"Команди &плагинів"
 "Каманды &дадаткаў"
 "Komandos - pri&edai"
 
@@ -14522,7 +14522,7 @@ MMenuDialogSettings
 "Diá&logo"
 "Nastavenia dialó&gov"
 "► &Finestre"
-"Налаштування &діалогов"
+"Налаштування &діалогів"
 "Налады &гутаркі"
 upd:"Di&alog settings"
 
@@ -14620,7 +14620,7 @@ MMenuFilePanelModes
 "M&odo de paneles de archivos"
 "&Módy súborových panelov"
 "► Modi Di &Visualizzazione"
-"Режим&и панелі файлов"
+"Режим&и панелі файлів"
 "Стан&ы панэлі файлаў"
 "Failų lan&go režimai"
 
@@ -15411,19 +15411,19 @@ MChangeDriveBDR
 "BD-R"
 "BD-R"
 
-MChangeDriveBDRW
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
-"BD-RW"
+MChangeDriveBDRE
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
+"BD-RE"
 
 MChangeDriveHDDVDROM
 "HDDVD-ROM"
@@ -15592,7 +15592,6 @@ upd:"Cannot detach virtual disk {0}"
 "Не вдається від'єднати віртуальний диск {0}"
 "Немагчыма адключыць уяўны дыск ад {0}"
 upd:"Cannot detach a virtual disk {0}"
-
 
 MChangeDriveOpenFiles
 "Если вы не закроете открытые файлы, данные могут быть утеряны"
@@ -16607,7 +16606,7 @@ MSetAttrEncrypted
 "Ci&frado"
 "&Šifrovaný"
 "Cri&ptato"
-"За&шифрований"
+"&Шифрований"
 "Та&йнапісны"
 upd:"&Encrypted"
 
@@ -16761,7 +16760,7 @@ upd:"Recall on open"
 "Requerir al abrir"
 upd:"Recall on open"
 upd:"Recall on open"
-upd:"Recall on open"
+upd:"&Recall on open"
 upd:"Recall on open"
 upd:"R&ecall on open"
 
@@ -16775,7 +16774,7 @@ upd:"Recall on data access"
 "Requerir al acceder a datos"
 upd:"Recall on data access"
 upd:"Recall on data access"
-upd:"Recall on data access"
+upd:"Recall on data &access"
 upd:"Recall on data access"
 upd:"Rec&all on data access"
 
@@ -17144,7 +17143,6 @@ MSetAttrReparsePointCannotFor
 "Не вдалося видалити точку повторного аналізу для"
 "Немагчыма выдаліць кропку паўторнага аналізу для"
 "Nepavyko pašalinti atkūrimo taško"
-
 
 MSetColorPanel
 l:
@@ -17888,7 +17886,7 @@ MSetColorDialogListDisabled
 "Item desactivado"
 "Neaktívna položka"
 "Oggetto Disabilitato"
-"Блокований пункт"
+"Неактивний пункт"
 "Забаронены элемент"
 upd:"Disabled item"
 
@@ -18071,7 +18069,7 @@ upd:"Disabled text"
 "Texto desactivado"
 "Neaktívny text"
 "Testo Disabilitato"
-"Недоступний пункт"
+"Неактивний текст"
 "Забаронены тэкст"
 "Atjungtas tekstas"
 
@@ -18440,7 +18438,7 @@ MSetColorViewerArrows
 "Flechas desplazamiento de pantalla"
 "Šípky posuvníka"
 "Frecce Di Scorrimento"
-"Стрілки зсуву екрану"
+"Стрілки прокручування екрану"
 "Стрэлкі зруху экрана"
 "Šliaužiklio rodyklės"
 
@@ -18625,7 +18623,7 @@ l:
 "Grupos de colores"
 "Skupiny farieb"
 "Colore Dei Gruppi"
-"Колірні групи"
+"Кольорові групи"
 "Каляровыя суполкі"
 "Spalvų grupės"
 
@@ -18686,6 +18684,34 @@ MSetColorBackground
 "&Фон:"
 "&Fonas:"
 
+MSetColorForegroundDefault
+"По умолчанию"
+"Default"
+"Výchozí"
+"Default"
+"Alapértelmezett"
+"Domyślny"
+"Por defecto"
+"Predvolená"
+"Predefinito"
+"За замовчуванням"
+"Па змаўчанні"
+"Numatytas"
+
+MSetColorBackgroundDefault
+"По умолчанию"
+"Default"
+"Výchozí"
+"Default"
+"Alapértelmezett"
+"Domyślny"
+"Por defecto"
+"Predvolená"
+"Predefinito"
+"За замовчуванням"
+"Па змаўчанні"
+"Numatytas"
+
 MSetColorForeIndex
 l:
 l:// 8 characters max
@@ -18717,6 +18743,22 @@ l:// 8 characters max
 "AARRGGBB"
 "AARRGGBB"
 "AARRGGBB"
+
+MSetColorForeDefault
+l:
+l:// 8 characters max
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
 
 MSetColorFore256
 l:
@@ -18781,6 +18823,22 @@ l:// 8 characters max
 "AARRGGBB"
 "AARRGGBB"
 "AARRGGBB"
+
+MSetColorBackDefault
+l:
+l:// 8 characters max
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
+"AA"
 
 MSetColorBack256
 l:
@@ -19006,7 +19064,7 @@ MSetColorVTHintInfo
 "Colores extendidos y estilos requieren renderizado VT."
 "Extended colors and styles require VT rendering."
 "Extended colors and styles require VT rendering."
-"Extended colors and styles require VT rendering."
+"Розширені кольори та стилі потребують VT rendering."
 "Пашыраныя колеры і стылі патрабуюць візуалізацыі VT."
 "Extended colors and styles require VT rendering."
 
@@ -19020,7 +19078,7 @@ MSetColorVTHintSupported
 "Presione \"Habilitar VT\" abajo para activarlo."
 "Press \"Enable VT\" below to turn it on."
 "Press \"Enable VT\" below to turn it on."
-"Press \"Enable VT\" below to turn it on."
+"Натисніть \"Enable VT\" щоб увімкнути."
 "Націсніце \"Уключыць VT\", каб уключыць яго."
 "Press \"Enable VT\" below to turn it on."
 
@@ -19034,9 +19092,23 @@ MSetColorVTHintNotSupported
 "Su sistema no lo soporta."
 "Your system does not support it."
 "Your system does not support it."
-"Your system does not support it."
+"Ваша система не підтримує це."
 "Вашая сістэма не падтрымлівае гэтае."
 "Your system does not support it."
+
+MSetColorSystemDialog
+upd:"System"
+"System"
+upd:"System"
+upd:"System"
+upd:"System"
+"System"
+"Sistema"
+upd:"System"
+upd:"System"
+upd:"System"
+upd:"System"
+upd:"System"
 
 MSetColorSet
 "Установить"
@@ -19164,7 +19236,6 @@ upd:"&Overwrite and delete R/O files"
 "Перезапис і видалення R/O &файлів"
 "Перезапісаць і выдаліць &файлы 'толькі для чытання'"
 upd:"&Overwrite and delete R/O files"
-
 
 MSetConfirmDrag
 "Пере&таскивание"
@@ -19387,7 +19458,7 @@ upd:"Show standard &association item"
 "Mostrar &asociaciones normales de ítems"
 "Zobrazi&ť položku štandardnej asociácie"
 "Mostra Voce &Associazione Standard"
-"Елемент виклику стандартної &асоціації"
+"Показати стандартну &асоціацію"
 "Пункт выкліку звычайнага прызн&ачэння"
 upd:"Show standard &association item"
 
@@ -19488,7 +19559,7 @@ l:// Find folder Tree KeyBar
 "Ayuda"
 "Pomocník"
 "Aiuto"
-"Допом."
+"Допомога"
 "Дапамога"
 upd:"Help"
 
@@ -19645,7 +19716,6 @@ MFolderTreeF12
 ""
 ""
 ""
-
 
 MFolderTreeShiftF1
 ""
@@ -20139,7 +20209,6 @@ MFolderTreeCtrlF11
 
 MFolderTreeCtrlF12
 ""
-
 ""
 ""
 ""
@@ -22729,7 +22798,6 @@ MExcFullDump
 "Повний дамп"
 "Поўны дамп"
 "Visa iškeltis"
-
 
 MNetUserName
 l:
@@ -28799,7 +28867,7 @@ MFileFilterDateRelative
 "Relat&ivo"
 "Relatí&vny"
 "Relati&vo"
-"Відносна"
+"&Відносна"
 "Адносна&я"
 upd:"Relat&ive"
 
@@ -28955,7 +29023,7 @@ MFileFilterAttrCompressed
 "&Comprimido"
 "Kompri&movaný"
 "Co&mpresso"
-"Стиснутий"
+"Стисн&утий"
 "З&ціснуты"
 upd:"&Compressed"
 
@@ -31289,15 +31357,15 @@ l:// keys end
 #Must be the last
 MNewFileName
 l:
-"?Новый файл?"
-"?New File?"
-"?Nový soubor?"
-"?Neue Datei?"
-"?Új fájl?"
-"?Nowy plik?"
-"?Nuevo Archivo?"
-"?Nový súbor?"
-"* Nuovo File *"
-"?Новий файл?"
-"?Новы файл?"
-upd:"?New File?"
+"Новый_файл_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"New_File_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Nový_soubor_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Neue_Datei_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Új_fájl_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Nowy_plik_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Nuevo_Archivo_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Nový_súbor_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Nuovo_File_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Новий_файл_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+"Новы_файл_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"
+upd:"New_File_{0:04}-{1:02}-{2:02}_{3:02}.{4:02}.{5:02}.{6:03}.txt"

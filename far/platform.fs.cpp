@@ -1614,7 +1614,7 @@ namespace os::fs
 			security::descriptor Result(default_buffer_size);
 
 			if (!os::detail::ApiDynamicReceiver(Result,
-				[&](security::descriptor const& Buffer)
+				[&](span<SECURITY_DESCRIPTOR> const Buffer)
 				{
 					DWORD LengthNeeded = 0;
 					if (!::GetFileSecurity(Object, RequestedInformation, Buffer.data(), static_cast<DWORD>(Buffer.size()), &LengthNeeded))
@@ -2388,9 +2388,8 @@ namespace os::fs
 			const auto Where = { &reg::key::local_machine, &reg::key::current_user };
 			for (const auto& i: Where)
 			{
-				unsigned NoDrives;
-				if (i->get(L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer"sv, L"NoDrives"sv, NoDrives))
-					return ~NoDrives;
+				if (const auto NoDrives = i->get<unsigned>(L"Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer"sv, L"NoDrives"sv))
+					return ~*NoDrives;
 			}
 
 			return ~0u;

@@ -167,7 +167,7 @@ bool enum_lines::GetTString(std::basic_string<T>& To, eol& Eol, bool BigEndian) 
 				return true;
 
 			default:
-				UNREACHABLE;
+				std::unreachable();
 			}
 		}
 
@@ -189,7 +189,7 @@ bool enum_lines::GetTString(std::basic_string<T>& To, eol& Eol, bool BigEndian) 
 				return true;
 
 			default:
-				UNREACHABLE;
+				std::unreachable();
 			}
 		}
 
@@ -335,6 +335,15 @@ static bool GetCpUsingML(std::string_view Str, uintptr_t& Codepage, function_ref
 		LOGWARNING(L"CoCreateInstance(CLSID_CMultiLanguage): {}"sv, os::format_error(Result));
 		return false;
 	}
+
+	// https://bugs.farmanager.com/view.php?id=4000
+	// The Windows implementation of this API keeps the string length as unsigned short and does some math with it while calculating a total score or something.
+	// It the string size is 32768 (which we use by default), it can sometimes add up to 65536, which does not fit in unsigned short and becomes 0.
+	// That 0 later goes to a denominator somewhere with rather predictable results.
+	// MS didn't SEH-guard the function, so the exception leaks back into the process and crashes it.
+	// All the factors of 65536 are powers of two, so by reducing such sizes we ensure that even if it overflows, it won't add up to 65536, won't become 0 and won't crash.
+	if (std::has_single_bit(Str.size()))
+		Str.remove_suffix(1);
 
 	int Size = static_cast<int>(Str.size());
 	DetectEncodingInfo Info[16];
@@ -578,5 +587,22 @@ TEST_CASE("enum_lines")
 			});
 		}
 	}
+}
+
+TEST_CASE("GetCpUsingML_M4000")
+{
+	// https://bugs.farmanager.com/view.php?id=4000
+
+	char c[32768];
+	for (size_t i = 0; i != std::size(c); i += 2)
+	{
+		c[i + 0] = 0x00;
+		c[i + 1] = 0xE0;
+	}
+
+	uintptr_t Cp;
+	GetCpUsingML({ c, std::size(c) }, Cp, [](uintptr_t){ return true; });
+
+	SUCCEED();
 }
 #endif

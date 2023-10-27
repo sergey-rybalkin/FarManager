@@ -34,15 +34,18 @@ endif
 .const
 
 HOOK MACRO name, size, args:VARARG
-	ifndef X64
-		@CatStr(name, Wrapper) proto stdcall args
-		@CatStr(__imp__, name, @, size) dd @CatStr(name, Wrapper)
-		public @CatStr(__imp__, name, @, size)
-	else
-		@CatStr(name, Wrapper) proto stdcall
-		@CatStr(__imp_, name) dq @CatStr(name, Wrapper)
-		public @CatStr(__imp_, name)
-	endif
+	WRAPPER EQU @CatStr(Wrapper_, name)
+ifdef X64
+	DARGS   EQU
+	IMP     EQU @CatStr(__imp_, name)
+else
+	DARGS   EQU args
+	IMP     EQU @CatStr(__imp__, name, @, size)
+endif
+
+	WRAPPER proto stdcall DARGS
+	IMP dq WRAPPER
+	public IMP
 ENDM
 
 ifndef X64
@@ -63,5 +66,9 @@ endif
 HOOK InitializeCriticalSectionEx            , 12, :dword, :dword, :dword
 HOOK CompareStringEx                        , 36, :dword, :dword, :dword, :dword, :dword, :dword, :dword, :dword, :dword
 HOOK LCMapStringEx                          , 36, :dword, :dword, :dword, :dword, :dword, :dword, :dword, :dword, :dword
+HOOK AcquireSRWLockExclusive                ,  4, :dword
+HOOK ReleaseSRWLockExclusive                ,  4, :dword
+HOOK SleepConditionVariableSRW              , 16, :dword, :dword, :dword, :dword
+HOOK WakeAllConditionVariable               ,  4, :dword
 
 end

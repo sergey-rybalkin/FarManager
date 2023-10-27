@@ -66,12 +66,60 @@ namespace os
 {
 	namespace detail
 	{
-		HANDLE handle_implementation::normalise(HANDLE const Handle)
+		static bool ApiDynamicStringReceiverImpl(
+			string& Destination,
+			function_ref<size_t(span<wchar_t> WritableBuffer)> const Callable,
+			function_ref<bool(size_t ReturnedSize, size_t AllocatedSize)> const Condition
+		)
 		{
-			return Handle == INVALID_HANDLE_VALUE? nullptr : Handle;
+			return ApiDynamicReceiver(
+				buffer<wchar_t>(),
+				Callable,
+				Condition,
+				[&](span<wchar_t const> const Buffer)
+				{
+					Destination.assign(Buffer.data(), Buffer.size());
+				}
+			);
 		}
 
-		bool handle_implementation::wait(HANDLE const Handle, std::optional<std::chrono::milliseconds> const Timeout)
+		bool ApiDynamicStringReceiver(
+			string& Destination,
+			function_ref<size_t(span<wchar_t> WritableBuffer)> const Callable
+		)
+		{
+			return ApiDynamicStringReceiverImpl(
+				Destination,
+				Callable,
+				[](size_t const ReturnedSize, size_t const AllocatedSize)
+				{
+					// Why such a condition?
+					// Usually API functions return string length (without \0) on success and
+					// required buffer size (i. e. string length + \0) on failure.
+					// Some of them, however, always return buffer size.
+					// It's Callable's responsibility to handle and fix that.
+					return ReturnedSize >= AllocatedSize;
+				}
+			);
+		}
+
+		bool ApiDynamicErrorBasedStringReceiver(
+			DWORD const ExpectedErrorCode,
+			string& Destination,
+			function_ref<size_t(span<wchar_t> WritableBuffer)> const Callable)
+		{
+			return ApiDynamicStringReceiverImpl(
+				Destination,
+				Callable,
+				[&](size_t const ReturnedSize, size_t /*const AllocatedSize*/)
+				{
+					return !ReturnedSize && GetLastError() == ExpectedErrorCode;
+				}
+			);
+		}
+
+		[[nodiscard]]
+		static bool single_wait(HANDLE const Handle, std::optional<std::chrono::milliseconds> const Timeout = {})
 		{
 			switch (const auto Result = WaitForSingleObject(Handle, Timeout? *Timeout / 1ms : INFINITE))
 			{
@@ -83,11 +131,12 @@ namespace os
 
 			default:
 				// Abandoned or error
-				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"WaitForSingleobject returned {}"sv), Result));
+				throw MAKE_FAR_FATAL_EXCEPTION(far::format(L"WaitForSingleobject returned {}"sv, Result));
 			}
 		}
 
-		std::optional<size_t> handle_implementation::wait(span<HANDLE const> const Handles, bool const WaitAll, std::optional<std::chrono::milliseconds> Timeout)
+		[[nodiscard]]
+		static std::optional<size_t> multi_wait(span<HANDLE const> const Handles, bool const WaitAll, std::optional<std::chrono::milliseconds> Timeout = {})
 		{
 			assert(!Handles.empty());
 			assert(Handles.size() <= MAXIMUM_WAIT_OBJECTS);
@@ -105,8 +154,43 @@ namespace os
 			else
 			{
 				// Abandoned or error
-				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"WaitForMultipleObjects returned {}"sv), Result));
+				throw MAKE_FAR_FATAL_EXCEPTION(far::format(L"WaitForMultipleObjects returned {}"sv, Result));
 			}
+		}
+
+		void handle_implementation::wait(HANDLE const Handle)
+		{
+			(void)single_wait(Handle);
+		}
+
+		bool handle_implementation::is_signaled(HANDLE const Handle, std::chrono::milliseconds const Timeout)
+		{
+			return single_wait(Handle, Timeout);
+		}
+
+		size_t handle_implementation::wait_any(span<HANDLE const> const Handles)
+		{
+			return *multi_wait(Handles, false);
+		}
+
+		std::optional<size_t> handle_implementation::wait_any(span<HANDLE const> const Handles, std::optional<std::chrono::milliseconds> const Timeout)
+		{
+			return multi_wait(Handles, false, Timeout);
+		}
+
+		bool handle_implementation::wait_all(span<HANDLE const> const Handles, std::optional<std::chrono::milliseconds> const Timeout)
+		{
+			return multi_wait(Handles, true, Timeout).has_value();
+		}
+
+		void handle_implementation::wait_all(span<HANDLE const> const Handles)
+		{
+			(void)multi_wait(Handles, true);
+		}
+
+		HANDLE handle_implementation::normalise(HANDLE const Handle)
+		{
+			return Handle == INVALID_HANDLE_VALUE? nullptr : Handle;
 		}
 
 		void handle_closer::operator()(HANDLE Handle) const noexcept
@@ -135,6 +219,33 @@ namespace os
 		SetErrorMode(SetErrorMode(0) & ~Mask);
 	}
 
+constexpr struct
+{
+	size_t
+		LastError,
+		LastStatus;
+}
+teb_offsets
+{
+#ifdef _WIN64
+	0x68,
+	0x1250,
+#else
+	0x34,
+	0x0BF4,
+#endif
+};
+
+NTSTATUS get_last_nt_status(void const* Teb)
+{
+	return view_as<NTSTATUS>(Teb, teb_offsets.LastStatus);
+}
+
+DWORD get_last_error(void const* const Teb)
+{
+	return view_as<DWORD>(Teb, teb_offsets.LastError);
+}
+
 NTSTATUS get_last_nt_status()
 {
 	if (imports.RtlGetLastNtStatus)
@@ -145,15 +256,7 @@ WARNING_DISABLE_GCC("-Warray-bounds")
 	const auto Teb = NtCurrentTeb();
 WARNING_POP()
 
-	constexpr auto Offset =
-#ifdef _WIN64
-		0x1250
-#else
-		0x0BF4
-#endif
-		;
-
-	return view_as<NTSTATUS>(Teb, Offset);
+	return get_last_nt_status(Teb);
 }
 
 void set_last_nt_status(NTSTATUS const Status)
@@ -202,7 +305,7 @@ static string postprocess_error_string(unsigned const ErrorCode, string&& Str)
 {
 	std::replace_if(ALL_RANGE(Str), IsEol, L' ');
 	inplace::trim_right(Str);
-	return format(FSTR(L"0x{:0>8X} - {}"sv), ErrorCode, Str.empty() ? L"Unknown error"sv : Str);
+	return far::format(L"0x{:0>8X} - {}"sv, ErrorCode, Str.empty() ? L"Unknown error"sv : Str);
 }
 
 [[nodiscard]]
@@ -252,8 +355,8 @@ string error_state::NtErrorStr() const
 
 string error_state::to_string() const
 {
-	const auto StrWin32Error = Win32Error? format(FSTR(L"LastError: {}"sv), Win32ErrorStr()) : L""s;
-	const auto StrNtError    = NtError?    format(FSTR(L"NTSTATUS: {}"sv),  NtErrorStr())    : L""s;
+	const auto StrWin32Error = Win32Error? far::format(L"LastError: {}"sv, Win32ErrorStr()) : L""s;
+	const auto StrNtError    = NtError?    far::format(L"NTSTATUS: {}"sv,  NtErrorStr())    : L""s;
 
 	string_view const Errors[]
 	{
@@ -542,9 +645,16 @@ std::vector<HKL> get_keyboard_layout_list()
 	// The code below emulates it in the hope that your client and server layouts are more or less similar.
 	LOGWARNING(L"GetKeyboardLayoutList(): {}"sv, os::last_error());
 
+	const auto Key = reg::key::current_user.open(L"Keyboard Layout\\Preload"sv, KEY_QUERY_VALUE);
+	if (!Key)
+	{
+		LOGWARNING(L"Cannot open Keyboard Layout\\Preload key"sv);
+		return Result;
+	}
+
 	Result.reserve(10);
-	string LayoutStr, LayoutIdStr;
-	for (const auto& i: os::reg::enum_value(os::reg::key::current_user, L"Keyboard Layout\\Preload"sv))
+
+	for (const auto& i: Key.enum_values())
 	{
 		try
 		{
@@ -555,17 +665,15 @@ std::vector<HKL> get_keyboard_layout_list()
 			const auto Preload = from_string<uint32_t>(PreloadStr, {}, 16);
 			const auto PrimaryLanguageId = extract_integer<uint16_t, 0>(Preload);
 
-			const auto LayoutValue = os::reg::key::current_user.get(L"Keyboard Layout\\Substitutes"sv, PreloadStr, LayoutStr)?
-				from_string<uint32_t>(LayoutStr, {}, 16) :
-				Preload;
+			const auto LayoutStr = reg::key::current_user.get<string>(L"Keyboard Layout\\Substitutes"sv, PreloadStr);
+			const auto LayoutValue = LayoutStr? from_string<uint32_t>(*LayoutStr, {}, 16) : Preload;
 
 			const auto SecondaryLanguageId = extract_integer<uint16_t, 0>(LayoutValue);
 
-			const string_view LayoutView = LayoutValue == Preload? PreloadStr : LayoutStr;
+			const string_view LayoutView = LayoutValue == Preload? PreloadStr : *LayoutStr;
 
-			const auto LayoutId = os::reg::key::local_machine.get(concat(L"SYSTEM\\CurrentControlSet\\Control\\Keyboard Layouts\\"sv, LayoutView), L"Layout Id"sv, LayoutIdStr)?
-				from_string<int>(LayoutIdStr, {}, 16) :
-				0;
+			const auto LayoutIdStr = reg::key::local_machine.get<string>(concat(L"SYSTEM\\CurrentControlSet\\Control\\Keyboard Layouts\\"sv, LayoutView), L"Layout Id"sv);
+			const auto LayoutId = LayoutIdStr? from_string<int>(*LayoutIdStr, {}, 16) : 0;
 
 			const auto FinalLayout = make_integer<uint32_t, uint16_t>(PrimaryLanguageId, LayoutId? (LayoutId & 0xfff) | 0xf000 : SecondaryLanguageId);
 
@@ -648,7 +756,7 @@ namespace rtdl
 			}
 
 			if (!*m_module && Mandatory)
-				throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"Error loading {}: {}"sv), m_name, last_error()));
+				throw MAKE_FAR_FATAL_EXCEPTION(far::format(L"Error loading {}: {}"sv, m_name, last_error()));
 
 			return m_module->get();
 		}
@@ -677,7 +785,7 @@ namespace rtdl
 			if (const auto Pointer = *m_Pointer; Pointer || !Mandatory)
 				return Pointer;
 
-			throw MAKE_FAR_FATAL_EXCEPTION(format(FSTR(L"{}!{} is missing: {}"sv), m_Module->name(), encoding::ansi::get_chars(m_Name), last_error()));
+			throw MAKE_FAR_FATAL_EXCEPTION(far::format(L"{}!{} is missing: {}"sv, m_Module->name(), encoding::ansi::get_chars(m_Name), last_error()));
 		}
 	}
 

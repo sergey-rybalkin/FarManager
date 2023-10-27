@@ -785,7 +785,7 @@ private:
 			return compare_numbers(a.StreamsSize(m_Owner), b.StreamsSize(m_Owner));
 
 		default:
-			UNREACHABLE;
+			std::unreachable();
 		}
 	}
 
@@ -975,6 +975,8 @@ long long FileList::VMProcess(int OpCode,void *vParam,long long iParam)
 			if (mps->Mode == 1 && static_cast<size_t>(mps->Index) >= data_size())
 				return Result;
 
+			const auto IsRegularPanel = m_PanelMode == panel_mode::NORMAL_PANEL;
+
 			const auto ApplyToList = [&](const auto& Selector)
 			{
 				for (const auto& i: enum_tokens_with_quotes(mps->Item, L"\r\n"sv))
@@ -982,7 +984,9 @@ long long FileList::VMProcess(int OpCode,void *vParam,long long iParam)
 					if (i.empty())
 						continue;
 
-					const auto Pos = FindFile(PointToName(i), true);
+					const auto NameToFind = IsRegularPanel? PointToName(i) : i;
+					const auto PartialCompare = IsRegularPanel || !contains(i, path::separator);
+					const auto Pos = FindFile(NameToFind, PartialCompare);
 					if (Pos == -1)
 						continue;
 
@@ -1804,8 +1808,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 
 				if (LocalKey==KEY_SHIFTF4)
 				{
-					do
-					{
 						if (!dlgOpenEditor(strFileName, codepage))
 							return false;
 
@@ -1842,24 +1844,6 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 								}
 							}
 						}
-						else if (PluginMode) // пустое имя файла в панели плагина не разрешается!
-						{
-							if (Message(MSG_WARNING,
-								msg(lng::MWarning),
-								{
-									msg(lng::MEditNewPlugin1),
-									msg(lng::MEditNewPath3)
-								},
-								{ lng::MCancel },
-								L"WarnEditorPluginName"sv) != message_result::first_button)
-								return false;
-						}
-						else
-						{
-							strFileName = msg(lng::MNewFileName);
-						}
-					}
-					while (strFileName.empty());
 				}
 				else
 				{
@@ -1879,9 +1863,9 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 					strShortFileName = Current.AlternateFileName();
 				}
 
-				string strTempName;
 				string TemporaryDirectory;
 				bool UploadFailed = false, NewFile = false;
+				auto DeleteTemporaryFile = PluginMode;
 
 				if (PluginMode)
 				{
@@ -1890,8 +1874,12 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 					if (!os::fs::create_directory(TemporaryDirectory))
 						return true;
 
-					strTempName = path::join(TemporaryDirectory, PointToName(strFileName));
-
+					if (strFileName.empty())
+					{
+						NewFile = true;
+					}
+					else
+					{
 					const FileListItem* CurPtr = nullptr;
 					if (LocalKey==KEY_SHIFTF4)
 					{
@@ -1902,13 +1890,15 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 						else
 						{
 							NewFile = true;
-							strFileName = strTempName;
 						}
 					}
 					else
 					{
 						CurPtr = &m_ListData[m_CurFile];
 					}
+
+					strFileName = path::join(TemporaryDirectory, PointToName(strFileName));
+					strShortFileName = ConvertNameToShort(strFileName);
 
 					if (!NewFile)
 					{
@@ -1926,23 +1916,23 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 						}
 					}
 
-					strShortFileName = ConvertNameToShort(strFileName);
+					}
 				}
 
-				auto DeleteViewedFile = PluginMode && !Edit; // внутренний viewer сам все удалит.
 				auto Modaling = false;
 				auto UploadFile = true;
 				auto RefreshedPanel = true;
 
-				if (!strFileName.empty())
-				{
 					if (Edit)
 					{
-						const auto EnableExternal = ((any_of(LocalKey, KEY_F4, KEY_SHIFTF4) && Global->Opt->EdOpt.UseExternalEditor) ||
+						const auto EnableExternal = !strFileName.empty() && ((any_of(LocalKey, KEY_F4, KEY_SHIFTF4) && Global->Opt->EdOpt.UseExternalEditor) ||
 							(any_of(LocalKey, KEY_ALTF4, KEY_RALTF4) && !Global->Opt->EdOpt.UseExternalEditor)) && !Global->Opt->strExternalEditor.empty();
 						auto Processed = false;
 
-						const auto SavedState = file_state::get(strFileName);
+						std::optional<file_state> SavedState;
+						if (!strFileName.empty())
+							SavedState = file_state::get(strFileName);
+
 						if (any_of(LocalKey, KEY_ALTF4, KEY_RALTF4, KEY_F4) && ProcessLocalFileTypes(strFileName, strShortFileName, LocalKey == KEY_F4? FILETYPE_EDIT:FILETYPE_ALTEDIT, PluginMode, TemporaryDirectory))
 						{
 							UploadFile = file_state::get(strFileName) != SavedState;
@@ -1960,9 +1950,27 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 							else if (PluginMode)
 							{
 								RefreshedPanel = Global->WindowManager->GetCurrentWindow()->GetType() != windowtype_editor;
-								const auto ShellEditor = FileEditor::create(strFileName, codepage, (LocalKey == KEY_SHIFTF4 ? FFILEEDIT_CANNEWFILE : 0) | FFILEEDIT_DISABLEHISTORY, -1, -1, &strPluginData);
+
+								const auto ShellEditor = [&]
+								{
+									// BUGBUG, not good, consider extending FileEditor to provide the path
+									SCOPED_ACTION(os::fs::current_directory_guard)(TemporaryDirectory);
+									return FileEditor::create(strFileName, codepage, (LocalKey == KEY_SHIFTF4? FFILEEDIT_CANNEWFILE : 0) | FFILEEDIT_DISABLEHISTORY, -1, -1, &strPluginData);
+								}();
+
 								if (any_of(ShellEditor->GetExitCode(), -1, XC_OPEN_NEWINSTANCE)) Global->WindowManager->ExecuteModal(ShellEditor);//OT
-								UploadFile=ShellEditor->IsFileChanged() || NewFile;
+								UploadFile = ShellEditor->WasFileSaved();
+
+								{
+									// The user could potentially save the temporary file to a different location
+									string Dummy;
+									ShellEditor->GetTypeAndName(Dummy, strFileName);
+									string_view ParentDirectory = strFileName;
+									CutToParent(ParentDirectory);
+									if (!equal_icase(ParentDirectory, TemporaryDirectory))
+										DeleteTemporaryFile = false;
+								}
+
 								Modaling = true;
 							}
 							else
@@ -1991,17 +1999,7 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 							PluginPanelItemHolderHeap PanelItem;
 							const auto strSaveDir = os::fs::get_current_directory();
 
-							if (!os::fs::exists(strTempName))
-							{
-								string_view Path = strTempName;
-								CutToSlash(Path);
-								const auto Find = os::fs::enum_files(Path + L'*');
-								const auto ItemIterator = std::find_if(CONST_RANGE(Find, i) { return !(i.Attributes & FILE_ATTRIBUTE_DIRECTORY); });
-								if (ItemIterator != Find.cend())
-									strTempName = Path + ItemIterator->FileName;
-							}
-
-							if (FileNameToPluginItem(strTempName, PanelItem))
+							if (FileNameToPluginItem(strFileName, PanelItem))
 							{
 								const auto PutCode = Global->CtrlObject->Plugins->PutFiles(GetPluginHandle(), { &PanelItem.Item, 1 }, false, OPM_EDIT);
 
@@ -2060,17 +2058,16 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 									&ViewList);
 
 								/* $ 08.04.2002 IS
-								Сбросим DeleteViewedFile, т.к. внутренний viewer сам все удалит
+								Сбросим DeleteTemporaryFile, т.к. внутренний viewer сам все удалит
 								*/
 								if (ShellViewer->GetExitCode() && PluginMode)
 								{
 									ShellViewer->SetTempViewName(strFileName);
-									DeleteViewedFile=false;
+									DeleteTemporaryFile = false;
 								}
 							}
 						}
 					}
-				}
 
 				/* $ 08.04.2002 IS
 				     для файла, который открывался во внутреннем viewer-е, ничего не
@@ -2089,7 +2086,7 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 							},
 							{ lng::MOk });
 					}
-					else if (Edit || DeleteViewedFile)
+					else if (DeleteTemporaryFile)
 					{
 						// удаляем файл только для случая открытия его в редакторе или во
 						// внешнем viewer-е, т.к. внутренний viewer удаляет файл сам
@@ -2284,20 +2281,20 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_MSWHEEL_UP:
 		case KEY_MSWHEEL_UP | KEY_ALT:
 		case KEY_MSWHEEL_UP | KEY_RALT:
-			Scroll(LocalKey & (KEY_ALT | KEY_RALT)? -1 : static_cast<int>(-Global->Opt->MsWheelDelta));
+			Scroll(-static_cast<int>((LocalKey == KEY_MSWHEEL_UP? get_wheel_scroll_lines(Global->Opt->MsWheelDelta) : 1) * Key.NumberOfWheelEvents()));
 			return true;
 
 		case KEY_MSWHEEL_DOWN:
 		case KEY_MSWHEEL_DOWN | KEY_ALT:
 		case KEY_MSWHEEL_DOWN | KEY_RALT:
-			Scroll(LocalKey & (KEY_ALT | KEY_RALT)? 1 : static_cast<int>(Global->Opt->MsWheelDelta));
+			Scroll(static_cast<int>((LocalKey == KEY_MSWHEEL_DOWN? get_wheel_scroll_lines(Global->Opt->MsWheelDelta) : 1) * Key.NumberOfWheelEvents()));
 			return true;
 
 		case KEY_MSWHEEL_LEFT:
 		case KEY_MSWHEEL_LEFT | KEY_ALT:
 		case KEY_MSWHEEL_LEFT | KEY_RALT:
 		{
-			int Roll = LocalKey & (KEY_ALT | KEY_RALT)? 1 : static_cast<int>(Global->Opt->MsHWheelDelta);
+			const auto Roll = static_cast<int>((LocalKey == KEY_MSWHEEL_LEFT? get_wheel_scroll_chars(Global->Opt->MsHWheelDelta) : 1) * Key.NumberOfWheelEvents());
 			repeat(Roll, [&]{ ProcessKey(Manager::Key(KEY_LEFT)); });
 			return true;
 		}
@@ -2306,7 +2303,7 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 		case KEY_MSWHEEL_RIGHT | KEY_ALT:
 		case KEY_MSWHEEL_RIGHT | KEY_RALT:
 		{
-			int Roll = LocalKey & (KEY_ALT | KEY_RALT)? 1 : static_cast<int>(Global->Opt->MsHWheelDelta);
+			const auto Roll = static_cast<int>((LocalKey == KEY_MSWHEEL_RIGHT? get_wheel_scroll_chars(Global->Opt->MsHWheelDelta) : 1) * Key.NumberOfWheelEvents());
 			repeat(Roll, [&]{ ProcessKey(Manager::Key(KEY_RIGHT)); });
 			return true;
 		}
@@ -3132,7 +3129,7 @@ bool FileList::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 		return false;
 
 	const auto column_titles = Global->Opt->ShowColumnTitles ? 1 : 0;
-	const bool disk_or_sorts = Global->Opt->ShowSortMode && IsVisible() && !MouseEvent->dwEventFlags &&
+	const bool disk_or_sorts = Global->Opt->ShowSortMode && IsVisible() && IsMouseButtonEvent(MouseEvent->dwEventFlags) &&
 		MouseEvent->dwMousePosition.Y == m_Where.top + column_titles &&
 		MouseEvent->dwMousePosition.X > m_Where.left && MouseEvent->dwMousePosition.X < m_Where.left + 2+column_titles;
 
@@ -3154,8 +3151,14 @@ bool FileList::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 		return true;
 	}
 
-	if (IsVisible() && Global->Opt->ShowPanelScrollbar && IntKeyState.MousePos.x == m_Where.right &&
-	        (MouseEvent->dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED) && !(MouseEvent->dwEventFlags & MOUSE_MOVED) && !IsDragging())
+	if (
+		IsVisible() &&
+		Global->Opt->ShowPanelScrollbar &&
+		IntKeyState.MousePos.x == m_Where.right &&
+		(MouseEvent->dwButtonState & FROM_LEFT_1ST_BUTTON_PRESSED) &&
+		IsMouseButtonEvent(MouseEvent->dwEventFlags) &&
+		!IsDragging()
+	)
 	{
 		const auto ScrollY = m_Where.top + 1 + Global->Opt->ShowColumnTitles;
 
@@ -3282,7 +3285,7 @@ bool FileList::ProcessMouse(const MOUSE_EVENT_RECORD *MouseEvent)
 				const auto DataLock = lock_data();
 				auto& m_ListData = *DataLock;
 
-				if (!MouseEvent->dwEventFlags || MouseEvent->dwEventFlags==DOUBLE_CLICK)
+				if (IsMouseButtonEvent(MouseEvent->dwEventFlags))
 					MouseSelection = !m_ListData[m_CurFile].Selected;
 
 				Select(m_ListData[m_CurFile], MouseSelection);
@@ -4116,7 +4119,7 @@ long FileList::SelectFiles(int Mode, string_view const Mask)
 		if (!Ext.empty())
 		{
 			// Учтем тот момент, что расширение может содержать символы-разделители
-			strRawMask = format(FSTR(L"\"*{}\""sv), Ext);
+			strRawMask = far::format(L"\"*{}\""sv, Ext);
 			WrapBrackets=true;
 		}
 		else
@@ -4131,7 +4134,7 @@ long FileList::SelectFiles(int Mode, string_view const Mask)
 		{
 			// Учтем тот момент, что имя может содержать символы-разделители
 			const auto [Name, Ext] = name_ext(strCurName);
-			strRawMask = format(FSTR(L"\"{}.*\""sv), Name);
+			strRawMask = far::format(L"\"{}.*\""sv, Name);
 			WrapBrackets=true;
 			Mode=(Mode==SELECT_ADDNAME) ? SELECT_ADD:SELECT_REMOVE;
 		}
@@ -5159,16 +5162,14 @@ bool FileList::ApplyCommand()
 			if (CheckForEscAndConfirmAbort())
 				break;
 
-			string strConvertedCommand = strCommand;
 			bool PreserveLFN = false;
-
-			if (SubstFileName(strConvertedCommand, { i.FileName, i.AlternateFileName() }, &PreserveLFN) && !strConvertedCommand.empty())
+			if (string strConvertedCommand = strCommand; SubstFileName(strConvertedCommand, { i.FileName, i.AlternateFileName() }, &PreserveLFN) && !strConvertedCommand.empty())
 			{
 				SCOPED_ACTION(PreserveLongName)(i.FileName, PreserveLFN);
 
 				execute_info Info;
 				Info.DisplayCommand = strConvertedCommand;
-				Info.Command = strConvertedCommand;
+				Info.Command = std::move(strConvertedCommand);
 
 				Parent()->GetCmdLine()->ExecString(Info);
 			}
@@ -5362,30 +5363,41 @@ plugin_panel* FileList::OpenFilePlugin(const string& FileName, int PushPrev, OPE
 	}
 
 	auto hNewPlugin = OpenPluginForFile(FileName, 0, Type, StopProcessing);
-
 	const auto hNewPluginRawCopy = hNewPlugin.get();
 
 	if (hNewPlugin)
 	{
 		if (PushPrev)
-		{
 			PrevDataList.emplace_back(FileName, std::move(m_ListData), m_CurTopFile);
-		}
 
-		const auto WasFullscreen = IsFullScreen();
-		SetPluginMode(std::move(hNewPlugin), FileName);  // SendOnFocus??? true???
-		m_PanelMode = panel_mode::PLUGIN_PANEL;
-		UpperFolderTopFile=m_CurTopFile;
-		m_CurFile=0;
-		Update(0);
-		Redraw();
-		const auto AnotherPanel = Parent()->GetAnotherPanel(this);
-
-		if ((AnotherPanel->GetType() == panel_type::INFO_PANEL) || WasFullscreen)
-			AnotherPanel->Redraw();
+		SetAndUpdateFilePlugin(FileName, std::move(hNewPlugin));
 	}
 
 	return hNewPluginRawCopy;
+}
+//
+void FileList::PushFilePlugin(const string& FileName, std::unique_ptr<plugin_panel>&& hNewPlugin)
+{
+	const auto DataLock = lock_data();
+	auto& m_ListData = *DataLock;
+
+	PrevDataList.emplace_back(FileName, std::move(m_ListData), m_CurTopFile);
+	SetAndUpdateFilePlugin(FileName, std::move(hNewPlugin));
+}
+//
+void FileList::SetAndUpdateFilePlugin(const string& FileName, std::unique_ptr<plugin_panel>&& hNewPlugin)
+{
+	const auto WasFullscreen = IsFullScreen();
+	SetPluginMode(std::move(hNewPlugin), FileName);  // SendOnFocus??? true???
+	m_PanelMode = panel_mode::PLUGIN_PANEL;
+	UpperFolderTopFile = m_CurTopFile;
+	m_CurFile = 0;
+	Update(0);
+	Redraw();
+
+	const auto AnotherPanel = Parent()->GetAnotherPanel(this);
+	if ((AnotherPanel->GetType() == panel_type::INFO_PANEL) || WasFullscreen)
+		AnotherPanel->Redraw();
 }
 
 
@@ -5608,6 +5620,8 @@ bool FileList::PopPlugin(int EnableRestoreViewMode)
 		return false;
 	}
 
+	const string cached_hostfile = NullToEmpty(m_CachedOpenPanelInfo.HostFile);
+	const auto cached_Flags = m_CachedOpenPanelInfo.Flags;
 	const auto CurPlugin = std::move(PluginsList.back());
 	PluginsList.pop_back();
 	--Global->PluginPanelsCount;
@@ -5621,6 +5635,8 @@ bool FileList::PopPlugin(int EnableRestoreViewMode)
 		Global->CtrlObject->Plugins->ClosePanel(std::move(CurPlugin->m_Plugin));
 	}
 
+	char del_mode = '\0';
+	//
 	if (!PluginsList.empty())
 	{
 		if (EnableRestoreViewMode)
@@ -5650,16 +5666,23 @@ bool FileList::PopPlugin(int EnableRestoreViewMode)
 			FarChDir(strSaveDir);
 		}
 
-
 		Global->CtrlObject->Plugins->GetOpenPanelInfo(GetPluginHandle(), &m_CachedOpenPanelInfo);
-
-		if (!(m_CachedOpenPanelInfo.Flags & OPIF_REALNAMES))
+		if (cached_hostfile == CurPlugin->m_HostFile && !cached_hostfile.empty()) // del previous plugin host-file/directory
 		{
-			DeleteFileWithFolder(CurPlugin->m_HostFile);  // удаление файла от предыдущего плагина
+			const bool new_way = (cached_Flags & (OPIF_RECURSIVEPANEL | OPIF_DELETEFILEONCLOSE | OPIF_DELETEDIRONCLOSE)) != 0;
+			const bool real_names = (m_CachedOpenPanelInfo.Flags & OPIF_REALNAMES) != 0;
+			if ((!new_way && !real_names) || (cached_Flags & OPIF_DELETEDIRONCLOSE) != 0) del_mode = 'd';
+			else if ((cached_Flags & OPIF_DELETEFILEONCLOSE) != 0) del_mode = 'f';
 		}
 	}
 	else
 	{
+		if (!(cached_Flags & OPIF_REALNAMES) && !cached_hostfile.empty())         // NEW feature
+		{
+			if ((cached_Flags & OPIF_DELETEDIRONCLOSE) != 0) del_mode = 'd';       //  new flags - new way
+			else if ((cached_Flags & OPIF_DELETEFILEONCLOSE) != 0) del_mode = 'f'; //
+		}
+
 		m_PanelMode = panel_mode::NORMAL_PANEL;
 
 		if (EnableRestoreViewMode)
@@ -5669,6 +5692,12 @@ bool FileList::PopPlugin(int EnableRestoreViewMode)
 			m_ReverseSortOrder = CurPlugin->m_PrevSortOrder;
 			m_DirectoriesFirst = CurPlugin->m_PrevDirectoriesFirst;
 		}
+	}
+	//
+	if (del_mode)
+	{
+		if (del_mode == 'd') DeleteFileWithFolder(cached_hostfile);
+		if (del_mode == 'f') std::ignore = os::fs::delete_file(cached_hostfile);
 	}
 
 	if (EnableRestoreViewMode)
@@ -7024,7 +7053,7 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 					SetColor(IsFocused()? COL_PANELSELECTEDTITLE:COL_PANELTITLE);
 				}
 
-				auto strReadMsg = format(msg(lng::MReadingFiles), m_ListData.size());
+				auto strReadMsg = far::vformat(msg(lng::MReadingFiles), m_ListData.size());
 				inplace::truncate_left(strReadMsg, Title.size() - 2);
 				GotoXY(m_Where.left + 1 + static_cast<int>(Title.size() - strReadMsg.size() - 1) / 2, m_Where.top);
 				Text(concat(L' ', strReadMsg, L' '));
@@ -7255,7 +7284,7 @@ void FileList::MoveSelection(list_data& From, list_data& To)
 	std::vector<size_t> OldPositions;
 	OldPositions.reserve(To.size());
 
-	std::set<decltype(From.begin())> MatchedNames;
+	std::vector<decltype(From.begin())> MatchedNames;
 
 	const auto npos = static_cast<size_t>(-1);
 
@@ -7269,10 +7298,12 @@ void FileList::MoveSelection(list_data& From, list_data& To)
 			return EqualRange.begin();
 
 		MatchedNames.clear();
+		reserve_exp_noshrink(MatchedNames, EqualRange.size());
+
 		for (auto Iterator = EqualRange.begin(); Iterator != EqualRange.end(); ++Iterator)
 		{
 			if (!Iterator->FileName.empty())
-				MatchedNames.insert(Iterator);
+				MatchedNames.push_back(Iterator);
 		}
 
 		const auto filter = [&](const auto& Predicate)
@@ -8106,14 +8137,14 @@ void FileList::ShowSelectedSize()
 	if (m_SelFileCount)
 	{
 		auto strFormStr = size2str(SelFileSize, 6, false, true);
-		auto strSelStr = format(msg(lng::MListFileSize), strFormStr, m_SelFileCount - m_SelDirCount, m_SelDirCount, m_SelFileCount);
+		auto strSelStr = far::vformat(msg(lng::MListFileSize), strFormStr, m_SelFileCount - m_SelDirCount, m_SelDirCount, m_SelFileCount);
 		const auto BorderSize = 1;
 		const auto MarginSize = 1;
 		const auto AvailableWidth = static_cast<size_t>(std::max(0, ObjWidth() - BorderSize * 2 - MarginSize * 2));
 		if (strSelStr.size() > AvailableWidth)
 		{
 			strFormStr = size2str(SelFileSize, 6, false, false);
-			strSelStr = format(msg(lng::MListFileSize), strFormStr, m_SelFileCount - m_SelDirCount, m_SelDirCount, m_SelFileCount);
+			strSelStr = far::vformat(msg(lng::MListFileSize), strFormStr, m_SelFileCount - m_SelDirCount, m_SelDirCount, m_SelFileCount);
 			if (strSelStr.size() > AvailableWidth)
 				inplace::truncate_right(strSelStr, AvailableWidth);
 		}
@@ -8141,17 +8172,17 @@ void FileList::ShowTotalSize(const OpenPanelInfo &Info)
 		{
 			if (!Global->Opt->ShowPanelFree || strFreeSize.empty())
 			{
-				strTotalSize = format(msg(lng::MListFileSize), strFormSize, m_TotalFileCount, m_TotalDirCount, m_TotalFileCount + m_TotalDirCount);
+				strTotalSize = far::vformat(msg(lng::MListFileSize), strFormSize, m_TotalFileCount, m_TotalDirCount, m_TotalFileCount + m_TotalDirCount);
 			}
 			else
 			{
 				const string DHLine(3, BoxSymbols[BS_H2]);
-				strTotalSize = format(msg(lng::MListFileSizeStatus), strFormSize, m_TotalFileCount, m_TotalDirCount, DHLine, strFreeSize);
+				strTotalSize = far::vformat(msg(lng::MListFileSizeStatus), strFormSize, m_TotalFileCount, m_TotalDirCount, DHLine, strFreeSize);
 			}
 		}
 		else
 		{
-			strTotalSize = format(msg(lng::MListFreeSize), strFreeSize.empty() ? L"?"s : strFreeSize);
+			strTotalSize = far::vformat(msg(lng::MListFreeSize), strFreeSize.empty() ? L"?"s : strFreeSize);
 		}
 		return strTotalSize;
 	};
