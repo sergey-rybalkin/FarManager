@@ -240,7 +240,7 @@ LINK_OBJS = \
 
 TEST_OBJS = "$(INTDIR)\api_test_c.testobj" "$(INTDIR)\api_test_c++.testobj"
 
-ADDINCLUDE=/I $(BOOTSTRAPDIR).. /I ..\..\libgit2-1.7.1\include
+ADDINCLUDE=/I $(BOOTSTRAPDIR).. /I ..\..\libgit2-1.8.0\include
 
 CPPFLAGS = $(CPPFLAGS) $(ADDINCLUDE)
 RFLAGS = $(RFLAGS) $(ADDINCLUDE)
