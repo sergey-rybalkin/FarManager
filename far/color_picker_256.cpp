@@ -192,8 +192,9 @@ enum color_256_dialog_items
 
 	cd_button_home,
 
-	cd_button_plus,
 	cd_button_minus,
+	cd_text_slice,
+	cd_button_plus,
 
 	cd_text_rgb,
 	cd_text_r,
@@ -240,6 +241,8 @@ struct color_256_state
 	{
 		CurColor = RGB;
 	}
+
+	intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2);
 };
 
 static auto cube_index(color_256_state const& ColorState, color_256_dialog_items const Button)
@@ -273,10 +276,8 @@ static void init_cube(color_256_state& ColorState)
 	}
 }
 
-static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2)
+intptr_t color_256_state::GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void* Param2)
 {
-	auto& ColorState = edit_as<color_256_state>(Dlg->SendMessage(DM_GETDLGDATA, 0, nullptr));
-
 	switch (Msg)
 	{
 	case DN_CTLCOLORDLGITEM:
@@ -285,7 +286,7 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 
 			if (in_closed_range(cd_cube_first, Param1, cd_cube_last))
 			{
-				const auto ColorIndex = cube_index(ColorState, static_cast<color_256_dialog_items>(Param1));
+				const auto ColorIndex = cube_index(*this, static_cast<color_256_dialog_items>(Param1));
 				Colors.Colors[0] = Console256ColorToFarColor({ distinct_cube_map[ColorIndex], cube_color(ColorIndex) });
 				return true;
 			}
@@ -302,7 +303,7 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 			case cd_text_rgb:
 				{
 					// Foreground color is irrelevant
-					Colors.Colors[0] = Console256ColorToFarColor({ 0, ColorState.CurColor });
+					Colors.Colors[0] = Console256ColorToFarColor({ 0, CurColor });
 					return true;
 				}
 
@@ -311,7 +312,7 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 			case cd_text_b:
 				{
 					const auto Context = get_rgb_context<rgb>(Item);
-					auto RGB = ColorState.as_rgb();
+					auto RGB = as_rgb();
 					auto& Channel = std::invoke(Context.Channel, RGB);
 					const auto SavedValue = Channel;
 					RGB = {};
@@ -330,19 +331,19 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 	case DN_BTNCLICK:
 		{
 			const auto Button = static_cast<color_256_dialog_items>(Param1);
-			if (on_button_click(Dlg, Button, ColorState))
+			if (on_button_click(Dlg, Button, *this))
 				return true;
 
 			if (Param2 && in_closed_range(cd_cube_first, Button, cd_cube_last))
 			{
-				ColorState.CurColor = cube_color(cube_index(ColorState, Button));
-				update_rgb_control<color_256_state>(Dlg, ColorState.as_rgb());
+				CurColor = cube_color(cube_index(*this, Button));
+				update_rgb_control<color_256_state>(Dlg, as_rgb());
 				return true;
 			}
 
 			if (Param2 && in_closed_range(cd_grey_first, Button, cd_grey_last))
 			{
-				ColorState.CurColor = grey_color(grey_stripe_mapping[grey_index_by_control[Button - cd_grey_first]]);
+				CurColor = grey_color(grey_stripe_mapping[grey_index_by_control[Button - cd_grey_first]]);
 				update_rgb_control<color_256_state>(Dlg, rgb{});
 				return true;
 			}
@@ -350,8 +351,8 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 			switch (Button)
 			{
 			case cd_button_home:
-				init_cube(ColorState);
-				ColorState.Cube.Slice = 0;
+				init_cube(*this);
+				Cube.Slice = 0;
 				Dlg->SendMessage(DM_ONCUBECHANGE, 0, {});
 				return true;
 
@@ -363,15 +364,15 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 
 	case DM_ONCUBECHANGE:
 		{
-			if (is_rgb(ColorState.CurColor))
+			if (is_rgb(CurColor))
 				Dlg->SendMessage(DM_SETCHECK, cd_cube_first, ToPtr(BSTATE_3STATE));
 
-			const auto& Plane = ColorState.Cube.Cube[ColorState.Cube.Slice];
+			const auto& Plane = Cube.Cube[Cube.Slice];
 			for (const auto& Line: Plane)
 			{
 				for (const auto& Point: Line)
 				{
-					if (cube_color(Point) == ColorState.CurColor)
+					if (cube_color(Point) == CurColor)
 					{
 						const auto ControlId = cd_cube_first + cube_rc_mapping[&Point - &Plane[0][0]];
 						Dlg->SendMessage(DM_SETCHECK, ControlId, ToPtr(BSTATE_CHECKED));
@@ -379,6 +380,8 @@ static intptr_t GetColorDlgProc(Dialog* Dlg, intptr_t Msg, intptr_t Param1, void
 					}
 				}
 			}
+
+			Dlg->SendMessage(DM_SETTEXTPTR, cd_text_slice, UNSAFE_CSTR(Cube.slice_str()));
 
 			Dlg->SendMessage(DM_REDRAW, 0, {});
 		}
@@ -479,7 +482,9 @@ bool pick_color_256(uint8_t& Color)
 		ColorDlg[ControlId].Flags |= DIF_FOCUS;
 	}
 
-	const auto Dlg = Dialog::create(ColorDlg, GetColorDlgProc, &ColorState);
+	ColorDlg[cd_text_slice].strData = ColorState.Cube.slice_str();
+
+	const auto Dlg = Dialog::create(ColorDlg, std::bind_front(&color_256_state::GetColorDlgProc, &ColorState));
 
 	const auto
 		DlgWidth = static_cast<int>(ColorDlg[cd_border].X2) + 4,

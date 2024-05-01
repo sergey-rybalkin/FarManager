@@ -181,7 +181,7 @@ size_t CommandLine::DrawPrompt()
 		}
 
 		if (CurLength + str.size() > MaxLength)
-			inplace::truncate_path(str, std::max(size_t{}, MaxLength - CurLength));
+			inplace::truncate_path(str, std::max(0uz, MaxLength - CurLength));
 		SetColor(i.Colour);
 		Text(str);
 		CurLength += str.size();
@@ -773,7 +773,7 @@ std::list<CommandLine::segment> CommandLine::GetPrompt()
 		{
 			bool Stop;
 			auto NewColor = PrefixColor;
-			const auto Str = make_string_view(Iterator, Format.cend());
+			string_view const Str{ Iterator, Format.cend() };
 			const auto Tail = colors::ExtractColorInNewFormat(Str, NewColor, Stop);
 			if (Tail.size() == Str.size())
 			{
@@ -1087,7 +1087,7 @@ static bool ProcessFarCommands(string_view Command, function_ref<void(bool)> con
 			}
 		}
 
-		if (const auto& Factories = Global->CtrlObject->Plugins->Factories(); std::any_of(ALL_CONST_RANGE(Factories), [](const auto& i) { return i->IsExternal(); }))
+		if (const auto& Factories = Global->CtrlObject->Plugins->Factories(); std::ranges::any_of(Factories, [](const auto& i) { return i->IsExternal(); }))
 		{
 			std::wcout << L"\nPlugin adapters:\n"sv;
 			for (const auto& i: Factories)
@@ -1151,7 +1151,7 @@ void CommandLine::ExecString(execute_info& Info)
 	SCOPE_EXIT
 	{
 		if (ExecutionContext)
-			ExecutionContext->DoEpilogue(Info.Echo && !Info.Command.empty());
+			ExecutionContext->DoEpilogue(Info.Echo && !Info.Command.empty(), true);
 
 		if (!IsUpdateNeeded)
 			return;
@@ -1254,27 +1254,23 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 	if (SetPanel->GetType() != panel_type::FILE_PANEL && Global->CtrlObject->Cp()->PassivePanel()->GetType() == panel_type::FILE_PANEL)
 		SetPanel=Global->CtrlObject->Cp()->PassivePanel();
 
-	const auto IsCommand = [&CmdLine](const string_view cmd, const bool bslash)
+	const auto Trimmed = trim(CmdLine);
+
+	const auto Command = Trimmed.substr(0, Trimmed.find_first_of(L' '));
+	const auto Arguments = trim_left(Trimmed.substr(Command.size()));
+
+	// Cursed spaceless DOS legacy syntax like cd\ or cd/d
+	// Technically other commands can use this syntax too, but we limit it to cd/chdir
+	const auto CommandCursed = Trimmed.substr(0, Trimmed.find_first_of(L" \\/"));
+	const auto ArgumentsCursed = trim_left(Trimmed.substr(CommandCursed.size()));
+
+	const auto FindKey = [&](string_view const Where, wchar_t const Key)
 	{
-		const auto n = cmd.size();
-		return starts_with_icase(CmdLine, cmd)
-			&& (n == CmdLine.size() || contains(L"/ \t"sv, CmdLine[n]) || (bslash && CmdLine[n] == L'\\'));
+		const wchar_t Param[] = { L'/', Key, {} };
+		return starts_with_icase(Where, Param) && (Where.size() == 2 || Where[2] == L' ');
 	};
 
-	const auto FindKey = [&CmdLine](wchar_t Key)
-	{
-		const auto FirstSpacePos = CmdLine.find(L' ');
-		const auto NotSpacePos = CmdLine.find_first_not_of(L' ', FirstSpacePos);
-
-		return NotSpacePos != string::npos &&
-			CmdLine.size() > NotSpacePos + 1 &&
-			CmdLine[NotSpacePos] == L'/' &&
-			upper(CmdLine[NotSpacePos + 1]) == upper(Key);
-	};
-
-	const auto FindHelpKey = [&FindKey]() { return FindKey(L'?'); };
-
-	if (CmdLine.size() > 1 && CmdLine[1] == L':' && (CmdLine.size() == 2 || CmdLine.find_first_not_of(L' ', 2) == string::npos))
+	if (Command.size() == 2 && Command[1] == L':' && Arguments.empty())
 	{
 		ConsoleActivatior(false);
 
@@ -1287,18 +1283,17 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 		return true;
 	}
 
-	if (FindHelpKey())
+	if (FindKey(Arguments, L'?'))
 		return false;
 
-	const auto CommandSet = L"SET"sv;
 	// SET [variable=[value]]
-	if (IsCommand(CommandSet, false))
+	if (equal_icase(Command, L"SET"sv))
 	{
-		if (FindKey(L'A') || FindKey(L'P'))
+		if (FindKey(Arguments, L'A') || FindKey(Arguments, L'P'))
 			return false; //todo: /p - dialog, /a - calculation; then set variable ...
 
 		size_t pos;
-		const auto SetParams = trim_left(CmdLine.substr(CommandSet.size()));
+		const auto SetParams = unquote(trim_right(Arguments));
 
 		// "set" (display all) or "set var" (display all that begin with "var")
 		if (SetParams.empty() || ((pos = SetParams.find(L'=')) == string::npos) || !pos)
@@ -1307,14 +1302,12 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 			if (SetParams.find_first_of(L"|>"sv) != SetParams.npos)
 				return false;
 
-			const auto UnquotedSetParams = unquote(SetParams);
-
 			ConsoleActivatior(true);
 
 			const os::env::provider::strings EnvStrings;
 			for (const auto& i: enum_substrings(EnvStrings.data()))
 			{
-				if (starts_with_icase(i, UnquotedSetParams))
+				if (starts_with_icase(i, SetParams))
 				{
 					std::wcout << i << L'\n';
 				}
@@ -1326,8 +1319,8 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 
 		ConsoleActivatior(false);
 
-		const auto VariableValue = trim_right(SetParams.substr(pos + 1));
-		const auto VariableName = unquote(SetParams.substr(0, pos));
+		const auto VariableValue = SetParams.substr(pos + 1);
+		const auto VariableName = SetParams.substr(0, pos);
 
 		if (VariableValue.empty()) //set var=
 		{
@@ -1341,10 +1334,9 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 		return true;
 	}
 
-	const auto CommandCls = L"CLS"sv;
-	if (IsCommand(CommandCls, false))
+	if (equal_icase(Command, L"CLS"sv))
 	{
-		if (!trim_left(CmdLine.substr(CommandCls.size())).empty())
+		if (!Arguments.empty())
 		{
 			// Theoretically, in cmd "cls" and "cls blablabla" are the same things.
 			// But, if the user passed some parameters to cls it's quite probably
@@ -1359,14 +1351,13 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 	}
 
 	// PUSHD путь | ..
-	const auto CommandPushd = L"PUSHD"sv;
-	if (IsCommand(CommandPushd, false))
+	if (equal_icase(Command, L"PUSHD"sv))
 	{
 		ConsoleActivatior(false);
 
 		const auto PushDir = m_CurDir;
 
-		if (const auto NewDir = trim(CmdLine.substr(CommandPushd.size())); NewDir.empty() || IntChDir(NewDir, true))
+		if (const auto NewDir = trim_right(Arguments); NewDir.empty() || IntChDir(NewDir, true))
 		{
 			ppstack.push(PushDir);
 			os::env::set(L"FARDIRSTACK"sv, PushDir);
@@ -1377,7 +1368,7 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 
 	// POPD
 	// TODO: добавить необязательный параметр - число, сколько уровней пропустить, после чего прыгнуть.
-	if (IsCommand(L"POPD"sv, false))
+	if (equal_icase(Command, L"POPD"sv))
 	{
 		ConsoleActivatior(false);
 
@@ -1400,7 +1391,7 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 	}
 
 	// CLRD
-	if (IsCommand(L"CLRD"sv, false))
+	if (equal_icase(Command, L"CLRD"sv))
 	{
 		ConsoleActivatior(false);
 
@@ -1415,10 +1406,9 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 			nnn   Specifies a code page number (Dec or Hex).
 		Type CHCP without a parameter to display the active code page number.
 	*/
-	const auto CommandChcp = L"CHCP"sv;
-	if (IsCommand(CommandChcp, false))
+	if (equal_icase(Command, L"CHCP"sv))
 	{
-		const auto ChcpParams = trim(CmdLine.substr(CommandChcp.size()));
+		const auto ChcpParams = trim_right(Arguments);
 		uintptr_t cp;
 		if (!from_string(ChcpParams, cp))
 			return false;
@@ -1440,12 +1430,9 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 		return true;
 	}
 
-	const auto CommandCd = L"CD"sv;
-	const auto CommandChdir = L"CHDIR"sv;
-	const auto IsCommandCd = IsCommand(CommandCd, true);
-	if (IsCommandCd || IsCommand(CommandChdir, true))
+	if (const auto IsCommandCd = equal_icase(CommandCursed, L"CD"sv); IsCommandCd || equal_icase(CommandCursed, L"CHDIR"sv))
 	{
-		auto CdParams = trim(CmdLine.substr(IsCommandCd? CommandCd.size() : CommandChdir.size()));
+		auto CdParams = trim_right(ArgumentsCursed);
 
 		//проигнорируем /D
 		//мы и так всегда меняем диск а некоторые в алайсах или по привычке набирают этот ключ
@@ -1465,14 +1452,11 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 		return true;
 	}
 
-	const auto CommandTitle = L"TITLE"sv;
-	if (IsCommand(CommandTitle, false))
+	if (equal_icase(Command, L"TITLE"))
 	{
 		ConsoleActivatior(false);
 
-		const auto Title = CmdLine.substr(CommandTitle.size());
-
-		ConsoleTitle::SetUserTitle(Title.empty()? Title : Title.substr(1));
+		ConsoleTitle::SetUserTitle(Arguments);
 
 		if (!(Global->CtrlObject->Cp()->LeftPanel()->IsVisible() || Global->CtrlObject->Cp()->RightPanel()->IsVisible()))
 		{
@@ -1481,10 +1465,14 @@ bool CommandLine::ProcessOSCommands(string_view const CmdLine, function_ref<void
 		return true;
 	}
 
-	if (IsCommand(L"EXIT"sv, false))
+	if (equal_icase(Command, L"EXIT"sv))
 	{
+		int ExitCode = EXIT_SUCCESS;
+		if (!from_string(Arguments, ExitCode))
+			LOGWARNING(L"Error parsing exit arguments: {}"sv, Arguments);
+
 		ConsoleActivatior(false);
-		Global->WindowManager->ExitMainLoop(FALSE);
+		Global->WindowManager->ExitMainLoop(FALSE, ExitCode);
 		return true;
 	}
 

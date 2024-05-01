@@ -306,18 +306,24 @@ void InitKeysArray()
 
 	BYTE KeyState[256]{};
 
-	for (const auto& j: irange(2))
+	for (const auto j: std::views::iota(0, 2))
 	{
 		KeyState[VK_SHIFT] = j * 0x80;
 
 		for (const auto& i: Layout())
 		{
-			for (const auto& VK : irange(256))
+			for (const auto VK : std::views::iota(0, 256))
 			{
 				if (wchar_t idx; ToUnicodeEx(VK, 0, KeyState, &idx, 1, ToUnicodeFlags, i) > 0)
 				{
 					if (!KeyToVKey[idx])
 						KeyToVKey[idx] = VK + j * 0x100;
+
+					// VKeyToASCII - используется вместе с KeyToVKey чтоб подменить нац. символ на US-ASCII
+					// Имея мапирование юникод -> VK строим обратное мапирование
+					// VK -> символы с кодом меньше 0x80, т.е. только US-ASCII символы
+					if (idx < 0x80 && !VKeyToASCII[VK + j * 0x100])
+						VKeyToASCII[VK + j * 0x100] = upper(idx);
 				}
 			}
 		}
@@ -330,18 +336,6 @@ void InitKeysArray()
 		if (!KeyToVKey[Local])
 			KeyToVKey[Local] = KeyToVKey[English];
 	});
-
-	//VKeyToASCII - используется вместе с KeyToVKey чтоб подменить нац. символ на US-ASCII
-	//***********
-	//Имея мапирование юникод -> VK строим обратное мапирование
-	//VK -> символы с кодом меньше 0x80, т.е. только US-ASCII символы
-	for (const auto& i: irange(1, 0x80))
-	{
-		const auto x = KeyToVKey[i];
-
-		if (x && !VKeyToASCII[x])
-			VKeyToASCII[x] = upper(i);
-	}
 }
 
 //Сравнивает если Key и CompareKey это одна и та же клавиша в разных раскладках
@@ -425,10 +419,12 @@ void FarKeyToInputRecord(const FarKey& Key,INPUT_RECORD* Rec)
 		Rec->Event.KeyEvent.bKeyDown=1;
 		Rec->Event.KeyEvent.wRepeatCount=1;
 		Rec->Event.KeyEvent.wVirtualKeyCode=Key.VirtualKeyCode;
-		Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
 
-		//BUGBUG
-		Rec->Event.KeyEvent.uChar.UnicodeChar=MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_CHAR);
+		const auto Layout = console.GetKeyboardLayout();
+		Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKeyEx(Rec->Event.KeyEvent.wVirtualKeyCode, MAPVK_VK_TO_VSC, Layout);
+		// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mapvirtualkeyexw
+		// an unshifted character value in the low order word of the return value
+		Rec->Event.KeyEvent.uChar.UnicodeChar = extract_integer<wchar_t, 0>(MapVirtualKeyEx(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_CHAR, Layout));
 
 		Rec->Event.KeyEvent.dwControlKeyState=Key.ControlKeyState;
 	}
@@ -1129,7 +1125,7 @@ static DWORD GetInputRecordImpl(INPUT_RECORD *rec,bool ExcludeMacro,bool Process
 			{ KEY_RCTRL,     VK_CONTROL,     MODIF_RCTRL,      true,     },
 		};
 
-		if (std::any_of(ALL_CONST_RANGE(Keys), [&CalcKey](const KeysData& A){ return CalcKey == A.FarKey && !PressedLast.Check(A.Modif); }))
+		if (std::ranges::any_of(Keys, [&CalcKey](const KeysData& A){ return CalcKey == A.FarKey && !PressedLast.Check(A.Modif); }))
 			CalcKey = KEY_NONE;
 
 		const size_t AllModif = KEY_CTRL | KEY_ALT | KEY_SHIFT | KEY_RCTRL | KEY_RALT;
@@ -1375,7 +1371,7 @@ int KeyNameToKey(string_view Name)
 	if (!Name.empty())
 	{
 		// сначала - FKeys1 - Вариант (1)
-		const auto ItemIterator = std::find_if(CONST_RANGE(FKeys1, i)
+		const auto ItemIterator = std::ranges::find_if(FKeys1, [&](TFKey const& i)
 		{
 			return equal_icase(Name, i.Name);
 		});
@@ -1422,7 +1418,7 @@ int KeyNameToKey(string_view Name)
 				if (const auto IsOem = Name.starts_with(OemPrefix); IsOem || Name.starts_with(SpecPrefix))
 				{
 					const auto Tail = Name.substr(IsOem? OemPrefix.size() : SpecPrefix.size());
-					if (Tail.size() == 5 && std::all_of(ALL_CONST_RANGE(Tail), std::iswdigit)) // Варианты (3) и (4)
+					if (Tail.size() == 5 && std::ranges::all_of(Tail, std::iswdigit)) // Варианты (3) и (4)
 					{
 						Key |= (IsOem? KEY_FKEY_BEGIN : KEY_VK_0xFF_BEGIN) | from_string<unsigned>(Tail);
 						Name = {};
@@ -1451,7 +1447,8 @@ static string KeyToTextImpl(unsigned int const Key0, tfkey_to_text ToText, add_s
 
 	auto strKeyText = GetShiftKeyName(Key, ToText, AddSeparator);
 
-	if (const auto FKeys1Iterator = std::find(ALL_CONST_RANGE(FKeys1), FKey); FKeys1Iterator != std::cend(FKeys1))
+	// Ugh, ranges are awesome.
+	if (const auto FKeys1Iterator = std::ranges::find_if(FKeys1, [&](TFKey const& Key){ return Key == FKey; }); FKeys1Iterator != std::cend(FKeys1))
 	{
 		AddSeparator(strKeyText);
 		append(strKeyText, ToText(*FKeys1Iterator));
@@ -1521,9 +1518,9 @@ string KeyToLocalizedText(unsigned int const Key)
 	);
 }
 
-string KeysListToLocalizedText(span<unsigned int const> const Keys)
+string KeysListToLocalizedText(std::span<unsigned int const> const Keys)
 {
-	return join(L" "sv, select(Keys, [](unsigned int const Key){ return KeyToLocalizedText(Key); }));
+	return join(L" "sv, Keys | std::views::transform([](unsigned int const Key){ return KeyToLocalizedText(Key); }));
 }
 
 static int key_to_vk(unsigned int const Key)
@@ -1563,7 +1560,7 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 			VirtKey=FKey-KEY_FKEY_BEGIN;
 		else if (FKey && FKey < WCHAR_MAX)
 		{
-			short Vk = VkKeyScan(static_cast<wchar_t>(FKey));
+			short Vk = VkKeyScanEx(static_cast<wchar_t>(FKey), console.GetKeyboardLayout());
 			if (Vk == -1)
 			{
 				for (const auto& i: Layout())
@@ -1608,7 +1605,7 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 			};
 
 			// In case of CtrlShift, CtrlAlt, AltShift, CtrlAltShift there is no unambiguous mapping.
-			const auto ItemIterator = std::find_if(CONST_RANGE(ExtKeyMap, i) { return (i.first & FShift) != 0; });
+			const auto ItemIterator = std::ranges::find_if(ExtKeyMap, [&](auto const& i){ return (i.first & FShift) != 0; });
 			if (ItemIterator != std::cend(ExtKeyMap))
 				VirtKey = ItemIterator->second;
 		}
@@ -1672,12 +1669,7 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 				{'/','?'}
 			};
 
-			const auto ItemIterator = std::find_if(CONST_RANGE(Keys, Item)
-			{
-				return Item.FarKey == FKey;
-			});
-
-			if (ItemIterator != std::cend(Keys))
+			if (const auto ItemIterator = std::ranges::find(Keys, FKey, &KeysData::FarKey); ItemIterator != std::cend(Keys))
 			{
 				FKey = ItemIterator->Char;
 			}
@@ -1700,7 +1692,7 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 					{
 						// При нажатии RCtrl и RAlt в консоль приходит VK_CONTROL и VK_MENU а не их правые аналоги
 						Rec->Event.KeyEvent.wVirtualKeyCode = (VirtKey==VK_RCONTROL)?VK_CONTROL:(VirtKey==VK_RMENU)?VK_MENU:VirtKey;
-						Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKey(Rec->Event.KeyEvent.wVirtualKeyCode,MAPVK_VK_TO_VSC);
+						Rec->Event.KeyEvent.wVirtualScanCode = MapVirtualKeyEx(Rec->Event.KeyEvent.wVirtualKeyCode, MAPVK_VK_TO_VSC, console.GetKeyboardLayout());
 					}
 					else
 					{
@@ -1871,31 +1863,43 @@ static int GetDirectlyMappedKey(int VKey)
 }
 
 // These VK_* map to different characters if Shift (and only Shift) is pressed
-static int GetMappedCharacter(int VKey)
+static int GetMappedCharacter(int VKey, int const ScanCode)
 {
+	// VK_OEM_* are mapped to different physical keys on different national keyboards.
+	// We map them to US keyboard characters via scan codes to ensure consistency.
+	// The key names will likely be incorrect for, say, German keyboards,
+	// but at least default actions and macros will work regardless of the input language.
 	switch (VKey)
 	{
-	case VK_OEM_PERIOD: return KEY_DOT;
-	case VK_OEM_COMMA: return KEY_COMMA;
-	case VK_OEM_MINUS: return '-';
-	case VK_OEM_PLUS: return '=';
-
-	// BUGBUG hard-coded for the US standard keyboard
-	case VK_OEM_1: return KEY_SEMICOLON;
-	case VK_OEM_2: return KEY_SLASH;
-	case VK_OEM_3: return '`';
-	case VK_OEM_4: return KEY_BRACKET;
-	case VK_OEM_5: return KEY_BACKSLASH;
-	case VK_OEM_6: return KEY_BACKBRACKET;
-	case VK_OEM_7: return '\'';
-
-	// BUGBUG does not exist in the US standard keyboard,
-	// but does exist in some others (e.g. the UK)
-	// '`' might not always be accurate, but it's better than nothing
-	case VK_OEM_8: return '`';
-
-	case VK_OEM_102: return KEY_BACKSLASH; // <> \|
-
+	case VK_OEM_PERIOD:
+	case VK_OEM_COMMA:
+	case VK_OEM_MINUS:
+	case VK_OEM_PLUS:
+	case VK_OEM_1:
+	case VK_OEM_2:
+	case VK_OEM_3:
+	case VK_OEM_4:
+	case VK_OEM_5:
+	case VK_OEM_6:
+	case VK_OEM_7:
+	case VK_OEM_8:
+	case VK_OEM_102:
+		switch (ScanCode)
+		{
+		case 12: return '-';
+		case 13: return '=';
+		case 26: return KEY_BRACKET;
+		case 27: return KEY_BACKBRACKET;
+		case 39: return KEY_SEMICOLON;
+		case 40: return '\'';
+		case 41: return '`';
+		case 43: return KEY_BACKSLASH;
+		case 51: return KEY_COMMA;
+		case 52: return KEY_DOT;
+		case 53: return KEY_SLASH;
+		case 86: return KEY_BACKSLASH;
+		default: return 0;
+		}
 	default: return 0;
 	}
 }
@@ -2135,6 +2139,11 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 		return KEY_NONE;
 	}
 
+	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mapvirtualkeyexw
+	// Dead keys (diacritics) are indicated by setting the top bit of the return value
+	if (!Char && MapVirtualKeyEx(KeyCode, MAPVK_VK_TO_CHAR, console.GetKeyboardLayout()) & 0x80000000)
+		return KEY_NONE;
+
 	//прежде, чем убирать это шаманство, поставьте себе раскладку, в которой по ralt+символ можно вводить символы.
 	//например немецкую:
 	//ralt+m - мю
@@ -2153,30 +2162,10 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 	//ralt+a/ralt+shift+a
 	//ralt+c/ralt+shift+c
 	//и т.д.
-	if ((CtrlState & (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) == (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED))
+	if ((CtrlState & (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED)) == (LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED) && Char >= L' ')
 	{
-		if (Char >= L' ')
-		{
-			return Char;
-		}
-
-		if (RealKey && ScanCode && !Char && KeyCode && KeyCode != VK_MENU)
-		{
-			//Это шаманство для ввода всяческих букв с тильдами, акцентами и прочим.
-			//Например на Шведской раскладке, "AltGr+VK_OEM_1" вообще не должно обрабатываться фаром, т.к. это DeadKey
-			//Dn, 1, Vk="VK_CONTROL" [17/0x0011], Scan=0x001D uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x00000008 (Casac - ecns)
-			//Dn, 1, Vk="VK_MENU" [18/0x0012], Scan=0x0038 uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x00000109 (CasAc - Ecns)
-			//Dn, 1, Vk="VK_OEM_1" [186/0x00BA], Scan=0x001B uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x00000009 (CasAc - ecns)
-			//Up, 1, Vk="VK_CONTROL" [17/0x0011], Scan=0x001D uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x00000001 (casAc - ecns)
-			//Up, 1, Vk="VK_MENU" [18/0x0012], Scan=0x0038 uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x00000100 (casac - Ecns)
-			//Up, 1, Vk="VK_OEM_1" [186/0x00BA], Scan=0x0000 uChar=[U='~' (0x007E): A='~' (0x7E)] Ctrl=0x00000000 (casac - ecns)
-			//Up, 1, Vk="VK_OEM_1" [186/0x00BA], Scan=0x001B uChar=[U='и' (0x00A8): A='' (0xA8)] Ctrl=0x00000000 (casac - ecns)
-			//Dn, 1, Vk="VK_A" [65/0x0041], Scan=0x001E uChar=[U='у' (0x00E3): A='' (0xE3)] Ctrl=0x00000000 (casac - ecns)
-			//Up, 1, Vk="VK_A" [65/0x0041], Scan=0x001E uChar=[U='a' (0x0061): A='a' (0x61)] Ctrl=0x00000000 (casac - ecns)
-			return KEY_NONE;
-		}
-
 		IntKeyState.LeftCtrlPressed = IntKeyState.RightCtrlPressed = false;
+		return Char;
 	}
 
 	if (KeyCode==VK_MENU)
@@ -2191,7 +2180,7 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 		{
 			static unsigned int const ScanCodes[]{ 82, 79, 80, 81, 75, 76, 77, 71, 72, 73 };
 
-			for (const auto& i: irange(std::size(ScanCodes)))
+			for (const auto i: std::views::iota(0uz, std::size(ScanCodes)))
 			{
 				if (ScanCodes[i] != ScanCode)
 					continue;
@@ -2241,20 +2230,6 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 			return Result;
 	}
 
-	if (!IntKeyState.CtrlPressed() && !IntKeyState.AltPressed() && (KeyCode >= VK_OEM_1 && KeyCode <= VK_OEM_8) && !Char)
-	{
-		//Это шаманство для того, чтобы фар не реагировал на DeadKeys (могут быть нажаты с Shift-ом)
-		//которые используются для ввода символов с диакритикой (тильды, шапки, и пр.)
-		//Dn, Vk="VK_SHIFT"    [ 16/0x0010], Scan=0x002A uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x10
-		//Dn, Vk="VK_OEM_PLUS" [187/0x00BB], Scan=0x000D uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x10
-		//Up, Vk="VK_OEM_PLUS" [187/0x00BB], Scan=0x0000 uChar=[U=''  (0x02C7): A='?' (0xC7)] Ctrl=0x10
-		//Up, Vk="VK_OEM_PLUS" [187/0x00BB], Scan=0x000D uChar=[U=''  (0x02C7): A='?' (0xC7)] Ctrl=0x10
-		//Up, Vk="VK_SHIFT"    [ 16/0x0010], Scan=0x002A uChar=[U=' ' (0x0000): A=' ' (0x00)] Ctrl=0x00
-		//Dn, Vk="VK_C"        [ 67/0x0043], Scan=0x002E uChar=[U=''  (0x010D): A=' ' (0x0D)] Ctrl=0x00
-		//Up, Vk="VK_C"        [ 67/0x0043], Scan=0x002E uChar=[U='c' (0x0063): A='c' (0x63)] Ctrl=0x00
-		return KEY_NONE;
-	}
-
 	if (!IntKeyState.CtrlPressed() && !IntKeyState.AltPressed())
 	{
 		// Shift or none - characters only
@@ -2266,7 +2241,7 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 	if (in_closed_range(L'0',  KeyCode, L'9') || in_closed_range(L'A', KeyCode, L'Z'))
 		return Modif | KeyCode;
 
-	if (const auto OemKey = GetMappedCharacter(KeyCode))
+	if (const auto OemKey = GetMappedCharacter(KeyCode, ScanCode))
 	{
 		return Modif + OemKey;
 	}

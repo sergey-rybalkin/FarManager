@@ -185,8 +185,7 @@ protected:
 	COPY_CONSTRUCTIBLE(Option);
 	COPY_ASSIGNABLE_DEFAULT(Option);
 
-	template<class T>
-	explicit Option(const T& Value): m_Value(Value) {}
+	explicit Option(const auto& Value): m_Value(Value) {}
 
 	template<class T>
 	[[nodiscard]]
@@ -211,8 +210,7 @@ namespace option
 	class validator_tag{};
 	class notifier_tag{};
 
-	template<typename callable>
-	auto validator(callable&& Callable)
+	auto validator(auto&& Callable)
 	{
 		return overload
 		{
@@ -221,8 +219,7 @@ namespace option
 		};
 	}
 
-	template<typename callable>
-	auto notifier(callable&& Callable)
+	auto notifier(auto&& Callable)
 	{
 		return overload
 		{
@@ -450,6 +447,7 @@ public:
 	void LocalViewerConfig(ViewerOptions &ViOptRef) {return ViewerConfig(ViOptRef, true);}
 	void LocalEditorConfig(EditorOptions &EdOptRef) {return EditorConfig(EdOptRef, true);}
 	void SetSearchColumns(string_view Columns, string_view Widths);
+	void SetFilePanelModes();
 
 	struct SortingOptions
 	{
@@ -789,6 +787,7 @@ public:
 		BoolOption RestoreCPAfterExecute;
 		StringOption strExecuteBatchType;
 		StringOption strExcludeCmds;
+		std::vector<string_view> ExcludeCmds;
 		StringOption Comspec;
 		StringOption ComspecArguments;
 		struct
@@ -1069,7 +1068,6 @@ private:
 	static void MaskGroupsSettings();
 	void AutoCompleteSettings();
 	void TreeSettings();
-	void SetFilePanelModes();
 	void SetViewSettings(size_t Index, PanelViewSettings&& Data);
 	void AddViewSettings(size_t Index, PanelViewSettings&& Data);
 	void DeleteViewSettings(size_t Index);

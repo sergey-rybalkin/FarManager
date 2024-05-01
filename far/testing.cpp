@@ -41,6 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Internal:
 #include "components.hpp"
+#include "locale.hpp"
 #include "log.hpp"
 
 // Platform:
@@ -94,7 +95,7 @@ std::optional<int> testing_main(std::span<wchar_t const* const> const Args)
 	if (is_ui_test_run(Args.subspan(1)))
 		return Catch::Session().run(static_cast<int>(Args.size()), Args.data());
 
-	const auto ServiceTestIterator = std::find_if(ALL_CONST_RANGE(Args), [](wchar_t const* const Arg){ return Arg == L"/service:test"sv; });
+	const auto ServiceTestIterator = std::ranges::find(Args, L"/service:test"sv);
 	const auto IsBuildStep = ServiceTestIterator != Args.end();
 
 	if constexpr (DebugTests)
@@ -134,6 +135,8 @@ std::optional<int> testing_main(std::span<wchar_t const* const> const Args)
 
 	NewArgs.emplace_back(L"--warn");
 	NewArgs.emplace_back(L"NoAssertions");
+
+	locale.invariant();
 
 	return Catch::Session().run(static_cast<int>(NewArgs.size()), NewArgs.data());
 }

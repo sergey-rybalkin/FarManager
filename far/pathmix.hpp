@@ -97,12 +97,12 @@ namespace path
 			const auto LastCharPos = Str.find_last_not_of(separators);
 			Str.resize(LastCharPos == string::npos? 0 : LastCharPos + 1);
 
-			const auto TotalSize = std::accumulate(ALL_RANGE(Args), Str.size() + (Args.size() - 1), [](size_t const Value, const append_arg& Element)
+			const auto TotalSize = std::ranges::fold_left(Args, Str.size() + (Args.size() - 1), [](size_t const Value, const append_arg& Element)
 			{
 				return Value + Element.size();
 			});
 
-			reserve_exp_noshrink(Str, TotalSize);
+			reserve_exp(Str, TotalSize);
 
 			for (const auto& i: Args)
 			{
@@ -114,15 +114,13 @@ namespace path
 		}
 	}
 
-	template<typename... args>
-	void append(string& Str, args const&... Args)
+	void append(string& Str, auto const&... Args)
 	{
 		detail::append_impl(Str, { detail::append_arg(Args)... });
 	}
 
-	template<typename arg, typename... args>
 	[[nodiscard]]
-	string join(arg&& Arg, const args&... Args)
+	string join(auto&& Arg, const auto&... Args)
 	{
 		static_assert(sizeof...(Args) > 0);
 
@@ -155,7 +153,6 @@ enum class root_type
 	remote,
 	unc_remote,
 	volume,
-	pipe,
 	unknown_rootlike
 };
 
@@ -180,18 +177,27 @@ string_view PointToFolderNameIfFolder(string_view Path);
 [[nodiscard]]
 std::pair<string_view, string_view> name_ext(string_view Path);
 
-void AddEndSlash(string &strPath, wchar_t TypeSlash);
-void AddEndSlash(string &strPath);
-bool AddEndSlash(wchar_t *Path, wchar_t TypeSlash);
-bool AddEndSlash(wchar_t *Path);
-[[nodiscard]]
-string AddEndSlash(string_view Path);
-void DeleteEndSlash(wchar_t* Path);
+namespace legacy
+{
+	bool AddEndSlash(wchar_t* Path);
+
+#ifndef NO_WRAPPER
+	bool AddEndSlash(char* Path);
+#endif
+
+	void DeleteEndSlash(wchar_t* Path);
+}
+
+void AddEndSlash(string& Path);
+[[nodiscard]] string AddEndSlash(string_view Path);
+bool AddEndSlash(wchar_t* Path) = delete;
+
 void DeleteEndSlash(string& Path);
-[[nodiscard]]
-string_view DeleteEndSlash(string_view Path);
-inline void ReplaceSlashToBackslash(string &strStr) { std::replace(ALL_RANGE(strStr), L'/', L'\\'); }
-inline void ReplaceBackslashToSlash(string &strStr) { std::replace(ALL_RANGE(strStr), L'\\', L'/'); }
+[[nodiscard]] string_view DeleteEndSlash(string_view Path);
+void DeleteEndSlash(wchar_t* Path) = delete;
+
+inline void ReplaceSlashToBackslash(string &strStr) { std::ranges::replace(strStr, L'/', L'\\'); }
+inline void ReplaceBackslashToSlash(string &strStr) { std::ranges::replace(strStr, L'\\', L'/'); }
 
 bool ContainsSlash(string_view Str);
 [[nodiscard]]

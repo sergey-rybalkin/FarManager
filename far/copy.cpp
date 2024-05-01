@@ -238,8 +238,7 @@ enum COPY_FLAGS
 	FCOPY_UPDATEPPANEL            = 12_bit, // необходимо обновить пассивную панель
 };
 
-template<typename times_type>
-static bool set_file_time(const os::fs::file& File, const times_type& Times, bool const All)
+static bool set_file_time(const os::fs::file& File, const auto& Times, bool const All)
 {
 	const auto opt_time = [&](const os::chrono::time_point& Time)
 	{
@@ -415,7 +414,7 @@ intptr_t ShellCopy::CopyDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 		{
 			if (Param1==ID_SC_USEFILTER) // "Use filter"
 			{
-				m_UseFilter = static_cast<FARCHECKEDSTATE>(reinterpret_cast<intptr_t>(Param2)) == BSTATE_CHECKED;
+				m_UseFilter = static_cast<FARCHECKEDSTATE>(std::bit_cast<intptr_t>(Param2)) == BSTATE_CHECKED;
 				return TRUE;
 			}
 
@@ -475,7 +474,7 @@ intptr_t ShellCopy::CopyDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 		case DN_LISTHOTKEY:
 			if(Param1==ID_SC_COMBO)
 			{
-				const auto Index = reinterpret_cast<intptr_t>(Param2);
+				const auto Index = std::bit_cast<intptr_t>(Param2);
 				if (Index == CM_ASKRO)
 				{
 					Dlg->SendMessage(DM_SWITCHRO, 0, nullptr);
@@ -513,7 +512,7 @@ intptr_t ShellCopy::CopyDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 			     в списке.
 			*/
 			const auto MultiCopy = Dlg->SendMessage(DM_GETCHECK, ID_SC_MULTITARGET, nullptr) == BSTATE_CHECKED;
-			string strOldFolder = view_as<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, ID_SC_TARGETEDIT, nullptr));
+			string strOldFolder = std::bit_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, ID_SC_TARGETEDIT, nullptr));
 			string strNewFolder;
 
 			if (AltF10 == 2)
@@ -900,13 +899,13 @@ ShellCopy::ShellCopy(
 		CopyDlg[ID_SC_SECURITY_INHERIT].Flags |= DIF_HIDDEN | DIF_DISABLE;
 		CopyDlg[ID_SC_SEPARATOR2].Flags       |= DIF_HIDDEN;
 
-		for (const auto& i: irange(ID_SC_SEPARATOR2, ID_SC_COMBO + 1))
+		for (const auto i: std::views::iota(ID_SC_SEPARATOR2 + 0, ID_SC_COMBO + 1))
 		{
 			CopyDlg[i].Y1-=2;
 			CopyDlg[i].Y2-=2;
 		}
 
-		for (const auto& i: irange(ID_SC_MULTITARGET, ID_SC_BTNCANCEL + 1))
+		for (const auto i: std::views::iota(ID_SC_MULTITARGET + 0, ID_SC_BTNCANCEL + 1))
 		{
 			CopyDlg[i].Y1-=3;
 			CopyDlg[i].Y2-=3;
@@ -970,7 +969,7 @@ ShellCopy::ShellCopy(
 		}
 
 		CopyDlg[ID_SC_COMBO].ListItems=&ComboList;
-		const auto Dlg = Dialog::create(CopyDlg, &ShellCopy::CopyDlgProc, this);
+		const auto Dlg = Dialog::create(CopyDlg, std::bind_front(&ShellCopy::CopyDlgProc, this));
 		Dlg->SetHelp(Link? L"HardSymLink"sv : L"CopyFiles"sv);
 		Dlg->SetId(Link?HardSymLinkId:(Move?(CurrentOnly?MoveCurrentOnlyFileId:MoveFilesId):(CurrentOnly?CopyCurrentOnlyFileId:CopyFilesId)));
 		Dlg->SetPosition({ -1, -1, DlgW, DlgH });
@@ -1902,7 +1901,9 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 				SrcData.ReparseTag,
 				IO_REPARSE_TAG_SYMLINK,
 				IO_REPARSE_TAG_MOUNT_POINT,
-				IO_REPARSE_TAG_APPEXECLINK
+				IO_REPARSE_TAG_NFS,
+				IO_REPARSE_TAG_APPEXECLINK,
+				IO_REPARSE_TAG_LX_SYMLINK
 			);
 		}
 		if (CopySymlinkContents)
@@ -2121,7 +2122,7 @@ COPY_CODES ShellCopy::ShellCopyOneFile(
 					if (!FileMoved)
 					{
 						ErrorState = os::last_error();
-						LOGWARNING(L"move_file({}, {}): {}"sv, strSrcFullName, strDestPath, os::last_error());
+						LOGWARNING(L"move_file({}, {}): {}"sv, strSrcFullName, strDestPath, *ErrorState);
 
 						if (NWFS_Attr && !os::fs::set_file_attributes(strSrcFullName, SrcData.Attributes)) // BUGBUG
 						{
@@ -2325,7 +2326,7 @@ void ShellCopy::CheckStreams(const string_view Src, const string_view DestPath)
 
 	const auto StreamsEnumerator = os::fs::enum_streams(Src);
 
-	if (!std::any_of(ALL_CONST_RANGE(StreamsEnumerator), [](WIN32_FIND_STREAM_DATA const& i){ return !string_view(i.cStreamName).starts_with(L"::"sv); }))
+	if (std::ranges::all_of(StreamsEnumerator, [](WIN32_FIND_STREAM_DATA const& i){ return string_view(i.cStreamName).starts_with(L"::"sv); }))
 		return;
 
 	switch (Message(MSG_WARNING, msg(lng::MWarning),
@@ -2820,7 +2821,7 @@ intptr_t ShellCopy::WarnDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* P
 	{
 		case DM_OPENVIEWER:
 		{
-			const auto& WFN = view_as<const file_names_for_overwrite_dialog>(Dlg->SendMessage(DM_GETDLGDATA, 0, nullptr));
+			const auto& WFN = view_as<file_names_for_overwrite_dialog>(Dlg->SendMessage(DM_GETDLGDATA, 0, nullptr));
 
 			NamesList List;
 			List.AddName(*WFN.Src);
@@ -3318,11 +3319,8 @@ bool ShellCopy::ShellSystemCopy(const string_view SrcName, const string_view Des
 				PROGRESS_CANCEL :
 				PROGRESS_CONTINUE;
 		},
-		[&]
-		{
-			SAVE_EXCEPTION_TO(ExceptionPtr);
-			return PROGRESS_CANCEL;
-		});
+		save_exception_and_return<PROGRESS_CANCEL>(ExceptionPtr)
+		);
 	};
 
 	const auto sd = GetSecurity(SrcName);

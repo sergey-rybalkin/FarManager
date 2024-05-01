@@ -82,10 +82,10 @@ public:
 	{
 		const file_ptr XmlFile(_wfsopen(NTPath(File).c_str(), L"rb", _SH_DENYWR));
 		if (!XmlFile)
-			throw MAKE_FAR_KNOWN_EXCEPTION(far::format(L"Error opening file \"{}\": {}"sv, File, os::format_errno(errno)));
+			throw far_known_exception(far::format(L"Error opening file \"{}\": {}"sv, File, os::format_errno(errno)));
 
 		if (const auto LoadResult = m_Document.LoadFile(XmlFile.get()); LoadResult != tinyxml::XML_SUCCESS)
-			throw MAKE_FAR_KNOWN_EXCEPTION(far::format(L"Error loading document from \"{}\": {}"sv, File, encoding::utf8::get_chars(m_Document.ErrorIDToName(LoadResult))));
+			throw far_known_exception(far::format(L"Error loading document from \"{}\": {}"sv, File, encoding::utf8::get_chars(m_Document.ErrorIDToName(LoadResult))));
 
 		const auto root = m_Document.FirstChildElement(XmlDocumentRootName);
 		SetRoot(root);
@@ -142,10 +142,10 @@ public:
 	{
 		const file_ptr XmlFile(_wfsopen(NTPath(File).c_str(), L"w", _SH_DENYWR));
 		if (!XmlFile)
-			throw MAKE_FAR_KNOWN_EXCEPTION(far::format(L"Error opening file \"{}\": {}"sv, File, os::format_errno(errno)));
+			throw far_known_exception(far::format(L"Error opening file \"{}\": {}"sv, File, os::format_errno(errno)));
 
 		if (const auto SaveResult = m_Document.SaveFile(XmlFile.get()); SaveResult != tinyxml::XML_SUCCESS)
-			throw MAKE_FAR_KNOWN_EXCEPTION(far::format(L"Error saving document to \"{}\": {}"sv, File, encoding::utf8::get_chars(m_Document.ErrorIDToName(SaveResult))));
+			throw far_known_exception(far::format(L"Error saving document to \"{}\": {}"sv, File, encoding::utf8::get_chars(m_Document.ErrorIDToName(SaveResult))));
 	}
 
 private:
@@ -238,8 +238,7 @@ void serialise_blob(tinyxml::XMLElement& e, bytes_view const Value)
 	SetAttribute(e, "value", base64::encode(Value));
 }
 
-template<typename callable>
-bool deserialise_value(char const* Type, char const* Value, callable const& Setter)
+bool deserialise_value(char const* Type, char const* Value, auto const& Setter)
 {
 	if (!strcmp(Type, "qword"))
 	{
@@ -295,8 +294,7 @@ int sqlite_busy_handler(void* Param, int Retries) noexcept
 class sqlite_boilerplate : public SQLiteDb
 {
 protected:
-	template<typename... args>
-	explicit sqlite_boilerplate(args&&... Args) :
+	explicit sqlite_boilerplate(auto&&... Args) :
 		SQLiteDb(sqlite_busy_handler, FWD(Args)...)
 	{
 	}
@@ -443,8 +441,8 @@ private:
 
 	virtual const char* GetKeyName() const = 0;
 
-	template<column_type TypeId, class getter_t, class T>
-	bool GetValueT(const string_view Key, const string_view Name, T& Value, const getter_t Getter) const
+	template<column_type TypeId>
+	bool GetValueT(const string_view Key, const string_view Name, auto& Value, const auto Getter) const
 	{
 		const auto Stmt = AutoStatement(stmtGetValue);
 		if (!Stmt->Bind(Key, Name).Step() || Stmt->GetColType(0) != TypeId)
@@ -454,14 +452,12 @@ private:
 		return true;
 	}
 
-	template<class T>
-	void SetValueT(const string_view Key, const string_view Name, const T Value)
+	void SetValueT(const string_view Key, const string_view Name, const auto Value)
 	{
 		ExecuteStatement(stmtSetValue, Key, Name, Value);
 	}
 
-	template<class T, class getter_t>
-	bool EnumValuesT(const string_view Key, bool Reset, string& Name, T& Value, const getter_t Getter) const
+	bool EnumValuesT(const string_view Key, bool Reset, string& Name, auto& Value, const auto Getter) const
 	{
 		auto Stmt = EnumValuesStmt();
 
@@ -806,8 +802,7 @@ private:
 		}
 	}
 
-	template<class T, class getter_t>
-	bool GetValueT(const key& Root, const string_view Name, T& Value, const getter_t Getter) const
+	bool GetValueT(const key& Root, const string_view Name, auto& Value, const auto Getter) const
 	{
 		const auto Stmt = AutoStatement(stmtGetValue);
 		if (!Stmt->Bind(Root.get(), Name).Step())
@@ -817,8 +812,7 @@ private:
 		return true;
 	}
 
-	template<class T>
-	void SetValueT(const key& Root, const string_view Name, const T& Value)
+	void SetValueT(const key& Root, const string_view Name, const auto& Value)
 	{
 		ExecuteStatement(stmtSetValue, Root.get(), Name, Value);
 	}
@@ -848,6 +842,52 @@ const std::pair<FARCOLORFLAGS, string_view> LegacyColorFlagNames[]
 	{ FCF_BG_INDEX, L"bg4bit"sv },
 };
 
+void color_to_xml(bytes_view const Blob, tinyxml::XMLElement& e)
+{
+	const auto process_color = [&](const char* const Name, COLORREF const Color)
+	{
+		if (Color)
+			SetAttribute(e, Name, encoding::utf8::get_bytes(to_hex_wstring(Color)));
+	};
+
+	FarColor Color;
+	if (!deserialise(Blob, Color))
+		return;
+
+	process_color("background", Color.BackgroundColor);
+	process_color("foreground", Color.ForegroundColor);
+	process_color("underline", Color.UnderlineColor);
+
+	if (Color.Flags)
+	{
+		if (const auto StrFlags = encoding::utf8::get_bytes(colors::ColorFlagsToString(Color.Flags)); !StrFlags.empty())
+			SetAttribute(e, "flags", StrFlags);
+	}
+}
+
+FarColor color_from_xml(tinyxml::XMLElement const& e)
+{
+	const auto process_color = [&](const char* const Name, COLORREF& Color)
+	{
+		if (const auto Value = e.Attribute(Name))
+			Color = std::strtoul(Value, nullptr, 16);
+	};
+
+	FarColor Color{};
+
+	process_color("background", Color.BackgroundColor);
+	process_color("foreground", Color.ForegroundColor);
+	process_color("underline", Color.UnderlineColor);
+
+	if (const auto flags = e.Attribute("flags"))
+	{
+		const auto FlagsStr = encoding::utf8::get_chars(flags);
+		Color.Flags = colors::ColorStringToFlags(FlagsStr) | StringToFlags(FlagsStr, LegacyColorFlagNames);
+	}
+
+	return Color;
+}
+
 class HighlightHierarchicalConfigDb final: public HierarchicalConfigDb
 {
 public:
@@ -870,15 +910,9 @@ private:
 
 		if (contains(ColorKeys, Name))
 		{
-			FarColor Color;
-			if (deserialise(Blob, Color))
-			{
-				SetAttribute(e, "type", "color"sv);
-				SetAttribute(e, "background", encoding::utf8::get_bytes(to_hex_wstring(Color.BackgroundColor)));
-				SetAttribute(e, "foreground", encoding::utf8::get_bytes(to_hex_wstring(Color.ForegroundColor)));
-				SetAttribute(e, "flags", encoding::utf8::get_bytes(colors::ColorFlagsToString(Color.Flags)));
-				return;
-			}
+			SetAttribute(e, "type", "color"sv);
+			color_to_xml(Blob, e);
+			return;
 		}
 
 		return HierarchicalConfigDb::SerializeBlob(Name, Blob, e);
@@ -887,21 +921,7 @@ private:
 	bytes DeserializeBlob(const char* Type, const char* Value, const tinyxml::XMLElement& e) const override
 	{
 		if(Type == "color"sv)
-		{
-			FarColor Color{};
-
-			if (const auto background = e.Attribute("background"))
-				Color.BackgroundColor = std::strtoul(background, nullptr, 16);
-			if (const auto foreground = e.Attribute("foreground"))
-				Color.ForegroundColor = std::strtoul(foreground, nullptr, 16);
-			if (const auto flags = e.Attribute("flags"))
-			{
-				const auto FlagsStr = encoding::utf8::get_chars(flags);
-				Color.Flags = colors::ColorStringToFlags(FlagsStr) | StringToFlags(FlagsStr, LegacyColorFlagNames);
-			}
-
-			return bytes(view_bytes(Color));
-		}
+			return bytes(view_bytes(color_from_xml(e)));
 
 		return HierarchicalConfigDb::DeserializeBlob(Type, Value, e);
 	}
@@ -918,6 +938,8 @@ public:
 private:
 	static void Initialise(const db_initialiser& Db)
 	{
+		Db.add_numeric_collation();
+
 		static const std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS colors(name TEXT NOT NULL PRIMARY KEY, value BLOB);"sv,
@@ -953,19 +975,13 @@ private:
 	{
 		auto& root = CreateChild(Representation.Root(), "colors");
 
-		const auto stmtEnumAllValues = create_stmt("SELECT name, value FROM colors ORDER BY name;"sv);
+		const auto stmtEnumAllValues = create_stmt("SELECT name, value FROM colors ORDER BY name COLLATE numeric;"sv);
 
 		while (stmtEnumAllValues.Step())
 		{
 			auto& e = CreateChild(root, "object");
-
 			SetAttribute(e, "name", stmtEnumAllValues.GetColTextUTF8(0));
-			if (FarColor Color; deserialise(stmtEnumAllValues.GetColBlob(1), Color))
-			{
-				SetAttribute(e, "background", encoding::utf8::get_bytes(to_hex_wstring(Color.BackgroundColor)));
-				SetAttribute(e, "foreground", encoding::utf8::get_bytes(to_hex_wstring(Color.ForegroundColor)));
-				SetAttribute(e, "flags", encoding::utf8::get_bytes(colors::ColorFlagsToString(Color.Flags)));
-			}
+			color_to_xml(stmtEnumAllValues.GetColBlob(1), e);
 		}
 	}
 
@@ -975,21 +991,14 @@ private:
 		for (const auto& e: xml_enum(Representation.Root().FirstChildElement("colors"), "object"))
 		{
 			const auto name = e.Attribute("name");
-			const auto background = e.Attribute("background");
-			const auto foreground = e.Attribute("foreground");
-			const auto flags = e.Attribute("flags");
 
 			if (!name)
 				continue;
 
 			const auto Name = encoding::utf8::get_chars(name);
 
-			if(background && foreground && flags)
+			if (const auto Color = color_from_xml(e); Color != FarColor{})
 			{
-				FarColor Color{};
-				Color.BackgroundColor = std::strtoul(background, nullptr, 16);
-				Color.ForegroundColor = std::strtoul(foreground, nullptr, 16);
-				Color.Flags = colors::ColorStringToFlags(encoding::utf8::get_chars(flags));
 				SetValue(Name, Color);
 			}
 			else
@@ -1770,7 +1779,7 @@ private:
 	os::event AsyncDeleteAddDone{os::event::type::manual, os::event::state::signaled};
 	os::event AsyncCommitDone{os::event::type::manual, os::event::state::signaled};
 	os::event AsyncWork{os::event::type::automatic, os::event::state::nonsignaled};
-	[[maybe_unused]] os::thread WorkThread{os::thread::mode::join, &HistoryConfigCustom::ThreadProc, this};
+	[[maybe_unused]] os::thread WorkThread{&HistoryConfigCustom::ThreadProc, this};
 
 	struct AsyncWorkItem
 	{
@@ -2393,8 +2402,7 @@ void config_provider::TryImportDatabase(representable& p, const char* NodeName, 
 	}
 }
 
-template<class T>
-void config_provider::ImportDatabase(T& Database, const char* ImportNodeName, bool IsPlugin)
+void config_provider::ImportDatabase(auto& Database, const char* ImportNodeName, bool IsPlugin)
 {
 	if (m_Mode != mode::m_import && Database.IsNew())
 	{
@@ -2687,7 +2695,7 @@ bool config_provider::ShowProblems() const
 void config_provider::AsyncCall(async_key, const std::function<void()>& Routine)
 {
 	std::erase_if(m_Threads, [](const os::thread& i){ return i.is_signaled(); });
-	m_Threads.emplace_back(os::thread::mode::join, Routine);
+	m_Threads.emplace_back(Routine);
 }
 
 config_provider& ConfigProvider()

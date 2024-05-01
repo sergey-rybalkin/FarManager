@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "macro.hpp"
 
 // Internal:
+#include "macrovalues.hpp"
 #include "uuids.far.hpp"
 #include "cmdline.hpp"
 #include "config.hpp"
@@ -76,10 +77,14 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "strmix.hpp"
 #include "string_sort.hpp"
 #include "tvar.hpp"
+#include "filetype.hpp"
+#include "hilight.hpp"
+#include "shortcuts.hpp"
 #include "global.hpp"
 
 // Platform:
 #include "platform.env.hpp"
+#include "platform.memory.hpp"
 
 // Common:
 #include "common/from_string.hpp"
@@ -357,57 +362,14 @@ void print_opcodes()
 }
 #endif
 
-using MACROFLAGS_MFLAGS = unsigned long long;
-enum: MACROFLAGS_MFLAGS
-{
-	MFLAGS_NONE                    = 0,
-	// public flags, read from/saved to config
-	MFLAGS_ENABLEOUTPUT            = 0_bit, // не подавлять обновление экрана во время выполнения макроса
-	MFLAGS_NOSENDKEYSTOPLUGINS     = 1_bit, // НЕ передавать плагинам клавиши во время записи/воспроизведения макроса
-	MFLAGS_RUNAFTERFARSTART        = 3_bit, // этот макрос запускается при старте ФАРа
-	MFLAGS_EMPTYCOMMANDLINE        = 4_bit, // запускать, если командная линия пуста
-	MFLAGS_NOTEMPTYCOMMANDLINE     = 5_bit, // запускать, если командная линия не пуста
-	MFLAGS_EDITSELECTION           = 6_bit, // запускать, если есть выделение в редакторе
-	MFLAGS_EDITNOSELECTION         = 7_bit, // запускать, если есть нет выделения в редакторе
-	MFLAGS_SELECTION               = 8_bit, // активная:  запускать, если есть выделение
-	MFLAGS_PSELECTION              = 9_bit, // пассивная: запускать, если есть выделение
-	MFLAGS_NOSELECTION             = 10_bit, // активная:  запускать, если есть нет выделения
-	MFLAGS_PNOSELECTION            = 11_bit, // пассивная: запускать, если есть нет выделения
-	MFLAGS_NOFILEPANELS            = 12_bit, // активная:  запускать, если это плагиновая панель
-	MFLAGS_PNOFILEPANELS           = 13_bit, // пассивная: запускать, если это плагиновая панель
-	MFLAGS_NOPLUGINPANELS          = 14_bit, // активная:  запускать, если это файловая панель
-	MFLAGS_PNOPLUGINPANELS         = 15_bit, // пассивная: запускать, если это файловая панель
-	MFLAGS_NOFOLDERS               = 16_bit, // активная:  запускать, если текущий объект "файл"
-	MFLAGS_PNOFOLDERS              = 17_bit, // пассивная: запускать, если текущий объект "файл"
-	MFLAGS_NOFILES                 = 18_bit, // активная:  запускать, если текущий объект "папка"
-	MFLAGS_PNOFILES                = 19_bit, // пассивная: запускать, если текущий объект "папка"
-	MFLAGS_PUBLIC_MASK             = 28_bit - 1,
-	// private flags, for runtime purposes only
-	MFLAGS_PRIVATE_MASK            = ~MFLAGS_PUBLIC_MASK,
-	MFLAGS_POSTFROMPLUGIN          = 28_bit  // последовательность пришла от АПИ
-};
-
 // для диалога назначения клавиши
 struct DlgParam
 {
 	unsigned long long Flags;
-	DWORD Key;
 	FARMACROAREA Area;
+	DWORD Key;
 	int Recurse;
 	bool Changed;
-};
-
-enum
-{
-	OP_ISEXECUTING              = 1,
-	OP_ISDISABLEOUTPUT          = 2,
-	OP_HISTORYDISABLEMASK       = 3,
-	OP_ISHISTORYDISABLE         = 4,
-	OP_ISTOPMACROOUTPUTDISABLED = 5,
-	OP_ISPOSTMACROENABLED       = 6,
-	OP_SETMACROVALUE            = 8,
-	OP_GETINPUTFROMMACRO        = 9,
-	OP_GETLASTERROR             = 11,
 };
 
 static bool ToDouble(long long v, double& d)
@@ -500,7 +462,8 @@ static void SetMacroValue(bool Value)
 
 static bool TryToPostMacro(FARMACROAREA Area,const string& TextKey,DWORD IntKey)
 {
-	FarMacroValue values[]{ 10.0, static_cast<double>(Area), TextKey, static_cast<double>(IntKey) };
+	FarMacroValue values[]{ static_cast<double>(OP_TRYTOPOSTMACRO), static_cast<double>(Area),
+		TextKey, static_cast<double>(IntKey) };
 	FarMacroCall fmc{ sizeof(fmc), std::size(values), values };
 	OpenMacroPluginInfo info{ MCT_KEYMACRO, &fmc };
 	return CallMacroPlugin(&info);
@@ -870,6 +833,36 @@ int KeyMacro::GetKey()
 			case MPRT_USERMENU:
 				ShowUserMenu(mpr.Count,mpr.Values);
 				break;
+
+			case MPRT_FOLDERSHORTCUTS:
+				if (IsPanelsArea(m_Area))
+				{
+					const auto Result = Shortcuts::Configure();
+					if (Result != -1)
+						Global->CtrlObject->Cp()->ActivePanel()->ExecShortcutFolder(Result);
+				}
+				break;
+
+			case MPRT_FILEASSOCIATIONS:
+				if (IsPanelsArea(m_Area))
+				{
+					EditFileTypes();
+				}
+				break;
+
+			case MPRT_FILEHIGHLIGHT:
+				if (IsPanelsArea(m_Area))
+				{
+					Global->CtrlObject->HiFiles->HiEdit(0);
+				}
+				break;
+
+			case MPRT_FILEPANELMODES:
+				if (IsPanelsArea(m_Area))
+				{
+					Global->Opt->SetFilePanelModes();
+				}
+				break;
 		}
 	}
 
@@ -936,7 +929,7 @@ bool KeyMacro::AddMacro(const UUID& PluginId, const MacroAddMacroV1* Data)
 
 	intptr_t Priority = 50;
 	if (Data->StructSize >= sizeof(MacroAddMacro))
-		Priority = view_as<const MacroAddMacro*>(Data)->Priority;
+		Priority = std::bit_cast<const MacroAddMacro*>(Data)->Priority;
 
 	FarMacroValue values[]
 	{
@@ -947,7 +940,7 @@ bool KeyMacro::AddMacro(const UUID& PluginId, const MacroAddMacroV1* Data)
 		Flags,
 		Data->Description,
 		PluginId,
-		{reinterpret_cast<void*>(Data->Callback)},
+		{std::bit_cast<void*>(Data->Callback)},
 		Data->Id,
 		Priority
 	};
@@ -972,7 +965,8 @@ bool KeyMacro::PostNewMacro(const wchar_t* Sequence,FARKEYMACROFLAGS InputFlags,
 	if (InputFlags & KMFLAGS_ENABLEOUTPUT)        Flags |= MFLAGS_ENABLEOUTPUT;
 	if (InputFlags & KMFLAGS_NOSENDKEYSTOPLUGINS) Flags |= MFLAGS_NOSENDKEYSTOPLUGINS;
 
-	FarMacroValue values[]{ 7.0, Lang, Sequence, static_cast<double>(Flags), static_cast<double>(AKey), onlyCheck };
+	FarMacroValue values[]{ static_cast<double>(OP_POSTNEWMACRO), Lang, Sequence,
+		static_cast<double>(Flags), static_cast<double>(AKey), onlyCheck };
 	FarMacroCall fmc{ sizeof(fmc), std::size(values), values };
 	OpenMacroPluginInfo info{ MCT_KEYMACRO, &fmc };
 	return CallMacroPlugin(&info);
@@ -1106,12 +1100,14 @@ static bool CheckAll(FARMACROAREA Area, MACROFLAGS_MFLAGS CurFlags)
 
 static int Set3State(DWORD Flags,DWORD Chk1,DWORD Chk2)
 {
-	const auto Chk12 = Chk1 | Chk2, FlagsChk12 = Flags & Chk12;
+	bool b1 = (Flags & Chk1) != 0;
+	bool b2 = (Flags & Chk2) != 0;
+	return b1==b2 ? 2 : b1 ? 1 : 0;
+}
 
-	if (FlagsChk12 == Chk12 || !FlagsChk12)
-		return 2;
-	else
-		return (Flags & Chk1)? 1 : 0;
+static DWORD Get3State(int Selected,DWORD Chk1,DWORD Chk2)
+{
+	return Selected==2 ? 0 : Selected==0 ? Chk1 : Chk2;
 }
 
 enum MACROSETTINGSDLG
@@ -1122,7 +1118,7 @@ enum MACROSETTINGSDLG
 	MS_TEXT_DESCR,
 	MS_EDIT_DESCR,
 	MS_SEPARATOR1,
-	MS_CHECKBOX_OUPUT,
+	MS_CHECKBOX_OUTPUT,
 	MS_CHECKBOX_START,
 	MS_SEPARATOR2,
 	MS_CHECKBOX_A_PANEL,
@@ -1151,7 +1147,7 @@ intptr_t KeyMacro::ParamMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 
 			if (Param1==MS_CHECKBOX_A_PANEL || Param1==MS_CHECKBOX_P_PANEL)
 			{
-				for (const auto& i: irange(1, 4))
+				for (const auto i: std::views::iota(1, 4))
 					Dlg->SendMessage(DM_ENABLE,Param1+i,Param2);
 			}
 			break;
@@ -1159,13 +1155,13 @@ intptr_t KeyMacro::ParamMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,vo
 
 			if (Param1==MS_BUTTON_OK)
 			{
-				const auto Sequence = view_as<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, MS_EDIT_SEQUENCE, nullptr));
+				const auto Sequence = std::bit_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, MS_EDIT_SEQUENCE, nullptr));
 				if (*Sequence)
 				{
 					if (ParseMacroString(Sequence,KMFLAGS_LUA,true))
 					{
 						m_RecCode=Sequence;
-						m_RecDescription = view_as<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, MS_EDIT_DESCR, nullptr));
+						m_RecDescription = std::bit_cast<const wchar_t*>(Dlg->SendMessage(DM_GETCONSTTEXTPTR, MS_EDIT_DESCR, nullptr));
 						return TRUE;
 					}
 				}
@@ -1219,13 +1215,13 @@ bool KeyMacro::GetMacroSettings(int Key, unsigned long long& Flags, string_view 
 		{ DI_CHECKBOX,  {{5,  8 }, {0,  8 }}, DIF_NONE, msg(lng::MMacroSettingsRunAfterStart), },
 		{ DI_TEXT,      {{-1, 9 }, {0,  9 }}, DIF_SEPARATOR, },
 		{ DI_CHECKBOX,  {{5,  10}, {0,  10}}, DIF_NONE, msg(lng::MMacroSettingsActivePanel), },
-		{ DI_CHECKBOX,  {{7,  11}, {0,  11}}, DIF_3STATE | DIF_DISABLE, msg(lng::MMacroSettingsPluginPanel), },
-		{ DI_CHECKBOX,  {{7,  12}, {0,  12}}, DIF_3STATE | DIF_DISABLE, msg(lng::MMacroSettingsFolders), },
-		{ DI_CHECKBOX,  {{7,  13}, {0,  13}}, DIF_3STATE | DIF_DISABLE, msg(lng::MMacroSettingsSelectionPresent), },
+		{ DI_CHECKBOX,  {{7,  11}, {0,  11}}, DIF_3STATE, msg(lng::MMacroSettingsPluginPanel), },
+		{ DI_CHECKBOX,  {{7,  12}, {0,  12}}, DIF_3STATE, msg(lng::MMacroSettingsFolders), },
+		{ DI_CHECKBOX,  {{7,  13}, {0,  13}}, DIF_3STATE, msg(lng::MMacroSettingsSelectionPresent), },
 		{ DI_CHECKBOX,  {{37, 10}, {0,  10}}, DIF_NONE, msg(lng::MMacroSettingsPassivePanel), },
-		{ DI_CHECKBOX,  {{39, 11}, {0,  11}}, DIF_3STATE | DIF_DISABLE, msg(lng::MMacroSettingsPluginPanel), },
-		{ DI_CHECKBOX,  {{39, 12}, {0,  12}}, DIF_3STATE | DIF_DISABLE, msg(lng::MMacroSettingsFolders), },
-		{ DI_CHECKBOX,  {{39, 13}, {0,  13}}, DIF_3STATE | DIF_DISABLE, msg(lng::MMacroSettingsSelectionPresent), },
+		{ DI_CHECKBOX,  {{39, 11}, {0,  11}}, DIF_3STATE, msg(lng::MMacroSettingsPluginPanel), },
+		{ DI_CHECKBOX,  {{39, 12}, {0,  12}}, DIF_3STATE, msg(lng::MMacroSettingsFolders), },
+		{ DI_CHECKBOX,  {{39, 13}, {0,  13}}, DIF_3STATE, msg(lng::MMacroSettingsSelectionPresent), },
 		{ DI_TEXT,      {{-1, 14}, {0,  14}}, DIF_SEPARATOR, },
 		{ DI_CHECKBOX,  {{5,  15}, {0,  15}}, DIF_3STATE, msg(lng::MMacroSettingsCommandLine), },
 		{ DI_CHECKBOX,  {{5,  16}, {0,  16}}, DIF_3STATE, msg(lng::MMacroSettingsSelectionBlockPresent), },
@@ -1237,35 +1233,47 @@ bool KeyMacro::GetMacroSettings(int Key, unsigned long long& Flags, string_view 
 	MacroSettingsDlg[MS_EDIT_SEQUENCE].strHistory = L"MacroSequence"sv;
 	MacroSettingsDlg[MS_EDIT_DESCR].strHistory = L"MacroDescription"sv;
 
-	MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected = 2;
-	MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected = 2;
-	MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected = 2;
-
-	MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected = 2;
-	MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected = 2;
-	MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected = 2;
-
-	MacroSettingsDlg[MS_CHECKBOX_CMDLINE].Selected = 2;
-	MacroSettingsDlg[MS_CHECKBOX_SELBLOCK].Selected = 2;
-
 	MacroSettingsDlg[MS_DOUBLEBOX].strData = far::vformat(msg(lng::MMacroSettingsTitle), KeyToText(Key));
 	//if(!(Key&0x7F000000))
 	//MacroSettingsDlg[3].Flags|=DIF_DISABLE;
-	MacroSettingsDlg[MS_CHECKBOX_OUPUT].Selected=Flags&MFLAGS_ENABLEOUTPUT?1:0;
+	MacroSettingsDlg[MS_CHECKBOX_OUTPUT].Selected=Flags&MFLAGS_ENABLEOUTPUT?1:0;
 	MacroSettingsDlg[MS_CHECKBOX_START].Selected=Flags&MFLAGS_RUNAFTERFARSTART?1:0;
-	MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected=Set3State(Flags,MFLAGS_NOFILEPANELS,MFLAGS_NOPLUGINPANELS);
-	MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected=Set3State(Flags,MFLAGS_NOFILES,MFLAGS_NOFOLDERS);
-	MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected=Set3State(Flags,MFLAGS_SELECTION,MFLAGS_NOSELECTION);
-	MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected=Set3State(Flags,MFLAGS_PNOFILEPANELS,MFLAGS_PNOPLUGINPANELS);
-	MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected=Set3State(Flags,MFLAGS_PNOFILES,MFLAGS_PNOFOLDERS);
-	MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected=Set3State(Flags,MFLAGS_PSELECTION,MFLAGS_PNOSELECTION);
+
+	int a = Set3State(Flags,MFLAGS_NOFILEPANELS,MFLAGS_NOPLUGINPANELS);
+	int b = Set3State(Flags,MFLAGS_NOFILES,MFLAGS_NOFOLDERS);
+	int c = Set3State(Flags,MFLAGS_SELECTION,MFLAGS_NOSELECTION);
+	MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected = a;
+	MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected = b;
+	MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected = c;
+	MacroSettingsDlg[MS_CHECKBOX_A_PANEL].Selected = (a!=2 || b!=2 || c!= 2) ? 1 : 0;
+	if (0 == MacroSettingsDlg[MS_CHECKBOX_A_PANEL].Selected)
+	{
+		MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Flags |= DIF_DISABLE;
+		MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Flags |= DIF_DISABLE;
+		MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Flags |= DIF_DISABLE;
+	}
+
+	a = Set3State(Flags,MFLAGS_PNOFILEPANELS,MFLAGS_PNOPLUGINPANELS);
+	b = Set3State(Flags,MFLAGS_PNOFILES,MFLAGS_PNOFOLDERS);
+	c = Set3State(Flags,MFLAGS_PSELECTION,MFLAGS_PNOSELECTION);
+	MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected = a;
+	MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected = b;
+	MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected = c;
+	MacroSettingsDlg[MS_CHECKBOX_P_PANEL].Selected = (a!=2 || b!=2 || c!= 2) ? 1 : 0;
+	if (0 == MacroSettingsDlg[MS_CHECKBOX_P_PANEL].Selected)
+	{
+		MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Flags |= DIF_DISABLE;
+		MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Flags |= DIF_DISABLE;
+		MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Flags |= DIF_DISABLE;
+	}
+
 	MacroSettingsDlg[MS_CHECKBOX_CMDLINE].Selected=Set3State(Flags,MFLAGS_EMPTYCOMMANDLINE,MFLAGS_NOTEMPTYCOMMANDLINE);
 	MacroSettingsDlg[MS_CHECKBOX_SELBLOCK].Selected=Set3State(Flags,MFLAGS_EDITSELECTION,MFLAGS_EDITNOSELECTION);
 	MacroSettingsDlg[MS_EDIT_SEQUENCE].strData = Src.empty()? m_RecCode : Src;
 	MacroSettingsDlg[MS_EDIT_DESCR].strData = Descr.empty()? m_RecDescription : Descr;
 
-	DlgParam Param{ 0, 0, MACROAREA_OTHER };
-	const auto Dlg = Dialog::create(MacroSettingsDlg, &KeyMacro::ParamMacroDlgProc, this, &Param);
+	DlgParam Param{ 0, MACROAREA_OTHER, 0 };
+	const auto Dlg = Dialog::create(MacroSettingsDlg, std::bind_front(&KeyMacro::ParamMacroDlgProc, this), &Param);
 	Dlg->SetPosition({ -1, -1, 73, 21 });
 	Dlg->SetHelp(L"KeyMacroSetting"sv);
 	Dlg->Process();
@@ -1273,60 +1281,33 @@ bool KeyMacro::GetMacroSettings(int Key, unsigned long long& Flags, string_view 
 	if (Dlg->GetExitCode()!=MS_BUTTON_OK)
 		return false;
 
-	enum key_id
-	{
-		key_output,
-		key_start,
-		key_pluginpanel,
-		key_folders,
-		key_selection,
-		key_cmdline,
-		key_selblock,
-
-		key_count
-	};
-
-	static const MACROFLAGS_MFLAGS Mapping[][3] =
-	{
-		// [ ] [x] [?]
-		{ MFLAGS_NONE, MFLAGS_ENABLEOUTPUT, MFLAGS_NONE },
-		{ MFLAGS_NONE, MFLAGS_RUNAFTERFARSTART, MFLAGS_NONE },
-		{ MFLAGS_NOPLUGINPANELS, MFLAGS_NOFILEPANELS, MFLAGS_NONE },
-		{ MFLAGS_NOFOLDERS, MFLAGS_NOFILES, MFLAGS_NONE },
-		{ MFLAGS_NOSELECTION, MFLAGS_SELECTION, MFLAGS_NONE },
-		{ MFLAGS_NOTEMPTYCOMMANDLINE, MFLAGS_EMPTYCOMMANDLINE, MFLAGS_NONE },
-		{ MFLAGS_EDITNOSELECTION, MFLAGS_EDITSELECTION, MFLAGS_NONE },
-	};
-
-	static_assert(key_count == std::size(Mapping));
-
-	const auto get_flag = [&](MACROSETTINGSDLG ControlId, key_id KeyId)
-	{
-		return Mapping[KeyId][MacroSettingsDlg[ControlId].Selected];
-	};
-
-	Flags =
-		get_flag(MS_CHECKBOX_OUPUT, key_output) |
-		get_flag(MS_CHECKBOX_START, key_start) |
-		get_flag(MS_CHECKBOX_CMDLINE, key_cmdline) |
-		get_flag(MS_CHECKBOX_SELBLOCK, key_selblock);
+	Flags=MacroSettingsDlg[MS_CHECKBOX_OUTPUT].Selected?MFLAGS_ENABLEOUTPUT:MFLAGS_NONE;
+	Flags|=MacroSettingsDlg[MS_CHECKBOX_START].Selected?MFLAGS_RUNAFTERFARSTART:MFLAGS_NONE;
 
 	if (MacroSettingsDlg[MS_CHECKBOX_A_PANEL].Selected)
 	{
-		Flags |=
-			get_flag(MS_CHECKBOX_A_PLUGINPANEL, key_pluginpanel) |
-			get_flag(MS_CHECKBOX_A_FOLDERS, key_folders) |
-			get_flag(MS_CHECKBOX_A_SELECTION, key_selection);
+		Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_A_PLUGINPANEL].Selected,
+		         MFLAGS_NOPLUGINPANELS, MFLAGS_NOFILEPANELS);
+		Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_A_FOLDERS].Selected,
+		         MFLAGS_NOFOLDERS, MFLAGS_NOFILES);
+		Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_A_SELECTION].Selected,
+		         MFLAGS_NOSELECTION, MFLAGS_SELECTION);
 	}
 
 	if (MacroSettingsDlg[MS_CHECKBOX_P_PANEL].Selected)
 	{
-		Flags |=
-			get_flag(MS_CHECKBOX_P_PLUGINPANEL, key_pluginpanel) |
-			get_flag(MS_CHECKBOX_P_FOLDERS, key_folders) |
-			get_flag(MS_CHECKBOX_P_SELECTION, key_selection);
+		Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_P_PLUGINPANEL].Selected,
+		         MFLAGS_PNOPLUGINPANELS, MFLAGS_PNOFILEPANELS);
+		Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_P_FOLDERS].Selected,
+		         MFLAGS_PNOFOLDERS, MFLAGS_PNOFILES);
+		Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_P_SELECTION].Selected,
+		         MFLAGS_PNOSELECTION, MFLAGS_PSELECTION);
 	}
 
+	Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_CMDLINE].Selected,
+	         MFLAGS_NOTEMPTYCOMMANDLINE, MFLAGS_EMPTYCOMMANDLINE);
+	Flags |= Get3State(MacroSettingsDlg[MS_CHECKBOX_SELBLOCK].Selected,
+	         MFLAGS_EDITNOSELECTION, MFLAGS_EDITSELECTION);
 	return true;
 }
 
@@ -1399,8 +1380,10 @@ class FarMacroApi
 public:
 	explicit FarMacroApi(FarMacroCall* Data) : mData(Data) {}
 
+	std::vector<TVar> parseParams(size_t Count) const;
 	void PassBoolean(bool b) const;
 	void PassError(const wchar_t* str) const;
+	void PassPointer(void* ptr) const;
 	void PassValue(long long Int) const;
 	void PassValue(double dbl) const;
 	void PassValue(const wchar_t* str) const;
@@ -1479,14 +1462,20 @@ public:
 
 private:
 	void fattrFuncImpl(int Type) const;
+	void SendValue(FarMacroValue &val) const;
 
 	FarMacroCall* mData;
 };
 
+void FarMacroApi::SendValue(FarMacroValue &val) const
+{
+	mData->Callback(mData->CallbackData, &val, 1);
+}
+
 void FarMacroApi::PassValue(const wchar_t *str) const
 {
 	FarMacroValue val = NullToEmpty(str);
-	mData->Callback(mData->CallbackData, &val, 1);
+	SendValue(val);
 }
 
 void FarMacroApi::PassValue(const string& str) const
@@ -1498,13 +1487,13 @@ void FarMacroApi::PassError(const wchar_t *str) const
 {
 	FarMacroValue val = NullToEmpty(str);
 	val.Type = FMVT_ERROR;
-	mData->Callback(mData->CallbackData, &val, 1);
+	SendValue(val);
 }
 
 void FarMacroApi::PassValue(double dbl) const
 {
 	FarMacroValue val = dbl;
-	mData->Callback(mData->CallbackData, &val, 1);
+	SendValue(val);
 }
 
 void FarMacroApi::PassValue(long long Int) const
@@ -1514,13 +1503,19 @@ void FarMacroApi::PassValue(long long Int) const
 		return PassValue(Double);
 
 	FarMacroValue val = Int;
-	mData->Callback(mData->CallbackData, &val, 1);
+	SendValue(val);
 }
 
 void FarMacroApi::PassBoolean(bool const b) const
 {
 	FarMacroValue val = b;
-	mData->Callback(mData->CallbackData, &val, 1);
+	SendValue(val);
+}
+
+void FarMacroApi::PassPointer(void *ptr) const
+{
+	FarMacroValue val = ptr;
+	SendValue(val);
 }
 
 void FarMacroApi::PassValue(const TVar& Var) const
@@ -1533,12 +1528,12 @@ void FarMacroApi::PassValue(const TVar& Var) const
 		PassValue(Var.asInteger());
 }
 
-static auto parseParams(size_t Count, const FarMacroCall* Data)
+std::vector<TVar> FarMacroApi::parseParams(size_t Count) const
 {
-	const auto argNum = std::min(Data->Count, Count);
+	const auto argNum = std::min(mData->Count, Count);
 	std::vector<TVar> Params;
 	Params.reserve(Count);
-	std::transform(Data->Values, Data->Values + argNum, std::back_inserter(Params), [](const auto& i)
+	std::ranges::transform(mData->Values, mData->Values + argNum, std::back_inserter(Params), [](const auto& i)
 	{
 		switch (i.Type)
 		{
@@ -2208,13 +2203,8 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 			if (SyncCall)
 				--m_InternalInput;
 
-			//в windows гарантируется, что не бывает указателей меньше 0x10000
-			if (reinterpret_cast<uintptr_t>(ResultCallPlugin) >= 0x10000 && ResultCallPlugin != INVALID_HANDLE_VALUE)
-			{
-				FarMacroValue Result(ResultCallPlugin);
-				Data->Callback(Data->CallbackData, &Result, 1);
-				return;
-			}
+			if (os::memory::is_pointer(ResultCallPlugin) && ResultCallPlugin != INVALID_HANDLE_VALUE)
+				return api.PassPointer(ResultCallPlugin);
 
 			return api.PassBoolean(ResultCallPlugin != nullptr);
 		}
@@ -2230,7 +2220,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 
 			const auto Area = static_cast<FARMACROAREA>(static_cast<int>(Data->Values[0].Double));
 			const auto Flags = static_cast<MACROFLAGS_MFLAGS>(static_cast<int>(Data->Values[1].Double));
-			const auto Callback = (Data->Count >= 3 && Data->Values[2].Type == FMVT_POINTER)? reinterpret_cast<FARMACROCALLBACK>(Data->Values[2].Pointer) : nullptr;
+			const auto Callback = (Data->Count >= 3 && Data->Values[2].Type == FMVT_POINTER)? std::bit_cast<FARMACROCALLBACK>(Data->Values[2].Pointer) : nullptr;
 			const auto CallbackId = (Data->Count >= 4 && Data->Values[3].Type == FMVT_POINTER)? Data->Values[3].Pointer : nullptr;
 			return api.PassBoolean(CheckAll(Area, Flags) && (!Callback || Callback(CallbackId, AKMFLAGS_NONE)));
 		}
@@ -2277,16 +2267,35 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 
 				switch (static_cast<int>(Data->Values[0].Double))
 				{
-					case 1: RestoreMacroChar(); break;
-					case 2: Global->ScrBuf->Lock(); break;
-					case 3: Global->ScrBuf->Unlock(); break;
-					case 4: Global->ScrBuf->ResetLockCount(); break;
-					case 5: api.PassValue(Global->ScrBuf->GetLockCount()); break;
-					case 6: if (Data->Count > 1) Global->ScrBuf->SetLockCount(Data->Values[1].Double); break;
-					case 7: api.PassBoolean(default_clipboard_mode::get() == clipboard_mode::internal); break;
-					case 8: if (Data->Count > 1) default_clipboard_mode::set(Data->Values[1].Boolean != 0? clipboard_mode::internal: clipboard_mode::system); break;
-					case 9: if (Data->Count > 1) api.PassValue(KeyNameToKey(Data->Values[1].String)); break;
-					case 10:
+					case IMP_RESTORE_MACROCHAR:
+						RestoreMacroChar();
+						break;
+					case IMP_SCRBUF_LOCK:
+						Global->ScrBuf->Lock();
+						break;
+					case IMP_SCRBUF_UNLOCK:
+						Global->ScrBuf->Unlock();
+						break;
+					case IMP_SCRBUF_RESETLOCKCOUNT:
+						Global->ScrBuf->ResetLockCount();
+						break;
+					case IMP_SCRBUF_GETLOCKCOUNT:
+						api.PassValue(Global->ScrBuf->GetLockCount());
+						break;
+					case IMP_SCRBUF_SETLOCKCOUNT:
+						if (Data->Count > 1) Global->ScrBuf->SetLockCount(Data->Values[1].Double);
+						break;
+					case IMP_GET_USEINTERNALCLIPBOARD:
+						api.PassBoolean(default_clipboard_mode::get() == clipboard_mode::internal);
+						break;
+					case IMP_SET_USEINTERNALCLIPBOARD:
+						if (Data->Count > 1) default_clipboard_mode::set(Data->Values[1].Boolean != 0?
+							clipboard_mode::internal: clipboard_mode::system);
+						break;
+					case IMP_KEYNAMETOKEY:
+						if (Data->Count > 1) api.PassValue(KeyNameToKey(Data->Values[1].String));
+						break;
+					case IMP_KEYTOTEXT:
 						if (Data->Count > 1)
 						{
 							api.PassValue(KeyToText(Data->Values[1].Double));
@@ -2326,7 +2335,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 		case MCODE_F_BM_PUSH:             // N=BM.Push() - сохранить текущую позицию в виде закладки в конце стека
 		case MCODE_F_BM_POP:              // N=BM.Pop() - восстановить текущую позицию из закладки в конце стека и удалить закладку
 		{
-			auto Params = parseParams(2, Data);
+			auto Params = api.parseParams(2);
 			auto& p1 = Params[0];
 			auto& p2 = Params[1];
 
@@ -2340,7 +2349,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 		case MCODE_F_MENU_GETVALUE:       // S=Menu.GetValue([N])
 		case MCODE_F_MENU_GETHOTKEY:      // S=gethotkey([N])
 		{
-			auto Params = parseParams(1, Data);
+			auto Params = api.parseParams(1);
 			TVar tmpVar=Params[0];
 
 			tmpVar.toInteger();
@@ -2390,7 +2399,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 		case MCODE_F_MENU_SELECT:      // N=Menu.Select(S[,N[,Dir]])
 		case MCODE_F_MENU_CHECKHOTKEY: // N=checkhotkey(S[,N])
 		{
-			auto Params = parseParams(3, Data);
+			auto Params = api.parseParams(3);
 			long long Result=-1;
 			long long tmpDir=0;
 
@@ -2423,7 +2432,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 		case MCODE_F_MENU_FILTER:      // N=Menu.Filter([Action[,Mode]])
 		case MCODE_F_MENU_FILTERSTR:   // S=Menu.FilterStr([Action[,S]])
 		{
-			auto Params = parseParams(2, Data);
+			auto Params = api.parseParams(2);
 			bool success=false;
 			auto& tmpAction = Params[0];
 
@@ -2441,7 +2450,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 					{
 						if (tmpVar.isUnknown())
 							tmpVar = -1;
-						tmpVar = CurrentWindow->VMProcess(CheckCode, reinterpret_cast<void*>(tmpVar.toInteger()), tmpAction.toInteger());
+						tmpVar = CurrentWindow->VMProcess(CheckCode, std::bit_cast<void*>(static_cast<intptr_t>(tmpVar.toInteger())), tmpAction.toInteger());
 						success=true;
 					}
 					else
@@ -2475,7 +2484,7 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 // S=trim(S[,N])
 void FarMacroApi::trimFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 
 	auto Str = Params[0].toString();
 
@@ -2515,7 +2524,7 @@ void FarMacroApi::substrFunc() const
 				если length = 0
 				если ...
 	*/
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	auto start = static_cast<int>(Params[1].asInteger());
 	const auto& Str = Params[0].toString();
 	const auto length_str = static_cast<int>(Str.size());
@@ -2586,7 +2595,7 @@ static void SplitPath(string_view const FullPath, string& Dest, int Flags)
 // S=fsplit(S,N)
 void FarMacroApi::fsplitFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 
 	string strPath;
 	SplitPath(Params[0].toString(), strPath, Params[1].asInteger());
@@ -2597,9 +2606,14 @@ void FarMacroApi::fsplitFunc() const
 // N=atoi(S[,radix])
 void FarMacroApi::atoiFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	long long Value = 0;
-	PassValue(from_string(Params[0].toString(), Value, nullptr, static_cast<int>(Params[1].toInteger()))? Value : 0);
+	int radix = static_cast<int>(Params[1].toInteger());
+
+	if (radix == 0 || (radix >= 2 && radix <= 36))
+		PassValue(from_string(Params[0].toString(), Value, nullptr, radix)? Value : 0);
+	else
+		PassValue(0);
 }
 
 // N=Window.Scroll(Lines[,Axis])
@@ -2608,7 +2622,7 @@ void FarMacroApi::windowscrollFunc() const
 	if (!Global->Opt->WindowMode)
 		return PassBoolean(false);
 
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 
 	int Lines = static_cast<int>(Params[0].asInteger()), Columns = 0;
 
@@ -2624,14 +2638,14 @@ void FarMacroApi::windowscrollFunc() const
 // S=itoa(N[,radix])
 void FarMacroApi::itowFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 
 	if (Params[0].isInteger() || Params[0].isDouble())
 	{
 		wchar_t value[65];
 		auto Radix = static_cast<int>(Params[1].toInteger());
 
-		if (!Radix)
+		if (Radix < 2 || Radix > 36)
 			Radix = 10;
 
 		Params[0] = TVar(_i64tow(Params[0].toInteger(), value, Radix));
@@ -2643,7 +2657,7 @@ void FarMacroApi::itowFunc() const
 // os::chrono::sleep_for(Nms)
 void FarMacroApi::sleepFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto Period = Params[0].asInteger();
 
 	if (Period > 0)
@@ -2668,7 +2682,7 @@ void FarMacroApi::keybarshowFunc() const
 		3 - swap
 		ret: prev mode or -1 - KeyBar not found
 	*/
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto f = Global->WindowManager->GetCurrentWindow();
 
 	PassValue(f? f->VMProcess(MCODE_F_KEYBAR_SHOW, nullptr, Params[0].asInteger()) - 1 : -1);
@@ -2678,7 +2692,7 @@ void FarMacroApi::keybarshowFunc() const
 // S=key(V)
 void FarMacroApi::keyFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	string strKeyText;
 
 	if (Params[0].isInteger() || Params[0].isDouble())
@@ -2699,7 +2713,7 @@ void FarMacroApi::keyFunc() const
 // V=waitkey([N,[T]])
 void FarMacroApi::waitkeyFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	const auto Type = static_cast<long>(Params[1].asInteger());
 
 	std::optional<std::chrono::milliseconds> TimeoutOpt;
@@ -2724,21 +2738,21 @@ void FarMacroApi::waitkeyFunc() const
 // n=min(n1,n2)
 void FarMacroApi::minFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	PassValue(std::min(Params[0], Params[1]));
 }
 
 // n=max(n1,n2)
 void FarMacroApi::maxFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	PassValue(std::max(Params[0], Params[1]));
 }
 
 // n=mod(n1,n2)
 void FarMacroApi::modFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 
 	const auto NumeratorType = Params[0].ParseType();
 	const auto DenominatorType = Params[1].ParseType();
@@ -2798,45 +2812,77 @@ void FarMacroApi::modFunc() const
 // N=index(S1,S2[,Mode])
 void FarMacroApi::indexFunc() const
 {
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	const auto& s = Params[0].toString();
 	const auto& p = Params[1].toString();
 
-	const auto StrStr = [](const string& Str1, const string& Str2) { return std::search(ALL_CONST_RANGE(Str1), ALL_CONST_RANGE(Str2)); };
-	const auto StrStrI = [](const string& Str1, const string& Str2) { return std::search(ALL_CONST_RANGE(Str1), ALL_CONST_RANGE(Str2), string_comparer_icase{}); };
+	const auto StrStr = [](const string& Str1, const string& Str2) { return std::ranges::search(Str1, Str2); };
+	const auto StrStrI = [](const string& Str1, const string& Str2) { return std::ranges::search(Str1, Str2, string_comparer_icase{}); };
 
-	const auto i = Params[2].asInteger()? StrStr(s, p) : StrStrI(s, p);
-	const auto Position = i != s.cend() ? i - s.cbegin() : -1;
+	const auto Result = Params[2].asInteger()? StrStr(s, p) : StrStrI(s, p);
+	const auto Position = Result.empty()? -1 : Result.begin() - s.cbegin();
 	PassValue(Position);
 }
 
 // S=rindex(S1,S2[,Mode])
 void FarMacroApi::rindexFunc() const
 {
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	const auto& s = Params[0].toString();
 	const auto& p = Params[1].toString();
 
-	const auto RevStrStr = [](const string& Str1, const string& Str2) { return std::find_end(ALL_CONST_RANGE(Str1), ALL_CONST_RANGE(Str2)); };
-	const auto RevStrStrI = [](const string& Str1, const string& Str2) { return std::find_end(ALL_CONST_RANGE(Str1), ALL_CONST_RANGE(Str2), string_comparer_icase{}); };
+	const auto RevStrStr = [](const string& Str1, const string& Str2) { return std::ranges::find_end(Str1, Str2); };
+	const auto RevStrStrI = [](const string& Str1, const string& Str2) { return std::ranges::find_end(Str1, Str2, string_comparer_icase{}); };
 
-	const auto i = Params[2].asInteger()? RevStrStr(s, p) : RevStrStrI(s, p);
-	const auto Position = i != s.cend()? i - s.cbegin() : -1;
+	const auto Result = Params[2].asInteger()? RevStrStr(s, p) : RevStrStrI(s, p);
+	const auto Position = Result.empty()? -1 : Result.begin() - s.cbegin();
 	PassValue(Position);
+}
+
+static auto convert_size2str_flags(uint64_t const Flags)
+{
+	static constexpr std::pair<uint64_t, uint64_t> FlagsMap[]
+	{
+		{ 0x0010000000000000, COLFLAGS_SHOW_MULTIPLIER },
+		{ 0x0800000000000000, COLFLAGS_GROUPDIGITS },
+		{ 0x0080000000000000, COLFLAGS_FLOATSIZE },
+		{ 0x0040000000000000, COLFLAGS_ECONOMIC },
+		{ 0x0400000000000000, COLFLAGS_THOUSAND },
+		{ 0x0020000000000000, COLFLAGS_USE_MULTIPLIER },
+	};
+
+	uint64_t InternalFlags = 0;
+
+	for (const auto& [From, To]: FlagsMap)
+	{
+		if (Flags & From)
+			InternalFlags |= To;
+	}
+
+	if (InternalFlags & COLFLAGS_USE_MULTIPLIER)
+	{
+		const auto Multiplier = Flags & COLFLAGS_MULTIPLIER_MASK;
+		InternalFlags |= Multiplier;
+	}
+
+	return InternalFlags;
 }
 
 // S=Size2Str(Size,Flags[,Width])
 void FarMacroApi::size2strFunc() const
 {
-	const auto Params = parseParams(3, mData);
+	const auto Params = parseParams(3);
+	const auto Size = as_unsigned(Params[0].asInteger());
+	const auto Flags = convert_size2str_flags(Params[1].asInteger());
 	const auto Width = static_cast<int>(Params[2].asInteger());
-	PassValue(FileSizeToStr(Params[0].asInteger(), Width, Params[1].asInteger()));
+
+	PassValue(FileSizeToStr(Size, Width, Flags));
 }
 
 // S=date([S])
 void FarMacroApi::dateFunc() const
 {
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 
 	if (Params[0].isInteger() && !Params[0].asInteger())
 		Params[0] = L""sv;
@@ -2853,7 +2899,7 @@ void FarMacroApi::dateFunc() const
 */
 void FarMacroApi::xlatFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	auto StrParam = Params[0].toString();
 	Xlat(StrParam, Params[1].asInteger());
 	PassValue(StrParam);
@@ -2862,7 +2908,7 @@ void FarMacroApi::xlatFunc() const
 // N=beep([N])
 void FarMacroApi::beepFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	PassBoolean(MessageBeep(static_cast<unsigned>(Params[0].asInteger())) != FALSE);
 }
 
@@ -2880,15 +2926,11 @@ Res=kbdLayout([N])
 // N=kbdLayout([N])
 void FarMacroApi::kbdLayoutFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto dwLayout = static_cast<DWORD>(Params[0].asInteger());
 
 	auto Ret = true;
-	HKL RetLayout = nullptr;
-
-	string LayoutName;
-	if (console.GetKeyboardLayoutName(LayoutName))
-		RetLayout = os::make_hkl(LayoutName);
+	const auto RetLayout = console.GetKeyboardLayout();
 
 	const auto hWnd = console.GetWindow();
 
@@ -2910,19 +2952,19 @@ void FarMacroApi::kbdLayoutFunc() const
 		else
 		{
 			WParam = 0;
-			LParam = reinterpret_cast<LPARAM>(os::make_hkl(dwLayout));
+			LParam = std::bit_cast<LPARAM>(os::make_hkl(dwLayout));
 		}
 
 		Ret = PostMessage(hWnd, WM_INPUTLANGCHANGEREQUEST, WParam, LParam) != FALSE;
 	}
 
-	PassValue(Ret? reinterpret_cast<intptr_t>(RetLayout) : 0);
+	PassValue(Ret? std::bit_cast<intptr_t>(RetLayout) : 0);
 }
 
 // S=prompt(["Title"[,"Prompt"[,flags[, "Src"[, "History"]]]]])
 void FarMacroApi::promptFunc() const
 {
-	const auto Params = parseParams(5, mData);
+	const auto Params = parseParams(5);
 	const auto& ValHistory = Params[4];
 	const auto& ValSrc = Params[3];
 	const auto Flags = static_cast<DWORD>(Params[2].asInteger());
@@ -2963,7 +3005,7 @@ void FarMacroApi::promptFunc() const
 // N=msgbox(["Title"[,"Text"[,flags]]])
 void FarMacroApi::msgBoxFunc() const
 {
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 
 	auto& ValT = Params[0];
 	string_view title;
@@ -2983,7 +3025,7 @@ void FarMacroApi::msgBoxFunc() const
 		Flags|=FMSG_MB_OK;
 
 	const auto TempBuf = concat(title, L'\n', text);
-	const auto Result = pluginapi::apiMessageFn(&FarUuid, &FarUuid, Flags, nullptr, view_as<const wchar_t* const*>(TempBuf.c_str()), 0, 0) + 1;
+	const auto Result = pluginapi::apiMessageFn(&FarUuid, &FarUuid, Flags, nullptr, std::bit_cast<const wchar_t* const*>(TempBuf.c_str()), 0, 0) + 1;
 	PassValue(Result);
 }
 
@@ -3003,7 +3045,7 @@ void FarMacroApi::msgBoxFunc() const
 //0x800 -
 void FarMacroApi::menushowFunc() const
 {
-	auto Params = parseParams(6, mData);
+	auto Params = parseParams(6);
 	auto& VY = Params[5];
 	auto& VX = Params[4];
 	auto& VFindOrFilter(Params[3]);
@@ -3039,7 +3081,7 @@ void FarMacroApi::menushowFunc() const
 	int nLeftShift=0;
 	if (bAutoNumbering)
 	{
-		for (int numlines = std::count(ALL_CONST_RANGE(strItems), L'\n'); numlines; numlines/=10)
+		for (int numlines = std::ranges::count(strItems, L'\n'); numlines; numlines/=10)
 		{
 			nLeftShift++;
 		}
@@ -3100,7 +3142,7 @@ void FarMacroApi::menushowFunc() const
 				}
 			};
 
-			const auto NewBegin = std::find_if(ALL_CONST_RANGE(NewItem.Name), [&](wchar_t i)
+			const auto NewBegin = std::ranges::find_if(NewItem.Name, [&](wchar_t i)
 			{
 				const auto Flag = CharToFlag(i);
 				NewItem.Flags |= Flag;
@@ -3144,7 +3186,7 @@ void FarMacroApi::menushowFunc() const
 
 	if ((bAutoNumbering) && (bSorting || bPacking))
 	{
-		for (const auto& i: irange(Menu->GetShowItemCount()))
+		for (const auto i: std::views::iota(0, Menu->GetShowItemCount()))
 		{
 			auto& Item = Menu->at(i);
 			if (!(Item.Flags & LIF_SEPARATOR))
@@ -3180,9 +3222,9 @@ void FarMacroApi::menushowFunc() const
 		const auto Key=RawKey();
 		if (bSetMenuFilter && !VFindOrFilter.isUnknown())
 		{
+			bSetMenuFilter = false;
 			string NewStr=VFindOrFilter.toString();
 			Menu->VMProcess(MCODE_F_MENU_FILTERSTR, &NewStr, 1);
-			bSetMenuFilter = false;
 		}
 
 		SelectedPos=Menu->GetSelectPos();
@@ -3204,7 +3246,7 @@ void FarMacroApi::menushowFunc() const
 			case KEY_RCTRLMULTIPLY:
 				if (bMultiSelect)
 				{
-					for (const auto& i: irange(Menu->size()))
+					for (const auto i: std::views::iota(0uz, Menu->size()))
 					{
 						if (Menu->at(i).Flags & MIF_HIDDEN)
 							continue;
@@ -3256,7 +3298,7 @@ void FarMacroApi::menushowFunc() const
 		{
 			string StrResult;
 
-			for (const auto& i: irange(Menu->size()))
+			for (const auto i: std::views::iota(0uz, Menu->size()))
 			{
 				if (Menu->GetCheck(static_cast<int>(i)))
 				{
@@ -3318,7 +3360,7 @@ void FarMacroApi::menushowFunc() const
 // S=Env(S[,Mode[,Value]])
 void FarMacroApi::environFunc() const
 {
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	auto& Value = Params[2];
 	const auto& Mode = Params[1];
 	auto& S = Params[0];
@@ -3336,7 +3378,7 @@ void FarMacroApi::environFunc() const
 // V=Panel.Select(panelType,Action[,Mode[,Items]])
 void FarMacroApi::panelselectFunc() const
 {
-	auto Params = parseParams(4, mData);
+	auto Params = parseParams(4);
 	auto& ValItems = Params[3];
 	const auto Mode = static_cast<int>(Params[2].asInteger());
 	const auto Action = static_cast<int>(Params[1].asInteger());
@@ -3388,7 +3430,7 @@ void FarMacroApi::fattrFuncImpl(int Type) const
 
 	if (any_of(Type, f_fattr_fs, f_fexist_fs))
 	{
-		auto Params = parseParams(1, mData);
+		auto Params = parseParams(1);
 		auto& Str = Params[0];
 
 		// get_find_data to support wildcards
@@ -3399,7 +3441,7 @@ void FarMacroApi::fattrFuncImpl(int Type) const
 	}
 	else
 	{
-		auto Params = parseParams(2, mData);
+		auto Params = parseParams(2);
 		auto& S = Params[1];
 		const auto& Str = S.toString();
 
@@ -3465,7 +3507,7 @@ void FarMacroApi::panelfexistFunc() const
 */
 void FarMacroApi::flockFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	int Ret = -1;
 	const auto stateFLock = static_cast<int>(Params[1].asInteger());
 	auto vkKey = static_cast<unsigned>(Params[0].asInteger());
@@ -3495,7 +3537,7 @@ void FarMacroApi::flockFunc() const
 // N=Dlg->SetFocus([ID])
 void FarMacroApi::dlgsetfocusFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 
 	const auto Index = static_cast<unsigned>(Params[0].asInteger()) - 1;
 
@@ -3519,7 +3561,7 @@ void FarMacroApi::dlgsetfocusFunc() const
 // V=Far.Cfg.Get(Key,Name)
 void FarMacroApi::farcfggetFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	const auto& Name = Params[1];
 	const auto& Key = Params[0];
 
@@ -3527,49 +3569,58 @@ void FarMacroApi::farcfggetFunc() const
 	return option? PassValue(option->toString()) : PassBoolean(false);
 }
 
-// V=Far.GetConfig(Key,Name)
+// V=Far.GetConfig(Key.Name)
 void FarMacroApi::fargetconfigFunc() const
 {
-	if (mData->Count >= 2 && mData->Values[0].Type==FMVT_STRING && mData->Values[1].Type==FMVT_STRING)
+	const wchar_t *Keyname = (mData->Count >= 1 && mData->Values[0].Type==FMVT_STRING) ?
+		mData->Values[0].String : L"";
+
+	const auto Dot = wcsrchr(Keyname, L'.');
+	if (Dot)
 	{
-		if (const auto option = Global->Opt->GetConfigValue(mData->Values[0].String, mData->Values[1].String))
+		const string_view Key(Keyname, Dot - Keyname);
+
+		if (const auto option = Global->Opt->GetConfigValue(Key, Dot+1))
 		{
-			if (const auto Opt = dynamic_cast<const BoolOption*>(option))
+			if (const auto OptBool = dynamic_cast<const BoolOption*>(option))
 			{
-				PassValue(1);
-				PassBoolean(Opt->Get());
-				return;
+				PassBoolean(OptBool->Get());
+				PassValue(L"boolean");
 			}
+			else if (const auto OptBool3 = dynamic_cast<const Bool3Option*>(option))
+			{
+				auto Val = OptBool3->Get();
+				if (Val == 0 || Val == 1)
+					PassBoolean(Val == 1);
+				else
+					PassValue(L"other");
 
-			if (const auto Opt = dynamic_cast<const Bool3Option*>(option))
-			{
-				PassValue(2);
-				PassValue(Opt->Get());
-				return;
+				PassValue(L"3-state");
 			}
-
-			if (const auto Opt = dynamic_cast<const IntOption*>(option))
+			else if (const auto OptInt = dynamic_cast<const IntOption*>(option))
 			{
-				PassValue(3);
-				PassValue(Opt->Get());
-				return;
+				PassValue(OptInt->Get());
+				PassValue(L"integer");
 			}
-
-			if (const auto Opt = dynamic_cast<const StringOption*>(option))
+			else if (const auto OptString = dynamic_cast<const StringOption*>(option))
 			{
-				PassValue(4);
-				PassValue(Opt->Get());
-				return;
+				PassValue(OptString->Get());
+				PassValue(L"string");
 			}
+			else
+				PassError(L"unknown option type");
 		}
+		else
+			PassError(L"setting doesn't exist");
 	}
-	PassBoolean(false);
+	else
+		PassError(L"invalid argument #1");
 }
 
 // V=Dlg->GetValue([Pos[,InfoID]])
 void FarMacroApi::dlggetvalueFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	TVar Ret(-1);
 
 	if (Global->CtrlObject->Macro.GetArea()==MACROAREA_DIALOG)
@@ -3766,7 +3817,7 @@ void FarMacroApi::editorposFunc() const
 {
 	SCOPED_ACTION(LockOutput)(IsTopMacroOutputDisabled());
 
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	TVar Ret(-1);
 	int Where = static_cast<int>(Params[2].asInteger());
 	int What = static_cast<int>(Params[1].asInteger());
@@ -3882,7 +3933,7 @@ void FarMacroApi::editorposFunc() const
 // OldVar=Editor.Set(Idx,Value)
 void FarMacroApi::editorsetFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	TVar Ret(-1);
 	auto& Value = Params[1];
 	int Index = static_cast<int>(Params[0].asInteger());
@@ -4110,7 +4161,7 @@ void FarMacroApi::editorsetFunc() const
 // V=Clip(N[,V])
 void FarMacroApi::clipFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	auto& Val = Params[1];
 	const auto cmdType = static_cast<int>(Params[0].asInteger());
 
@@ -4196,7 +4247,7 @@ void FarMacroApi::clipFunc() const
 */
 void FarMacroApi::panelsetposidxFunc() const
 {
-	const auto Params = parseParams(3, mData);
+	const auto Params = parseParams(3);
 	const auto InSelection = static_cast<int>(Params[2].asInteger());
 	auto idxItem = static_cast<long>(Params[1].asInteger());
 	long long Ret=0;
@@ -4281,7 +4332,7 @@ void FarMacroApi::panelsetposidxFunc() const
 				else
 				{
 					const auto CurPos = SelPanel->GetCurrentPos();
-					for (const auto& I: irange(EndPos))
+					for (const auto I: std::views::iota(0uz, EndPos))
 					{
 						if ( SelPanel->IsSelected(I) && SelPanel->FileInFilter(I) )
 						{
@@ -4304,7 +4355,7 @@ void FarMacroApi::panelsetposidxFunc() const
 // N=Panel.SetPos(panelType,fileName)
 void FarMacroApi::panelsetposFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	const auto& Val = Params[1];
 	const auto& fileName=Val.asString();
 
@@ -4349,7 +4400,7 @@ Mode:
 
 void FarMacroApi::replaceFunc() const
 {
-	const auto Params = parseParams(5, mData);
+	const auto Params = parseParams(5);
 	auto Src = Params[0].asString();
 	const auto& Find = Params[1].asString();
 	const auto& Repl = Params[2].asString();
@@ -4363,7 +4414,7 @@ void FarMacroApi::replaceFunc() const
 // V=Panel.Item(typePanel,Index,TypeInfo)
 void FarMacroApi::panelitemFunc() const
 {
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	auto& P2 = Params[2];
 	auto& P1 = Params[1];
 
@@ -4465,13 +4516,13 @@ void FarMacroApi::panelitemFunc() const
 // N=len(V)
 void FarMacroApi::lenFunc() const
 {
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 	PassValue(Params[0].toString().size());
 }
 
 void FarMacroApi::ucaseFunc() const
 {
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 	auto& Val = Params[0];
 	Val = upper(Val.toString());
 	PassValue(Val);
@@ -4479,7 +4530,7 @@ void FarMacroApi::ucaseFunc() const
 
 void FarMacroApi::lcaseFunc() const
 {
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 	auto& Val = Params[0];
 	Val = lower(Val.toString());
 	PassValue(Val);
@@ -4487,7 +4538,7 @@ void FarMacroApi::lcaseFunc() const
 
 void FarMacroApi::stringFunc() const
 {
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 	auto& Val = Params[0];
 	Val.toString();
 	PassValue(Val);
@@ -4496,7 +4547,7 @@ void FarMacroApi::stringFunc() const
 // S=StrPad(Src,Cnt[,Fill[,Op]])
 void FarMacroApi::strpadFunc() const
 {
-	auto Params = parseParams(4, mData);
+	auto Params = parseParams(4);
 	auto& Src = Params[0];
 	if (Src.isUnknown())
 	{
@@ -4523,7 +4574,7 @@ void FarMacroApi::strpadFunc() const
 
 			const auto& pFill = Fill.asString();
 
-			for (const auto& i: irange(FineLength))
+			for (const auto i: std::views::iota(0uz, static_cast<size_t>(FineLength)))
 			{
 				NewFill.push_back(pFill[i % LengthFill]);
 			}
@@ -4558,7 +4609,7 @@ void FarMacroApi::strpadFunc() const
 // S=StrWrap(Text,Width[,Break[,Flags]])
 void FarMacroApi::strwrapFunc() const
 {
-	auto Params = parseParams(3, mData);
+	auto Params = parseParams(3);
 	auto& Break = Params[2];
 	const size_t Width = Params[1].asInteger();
 	const auto& Text = Params[0];
@@ -4571,21 +4622,21 @@ void FarMacroApi::strwrapFunc() const
 
 void FarMacroApi::intFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto& Val = Params[0];
 	PassValue(Val.asInteger());
 }
 
 void FarMacroApi::floatFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto& Val = Params[0];
 	PassValue(Val.asDouble());
 }
 
 void FarMacroApi::absFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 
 	TVar Result;
 
@@ -4618,7 +4669,7 @@ void FarMacroApi::absFunc() const
 
 void FarMacroApi::ascFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto& tmpVar = Params[0];
 
 	if (tmpVar.isString() && !tmpVar.asString().empty())
@@ -4629,7 +4680,7 @@ void FarMacroApi::ascFunc() const
 
 void FarMacroApi::chrFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	auto tmpVar = Params[0];
 
 	if (tmpVar.isNumber())
@@ -4644,7 +4695,7 @@ void FarMacroApi::chrFunc() const
 // N=FMatch(S,Mask)
 void FarMacroApi::fmatchFunc() const
 {
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	auto& Mask = Params[1];
 	auto& S = Params[0];
 	filemasks FileMask;
@@ -4686,7 +4737,7 @@ void FarMacroApi::editorselFunc() const
 	              Opt: ignore
 	              return 1
 	*/
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	TVar Ret(0ll);
 	const auto& Opts = Params[1];
 	auto& Action = Params[0];
@@ -4716,7 +4767,7 @@ void FarMacroApi::editorundoFunc() const
 	if (!CurrentEditor || !CurrentEditor->IsVisible())
 		return PassValue(0);
 
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 	auto& Action = Params[0];
 
 	EditorUndoRedo eur{ sizeof(eur) };
@@ -4734,7 +4785,7 @@ void FarMacroApi::editorsettitleFunc() const
 	if (!CurrentEditor || !CurrentEditor->IsVisible())
 		return PassValue(0);
 
-	auto Params = parseParams(1, mData);
+	auto Params = parseParams(1);
 	auto& Title = Params[0];
 
 	if (Title.isInteger() && !Title.asInteger())
@@ -4753,7 +4804,7 @@ void FarMacroApi::editordellineFunc() const
 	if (!CurrentEditor || !CurrentEditor->IsVisible())
 		return PassValue(0);
 
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto& Line = Params[0];
 
 	if (!Line.isNumber())
@@ -4772,7 +4823,7 @@ void FarMacroApi::editorinsstrFunc() const
 	if (!CurrentEditor || !CurrentEditor->IsVisible())
 		return PassValue(0);
 
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	auto& S = Params[0];
 	const auto& Line = Params[1];
 
@@ -4795,7 +4846,7 @@ void FarMacroApi::editorsetstrFunc() const
 	if (!CurrentEditor || !CurrentEditor->IsVisible())
 		return PassValue(0);
 
-	auto Params = parseParams(2, mData);
+	auto Params = parseParams(2);
 	auto& S = Params[0];
 	const auto& Line = Params[1];
 
@@ -4821,7 +4872,7 @@ void FarMacroApi::pluginexistFunc() const
 // N=Plugin.Load(DllPath[,ForceLoad])
 void FarMacroApi::pluginloadFunc() const
 {
-	const auto Params = parseParams(2, mData);
+	const auto Params = parseParams(2);
 	const auto& ForceLoad = Params[1];
 	const auto& DllPath = Params[0].asString();
 	const TVar Ret(pluginapi::apiPluginsControl(nullptr, !ForceLoad.asInteger()?PCTL_LOADPLUGIN:PCTL_FORCEDLOADPLUGIN, 0, UNSAFE_CSTR(DllPath)));
@@ -4854,7 +4905,7 @@ TSTFLD_ERROR     (-2) - ошибка (кривые параметры или н�
 */
 void FarMacroApi::testfolderFunc() const
 {
-	const auto Params = parseParams(1, mData);
+	const auto Params = parseParams(1);
 	const auto& tmpVar = Params[0];
 	long long Ret=TSTFLD_ERROR;
 
@@ -4874,6 +4925,7 @@ intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 	static DlgParam *KMParam=nullptr;
 	const INPUT_RECORD* record=nullptr;
 	unsigned key = 0;
+	bool KeyIsValid = false;
 
 	if (Msg == DN_CONTROLINPUT)
 	{
@@ -4935,7 +4987,7 @@ intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 		key = KeyNameToKey(static_cast<FarDialogItem*>(Param2)->Data);
 
 		if (key && !KMParam->Recurse)
-			goto M1;
+			KeyIsValid = true;
 	}
 	else if (Msg == DN_CONTROLINPUT && record->EventType==KEY_EVENT && (((key&KEY_END_SKEY) < KEY_END_FKEY) ||
 	                           (((key&KEY_END_SKEY) > INTERNAL_KEY_BASE) && (key&KEY_END_SKEY) < INTERNAL_KEY_BASE_2)))
@@ -4968,8 +5020,11 @@ intptr_t KeyMacro::AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,v
 		if (any_of(key, KEY_ENTER, KEY_NUMENTER) && LastKey && none_of(LastKey, KEY_ENTER, KEY_NUMENTER))
 			return FALSE;
 
-		// </Обработка особых клавиш: F1 & Enter>
-M1:
+		KeyIsValid = true;
+	}
+
+	if (KeyIsValid)
+	{
 		if ((key&0x00FFFFFF) > 0x7F && (key&0x00FFFFFF) < 0xFFFF)
 			key=KeyToKeyLayout(key&0x0000FFFF)|(key&~0x0000FFFF);
 
@@ -5088,9 +5143,9 @@ int KeyMacro::AssignMacroKey(DWORD &MacroKey, unsigned long long& Flags)
 		{DI_COMBOBOX,  {{5,  3}, {28, 3}}, DIF_FOCUS | DIF_DEFAULTBUTTON, },
 	});
 
-	DlgParam Param{ Flags, 0, m_StartMode };
+	DlgParam Param{ Flags, m_StartMode, 0 };
 	Global->IsProcessAssignMacroKey++;
-	const auto Dlg = Dialog::create(MacroAssignDlg, &KeyMacro::AssignMacroDlgProc, this, &Param);
+	const auto Dlg = Dialog::create(MacroAssignDlg, std::bind_front(&KeyMacro::AssignMacroDlgProc, this), &Param);
 	Dlg->SetPosition({ -1, -1, 34, 6 });
 	Dlg->SetHelp(L"KeyMacro"sv);
 	Dlg->Process();
@@ -5195,7 +5250,7 @@ TEST_CASE("macro.splitpath")
 
 	for (const auto& i: Tests)
 	{
-		for (const auto& Flags: irange(1, 0b1111))
+		for (const auto Flags: std::views::iota(1, 0b1111))
 		{
 			string Expected;
 
@@ -5213,6 +5268,27 @@ TEST_CASE("macro.splitpath")
 
 			REQUIRE(Expected == Actual);
 		}
+	}
+}
+
+TEST_CASE("macro.convert_size2str_flags")
+{
+	static const struct
+	{
+		uint64_t Input, Expected;
+	}
+	Tests[]
+	{
+		{ 0, 0 },
+		{ 1, 0 },
+		{ 0x1000000000000000, 0 },
+		{ 0x0020000000000005, COLFLAGS_USE_MULTIPLIER | COLFLAGS_MULTIPLIER_E },
+		{ as_unsigned(-1ll), COLFLAGS_SHOW_MULTIPLIER | COLFLAGS_GROUPDIGITS | COLFLAGS_FLOATSIZE | COLFLAGS_ECONOMIC | COLFLAGS_THOUSAND | COLFLAGS_USE_MULTIPLIER | COLFLAGS_MULTIPLIER_MASK },
+	};
+
+	for (const auto& i: Tests)
+	{
+		REQUIRE(i.Expected == convert_size2str_flags(i.Input));
 	}
 }
 #endif

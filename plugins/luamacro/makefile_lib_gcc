@@ -1,10 +1,15 @@
 NAME=luafar3
-LUAVER=51
+
+ifdef SYS_LUA
+LUA=lua
+else
 LUA=$(WINE_CMD)$(strip $(call os_name, luasdk/32/lua.exe))
+endif
 
 SRCS = \
 	luafar/bit64.c \
 	luafar/exported.c \
+	luafar/farhost.c \
 	luafar/flags.c \
 	luafar/keysandcolors.c \
 	luafar/lflua.c \
@@ -15,25 +20,21 @@ SRCS = \
 	luafar/service.c \
 	luafar/slnunico.c \
 	luafar/lutf8lib.c \
-	luafar/uliolib$(LUAVER).c \
-	luafar/uloadlib$(LUAVER).c \
+	luafar/uliolib51.c \
+	luafar/uloadlib51.c \
 	luafar/ustring.c \
 	luafar/util.c \
 	luafar/win.c \
 
-ifeq ($(LUAVER),52)
-SRCS += luafar/compat52.c
-endif
-
 USERLIBS = \
-	luasdk/$(DIRBIT)/lua$(LUAVER).lib \
+	luasdk/$(BITPREFIX)$(DIRBIT)/lua51.lib \
 	-Wl,--out-implib,$(OBJDIR)/luafar3.lib \
 
 USERC = \
 	-Iluasdk/include \
 	-DBUILD_DLL \
 	-DWINVER=0x500 \
-	-DLUADLL=\"lua$(LUAVER).dll\" \
+	-DLUADLL=\"lua51.dll\" \
 	-Wno-cast-function-type \
 	-Wno-cast-qual \
 	-Wno-format-nonliteral \
@@ -63,8 +64,8 @@ DEF_NAME = -
 include ../makefile_gcc_def_inc
 
 DOCS = \
-	luasdk/$(DIRBIT)/lua$(LUAVER).dll \
-	luasdk/$(DIRBIT)/lpeg.dll \
+	luasdk/$(BITPREFIX)$(DIRBIT)/lua51.dll \
+	luasdk/$(BITPREFIX)$(DIRBIT)/lpeg.dll \
 
 include ../makefile_gcc_target_inc
 

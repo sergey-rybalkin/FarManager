@@ -32,20 +32,21 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 // Self
-#define SQLITE_CONFIG_ONLY
-#include "sqlite.hpp"
-#undef SQLITE_CONFIG_ONLY
 
 // Internal:
 
 // Platform:
 
 // Common:
+#include "common/preprocessor.hpp"
 
 // External:
 
+#include "sqlite.config.h"
+
 //----------------------------------------------------------------------------
 
+#define SQLITE_API __declspec(dllexport)
 
 WARNING_PUSH(3)
 
@@ -58,6 +59,7 @@ WARNING_DISABLE_GCC("-Wpedantic")
 WARNING_DISABLE_GCC("-Wcast-function-type")
 WARNING_DISABLE_GCC("-Wcast-qual")
 WARNING_DISABLE_GCC("-Wdouble-promotion")
+WARNING_DISABLE_GCC("-Wduplicated-branches")
 WARNING_DISABLE_GCC("-Wimplicit-fallthrough")
 WARNING_DISABLE_GCC("-Wmisleading-indentation")
 WARNING_DISABLE_GCC("-Wmissing-declarations")

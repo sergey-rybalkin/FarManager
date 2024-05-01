@@ -205,8 +205,6 @@ static int MainProcess(
 		}
 		else
 		{
-			int DirCount=0;
-
 			// воспользуемся тем, что ControlObject::Init() создает панели
 			// юзая Global->Opt->*
 
@@ -216,7 +214,6 @@ static int MainProcess(
 
 			const auto SetupPanel = [&](bool active)
 			{
-				++DirCount;
 				string strPath = active? apanel : ppanel;
 				if (active? IsFileA : IsFileP)
 				{
@@ -247,7 +244,7 @@ static int MainProcess(
 			}
 
 			// теперь все готово - создаем панели!
-			Global->CtrlObject->Init(DirCount);
+			Global->CtrlObject->Init();
 
 			// а теперь "провалимся" в каталог или хост-файл (если получится ;-)
 			if (!apanel.empty())  // активная панель
@@ -317,7 +314,7 @@ static int MainProcess(
 		Global->ScrBuf->ResetLockCount();
 		Global->ScrBuf->Flush();
 
-		return EXIT_SUCCESS;
+		return Global->FarExitCode;
 }
 
 static auto full_path_expanded(string_view const Str)
@@ -421,7 +418,7 @@ static bool is_arg(string_view const Str)
 	return !Str.empty() && any_of(Str.front(), L'-', L'/');
 }
 
-static std::optional<int> ProcessServiceModes(span<const wchar_t* const> const Args)
+static std::optional<int> ProcessServiceModes(std::span<const wchar_t* const> const Args)
 {
 	const auto isArg = [&](string_view const Name)
 	{
@@ -477,7 +474,7 @@ static void handle_exception(function_ref<bool()> const Handler)
 	throw;
 }
 
-#ifndef _WIN64
+#ifdef _M_IX86
 std::pair<string_view, DWORD> get_hook_wow64_error();
 
 static void log_hook_wow64_status()
@@ -496,7 +493,7 @@ static void log_hook_wow64_status()
 		{
 			if (const auto LdrLoadDll = GetProcAddress(NtDll, "LdrLoadDll"))
 			{
-				const auto FunctionData = view_as<std::byte const*>(reinterpret_cast<void const*>(LdrLoadDll));
+				const auto FunctionData = std::bit_cast<std::byte const*>(LdrLoadDll);
 				LOGWARNING(L"LdrLoadDll: {}"sv, BlobToHexString({ FunctionData, 32 }));
 			}
 		}
@@ -528,7 +525,7 @@ struct args_context
 [[noreturn]]
 static void invalid_argument(string_view const Argument, string_view const Str)
 {
-	throw MAKE_FAR_KNOWN_EXCEPTION(far::format(L"Error processing \"{}\": {}"sv, Argument, Str));
+	throw far_known_exception(far::format(L"Error processing \"{}\": {}"sv, Argument, Str));
 }
 
 namespace args
@@ -540,7 +537,7 @@ namespace args
 		parameter_expected = L"a parameter is expected"sv;
 }
 
-static void parse_argument(span<const wchar_t* const>::const_iterator& Iterator, span<const wchar_t* const>::const_iterator End, args_context const& Context)
+static void parse_argument(std::span<const wchar_t* const>::iterator& Iterator, std::span<const wchar_t* const>::iterator End, args_context const& Context)
 {
 	if (Iterator == End)
 		return;
@@ -764,15 +761,15 @@ static void parse_argument(span<const wchar_t* const>::const_iterator& Iterator,
 	}
 }
 
-static void parse_command_line(span<const wchar_t* const> const Args, span<string> const SimpleArgs, args_context const& Context)
+static void parse_command_line(std::span<const wchar_t* const> const Args, std::span<string> const SimpleArgs, args_context const& Context)
 {
 	size_t SimpleArgsCount{};
 
-	for (auto Iter = Args.cbegin(); Iter != Args.cend();)
+	for (auto Iter = Args.begin(); Iter != Args.end();)
 	{
 		if (is_arg(*Iter))
 		{
-			parse_argument(Iter, Args.cend(), Context);
+			parse_argument(Iter, Args.end(), Context);
 			continue;
 		}
 
@@ -789,7 +786,7 @@ static void parse_command_line(span<const wchar_t* const> const Args, span<strin
 	}
 }
 
-static int mainImpl(span<const wchar_t* const> const Args)
+static int mainImpl(std::span<const wchar_t* const> const Args)
 {
 	setlocale(LC_ALL, "");
 
@@ -806,7 +803,7 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	os::memory::enable_low_fragmentation_heap();
 
-#ifndef _WIN64
+#ifdef _M_IX86
 	log_hook_wow64_status();
 #endif
 
@@ -920,20 +917,18 @@ static int mainImpl(span<const wchar_t* const> const Args)
 
 	NoElevationDuringBoot.reset();
 
-	const auto CurrentFunctionName = CURRENT_FUNCTION_NAME;
-
 	return cpp_try(
 	[&]
 	{
 		return MainProcess(strEditName, strViewName, DestNames[0], DestNames[1], StartLine, StartChar);
 	},
-	[&]() -> int
+	[&](source_location const& Location) -> int
 	{
-		handle_exception([&]{ return handle_unknown_exception(CurrentFunctionName); });
+		handle_exception([&]{ return handle_unknown_exception({}, Location); });
 	},
-	[&](std::exception const& e) -> int
+	[&](std::exception const& e, source_location const& Location) -> int
 	{
-		handle_exception([&]{ return handle_std_exception(e, CurrentFunctionName); });
+		handle_exception([&]{ return handle_std_exception(e, {}, Location); });
 	});
 }
 
@@ -976,8 +971,8 @@ static int wmain_seh()
 
 	// wmain is a non-standard extension and not available in gcc.
 	int Argc = 0;
-	const os::memory::local::ptr Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
-	std::span<wchar_t const* const> const AllArgs(Argv.get(), Argc), Args(AllArgs.subspan(1));
+	os::memory::local::ptr<wchar_t const* const> const Argv(CommandLineToArgvW(GetCommandLine(), &Argc));
+	std::span const AllArgs(Argv.get(), Argc), Args(AllArgs.subspan(1));
 
 	configure_exception_handling(Args);
 
@@ -997,8 +992,6 @@ static int wmain_seh()
 #ifdef __SANITIZE_ADDRESS__
 	os::env::set(L"ASAN_VCASAN_DEBUGGING"sv, L"1"sv);
 #endif
-
-	const auto CurrentFunctionName = CURRENT_FUNCTION_NAME;
 
 	return cpp_try(
 	[&]
@@ -1020,13 +1013,13 @@ static int wmain_seh()
 			return EXIT_FAILURE;
 		}
 	},
-	[&]() -> int
+	[&](source_location const& Location) -> int
 	{
-		handle_exception_final([&]{ return handle_unknown_exception(CurrentFunctionName); });
+		handle_exception_final([&]{ return handle_unknown_exception({}, Location); });
 	},
-	[&](std::exception const& e) -> int
+	[&](std::exception const& e, source_location const& Location) -> int
 	{
-		handle_exception_final([&]{ return handle_std_exception(e, CurrentFunctionName); });
+		handle_exception_final([&]{ return handle_std_exception(e, {}, Location); });
 	});
 }
 
@@ -1041,8 +1034,7 @@ int main()
 	[](DWORD const ExceptionCode) -> int
 	{
 		os::process::terminate_by_user(ExceptionCode);
-	},
-	CURRENT_FUNCTION_NAME);
+	});
 }
 
 #ifdef ENABLE_TESTS
@@ -1109,9 +1101,9 @@ TEST_CASE("Args")
 		{ { L"-v" },                     args::parameter_expected },
 		{ { L"-vw" },                    args::unknown_argument },
 		{ { L"-v", L"file" },            [&]{ return V_Param == L"file"sv; } },
-		{ { L"-m" },                     [&]{ return flags::check_all(MacroOptions, MDOL_ALL); } },
+		{ { L"-m" },                     [&]{ return flags::check_one(MacroOptions, MDOL_ALL); } },
 		{ { L"-mb" },                    args::unknown_argument },
-		{ { L"-ma" },                    [&]{ return flags::check_all(MacroOptions, MDOL_AUTOSTART); } },
+		{ { L"-ma" },                    [&]{ return flags::check_one(MacroOptions, MDOL_AUTOSTART); } },
 #ifndef NO_WRAPPER
 		{ { L"-u" },                     args::parameter_expected },
 		{ { L"-ua" },                    args::unknown_argument },
@@ -1159,7 +1151,7 @@ TEST_CASE("Args")
 
 	for (const auto& i: Tests)
 	{
-		span const Args = i.Args;
+		std::span const Args = i.Args;
 		auto Iterator = Args.begin();
 
 		std::visit(overload

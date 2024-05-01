@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "platform.reg.hpp"
 
 // Common:
+#include "common.hpp"
 #include "common/string_utils.hpp"
 
 // External:
@@ -56,7 +57,7 @@ namespace os::version
 	{
 		unsigned Length;
 		T* Result;
-		return VerQueryValue(Data.data(), null_terminated(SubBlock).c_str(), reinterpret_cast<void**>(&Result), &Length) && Length? Result : nullptr;
+		return VerQueryValue(Data.data(), null_terminated(SubBlock).c_str(), std::bit_cast<void**>(&Result), &Length) && Length? Result : nullptr;
 	}
 
 	bool file_version::read(string_view const Filename)
@@ -93,6 +94,28 @@ namespace os::version
 	VS_FIXEDFILEINFO const* file_version::get_fixed_info() const
 	{
 		return get_value<VS_FIXEDFILEINFO>(m_Buffer, L"\\"sv);
+	}
+
+	string file_version::version() const
+	{
+		if (const auto Str = get_string(L"FileVersion"sv))
+			return string(Str);
+
+		const auto FixedInfo = get_fixed_info();
+		if (!FixedInfo)
+			return {};
+
+		return far::format(L"{}.{}.{}.{}"sv,
+			extract_integer<WORD, 1>(FixedInfo->dwFileVersionMS),
+			extract_integer<WORD, 0>(FixedInfo->dwFileVersionMS),
+			extract_integer<WORD, 1>(FixedInfo->dwFileVersionLS),
+			extract_integer<WORD, 0>(FixedInfo->dwFileVersionLS)
+		);
+	}
+
+	string_view file_version::description() const
+	{
+		return NullToEmpty(get_string(L"FileDescription"sv));
 	}
 
 
@@ -144,24 +167,15 @@ namespace os::version
 		if (!Version.read(Name))
 			return last_error().Win32ErrorStr();
 
-		if (const auto Str = Version.get_string(L"FileVersion"sv))
+		if (auto Str = Version.version(); !Str.empty())
 			return Str;
 
-		const auto FixedInfo = Version.get_fixed_info();
-		if (!FixedInfo)
-			return last_error().Win32ErrorStr();
-
-		return far::format(L"{}.{}.{}.{}"sv,
-			extract_integer<WORD, 1>(FixedInfo->dwFileVersionMS),
-			extract_integer<WORD, 0>(FixedInfo->dwFileVersionMS),
-			extract_integer<WORD, 1>(FixedInfo->dwFileVersionLS),
-			extract_integer<WORD, 0>(FixedInfo->dwFileVersionLS)
-		);
+		return last_error().Win32ErrorStr();
 	}
 
 	static bool get_os_version(OSVERSIONINFOEX& Info)
 	{
-		const auto InfoPtr = edit_as<OSVERSIONINFO*>(&Info);
+		const auto InfoPtr = std::bit_cast<OSVERSIONINFO*>(&Info);
 
 		if (imports.RtlGetVersion && NT_SUCCESS(imports.RtlGetVersion(InfoPtr)))
 			return true;

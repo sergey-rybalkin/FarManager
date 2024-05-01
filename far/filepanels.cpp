@@ -77,7 +77,9 @@ FilePanels::FilePanels(private_tag):
 {
 }
 
-filepanels_ptr FilePanels::create(bool CreateRealPanels, int DirCount)
+FilePanels::~FilePanels() = default;
+
+filepanels_ptr FilePanels::create(bool CreateRealPanels)
 {
 	const auto FilePanelsPtr = std::make_shared<FilePanels>(private_tag());
 
@@ -88,7 +90,7 @@ filepanels_ptr FilePanels::create(bool CreateRealPanels, int DirCount)
 	{
 		FilePanelsPtr->m_Panels[panel_left].m_Panel = FilePanelsPtr->CreatePanel(static_cast<panel_type>(Global->Opt->LeftPanel.m_Type.Get()));
 		FilePanelsPtr->m_Panels[panel_right].m_Panel = FilePanelsPtr->CreatePanel(static_cast<panel_type>(Global->Opt->RightPanel.m_Type.Get()));
-		FilePanelsPtr->Init(DirCount);
+		FilePanelsPtr->Init();
 	}
 	else
 	{
@@ -130,7 +132,7 @@ static void PrepareOptFolder(string &strSrc, bool IsLocalPath_FarPath)
 	//ConvertNameToFull(strSrc,strSrc);
 }
 
-void FilePanels::Init(int DirCount)
+void FilePanels::Init()
 {
 	CmdLine = std::make_unique<CommandLine>(shared_from_this());
 	TopMenuBar = std::make_unique<MenuBar>(shared_from_this());
@@ -185,31 +187,8 @@ void FilePanels::Init(int DirCount)
 		Params.first->InitCurDir(os::fs::exists(Params.second.Folder.Get())? Params.second.Folder.Get() : Global->g_strFarPath);
 	};
 
-	if (Global->Opt->AutoSaveSetup || !DirCount)
-	{
-		InitCurDir_checked(Left);
-		InitCurDir_checked(Right);
-	}
-
-	if (!Global->Opt->AutoSaveSetup)
-	{
-		if (DirCount >= 1)
-		{
-			InitCurDir_checked(IsRightActive()? Right : Left);
-
-			if (DirCount == 2)
-			{
-				InitCurDir_checked(IsLeftActive()? Right : Left);
-			}
-		}
-
-		const string& PassiveFolder = m_ActivePanelIndex == panel_right? Left.second.Folder : Right.second.Folder;
-
-		if (DirCount < 2 && !PassiveFolder.empty() && os::fs::exists(PassiveFolder))
-		{
-			PassivePanel()->InitCurDir(PassiveFolder);
-		}
-	}
+	InitCurDir_checked(Left);
+	InitCurDir_checked(Right);
 
 #if 1
 	const auto show_if_visible = [](const std::pair<panel_ptr, Options::PanelOptions&>& Params)
@@ -367,8 +346,7 @@ int FilePanels::SwapPanels()
 	if (!LeftPanel()->IsVisible() && !RightPanel()->IsVisible())
 		return false;
 
-	using std::swap;
-	swap(m_Panels[panel_left], m_Panels[panel_right]);
+	std::ranges::swap(m_Panels[panel_left], m_Panels[panel_right]);
 	m_Panels[panel_left].m_Panel->on_swap();
 	m_Panels[panel_right].m_Panel->on_swap();
 	filters::SwapPanelFilters();
@@ -1007,7 +985,8 @@ panel_ptr FilePanels::ChangePanel(panel_ptr Current, panel_type NewType, int Cre
 	}
 	else
 	{
-		NewPanel=CreatePanel(NewType);
+		NewPanel->dispose();
+		NewPanel = CreatePanel(NewType);
 	}
 
 	if (!UsedLastPanel)

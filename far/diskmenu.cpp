@@ -203,7 +203,7 @@ static void AddPluginItems(VMenu2 &ChDisk, int Pos, int DiskCount, bool SetSelec
 	if (MenuInitItems.empty())
 		return;
 
-	std::sort(ALL_RANGE(MenuInitItems), [SortByHotkey = (Global->Opt->ChangeDriveMode & DRIVE_SORT_PLUGINS_BY_HOTKEY) != 0](menu_init_item const& a, menu_init_item const& b)
+	std::ranges::sort(MenuInitItems, [SortByHotkey = (Global->Opt->ChangeDriveMode & DRIVE_SORT_PLUGINS_BY_HOTKEY) != 0](menu_init_item const& a, menu_init_item const& b)
 	{
 		if (!SortByHotkey || a.Hotkey == b.Hotkey)
 			return string_sort::less(a.Str, b.Str);
@@ -802,8 +802,8 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 
 				if (DriveMode & (DRIVE_SHOW_SIZE | DRIVE_SHOW_SIZE_FLOAT))
 				{
-					unsigned long long TotalSize = 0, UserFree = 0;
-					if (os::fs::get_disk_size(RootDirectory, &TotalSize, nullptr, &UserFree))
+					unsigned long long UserTotal = 0, UserFree = 0;
+					if (os::fs::get_disk_size(RootDirectory, &UserTotal, {}, &UserFree))
 					{
 						const auto SizeFlags = DriveMode & DRIVE_SHOW_SIZE?
 							//размер как минимум в мегабайтах
@@ -816,7 +816,7 @@ static int ChangeDiskMenu(panel_ptr Owner, int Pos, bool FirstCall)
 							return trim(FileSizeToStr(Size, 9, SizeFlags));
 						};
 
-						NewItem.TotalSize = FormatSize(TotalSize);
+						NewItem.TotalSize = FormatSize(UserTotal);
 						NewItem.FreeSize = FormatSize(UserFree);
 					}
 				}
