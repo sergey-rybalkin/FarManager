@@ -119,6 +119,9 @@ FAR_INLINE_CONSTANT FARCOLORFLAGS
 	FCF_INHERIT_STYLE      = 0x0000000000000004ULL,
 
 	FCF_RAWATTR_MASK       = 0x000000000000FF00ULL, // stored console attributes
+#ifdef FAR_USE_INTERNALS
+	FCF_FOREIGN            = 0x0000000000010000ULL,
+#endif // END FAR_USE_INTERNALS
 
 	FCF_FG_BOLD            = 0x1000000000000000ULL,
 	FCF_FG_ITALIC          = 0x2000000000000000ULL,
@@ -138,7 +141,11 @@ FAR_INLINE_CONSTANT FARCOLORFLAGS
 
 	FCF_NONE               = 0;
 
-struct rgba
+struct
+#if defined(__cplusplus) && !defined(__cplusplus_cli)
+alignas(COLORREF)
+#endif
+rgba
 {
 	unsigned char
 		r,
@@ -147,7 +154,11 @@ struct rgba
 		a;
 };
 
-struct color_index
+struct
+#if defined(__cplusplus) && !defined(__cplusplus_cli)
+alignas(COLORREF)
+#endif
+color_index
 {
 	unsigned char
 		i,
@@ -2951,6 +2962,7 @@ enum MACROPLUGINRETURNTYPE
 	MPRT_FILEHIGHLIGHT    = 12,
 	MPRT_FILEPANELMODES   = 13,
 	MPRT_FOLDERSHORTCUTS  = 14,
+	MPRT_FILEMASKGROUPS   = 15,
 };
 
 struct OpenMacroPluginInfo

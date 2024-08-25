@@ -134,6 +134,7 @@
 <?define Guid.Panel.Search.CtrlIns.lua = "9A712F58-6917-4353-A80C-F0DE27A419B2" ?>
 <?define Guid.ShiftBS.lua = "638743BB-D4CE-47A5-A396-7694CAD9D02C" ?>
 <?define Guid.ShiftTab.lua = "2CBFADCC-7E55-4B8D-B2A6-24F891F3B3E2" ?>
+<?define Guid.SwapHorizontalScrollDirection.lua = "1E88CD5B-8B2E-4F67-8F8F-5CFD15F9ECCD" ?>
 <?define Guid.Symlink.lua = "161D54C6-F4C4-4AB3-ADD6-D852FEAB818F" ?>
 <?define Guid.UppercaseFolders.lua = "60239181-B882-4F76-B3CB-899A902E1604" ?>
 <?define Guid.View.CtrlUpDown.lua = "27C5A1BF-2A3C-40DB-A722-BFBC1A6FB377" ?>
@@ -431,13 +432,16 @@
 
 <?define Guid.ChangeLog_11 = "8E90D597-E10E-4F29-9FBC-AED74A6AF688" ?>
 <?define Guid.NetBox.dll = "FABFEBD9-2B9B-40F1-9254-F79334A5EAA0" ?>
+<?define Guid.NetBox.map = "5AF83C1F-7884-4FDA-9612-9C81D9A5EFD3" ?>
 <?define Guid.NetBoxEng.lng = "84D0F552-3B68-49F7-A5FC-9D0ADE6BDEB1" ?>
 <?define Guid.NetBoxRus.lng = "D3EA7808-4470-4ED4-876B-58ED0D75CD0E" ?>
 <?define Guid.NetBoxPol.lng = "F8B2CCAE-4A12-479F-8CC2-B591BFC94A47" ?>
+<?define Guid.NetBoxSpa.lng = "691FF7F4-660F-4920-9DAB-8429224A0848" ?>
 <?define Guid.README.md = "5D908D6F-ACB4-4B0E-A102-9A76E47F15C7" ?>
 <?define Guid.README.RU.md = "E879951C-FCFC-49DF-8A3B-F0263C42FB7C" ?>
 <?define Guid.README.PL.md = "087C4743-BCB3-4A2B-98CC-9E8E796A306B" ?>
 <?define Guid.LICENSE.txt = "EDD17AEF-E349-4A43-B890-BE65D5B82B9C" ?>
+<?define Guid.cacert.pem = "E1BC374D-4FCA-4F14-8843-EB6E7093CFF8" ?>
 
 <?define Guid.changelog_12 = "63AFBAE0-C8BF-4ACE-B770-E78BBAA8592F" ?>
 <?define Guid.HlfViewer.dll = "90698D53-45C4-4A7D-BBC4-033E74FE690C" ?>

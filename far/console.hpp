@@ -108,6 +108,7 @@ namespace console_detail
 
 		bool GetMode(HANDLE ConsoleHandle, DWORD& Mode) const;
 		bool SetMode(HANDLE ConsoleHandle, DWORD Mode) const;
+		std::optional<DWORD> UpdateMode(HANDLE ConsoleHandle, DWORD ToSet, DWORD ToClear) const;
 
 		bool IsVtSupported() const;
 
@@ -163,6 +164,8 @@ namespace console_detail
 
 		bool ClearExtraRegions(const FarColor& Color, int Mode) const;
 
+		bool Clear(const FarColor& Color) const;
+
 		bool ScrollWindow(int Lines, int Columns = 0) const;
 
 		bool ScrollWindowToBegin() const;
@@ -190,14 +193,24 @@ namespace console_detail
 		bool IsWidePreciseExpensive(char32_t Codepoint);
 		void ClearWideCache();
 
-		bool GetPalette(std::array<COLORREF, 16>& Palette) const;
-		bool SetPalette(std::array<COLORREF, 16> const& Palette) const;
+		bool GetPalette(std::array<COLORREF, 256>& Palette) const;
+		bool SetPalette(std::array<COLORREF, 256> const& Palette) const;
 
 		static void EnableWindowMode(bool Value);
 		static void EnableVirtualTerminal(bool Value);
 
 		void set_progress_state(TBPFLAG State) const;
 		void set_progress_value(TBPFLAG State, size_t Percent) const;
+
+		void stash_output() const;
+		void unstash_output(rectangle Coordinates) const;
+
+		void start_prompt() const;
+		void start_command() const;
+		void start_output() const;
+		void command_finished() const;
+		void command_finished(int ExitCode) const;
+		void command_not_found(string_view Command) const;
 
 		[[nodiscard]]
 		short GetDelta() const;

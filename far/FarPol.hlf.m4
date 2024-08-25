@@ -2851,14 +2851,19 @@ $ #Podgląd: sterowanie klawiszami#
  #Ctrl+Shift+Lewo#    Pokazuje pierwszą kolumnę z lewej
  #Ctrl+Shift+Prawo#   Pokazuje ostatnią kolumnę z prawej ze wszystkich linii widocznych na ekranie
 
- W ~trybach podglądu~@ViewerMode@ #hex# (szesnastkowo) i #źródło#, skróty #Ctrl+Lewo#
-oraz #Ctrl+Prawo# przesuwają zawartość okna o jeden bajt w odpowiednim
-kierunku.
+ Następujące skróty klawiszowe są dostępne w trybach #źródłowym# i #hex# (szesnastkowym):
 
- W trybie #hex# ~podglądu~@ViewerMode@, skróty #Alt+Lewo# i #Alt+Prawo#
-odpowiednio zmniejszają lub zwiększają liczbę bajtów widocznych o jeden.
-Skróty #Ctrl+Alt+Lewo# i #Ctrl+Alt+Prawo# zmieniają liczbę wyświetlanych
-bajtów o 16.
+ #Ctrl+Lewo#          ^<wrap>Przesuwa wszystkie znaki (tryb #źródłowy#) lub bajty (tryb #hex#) w prawo
+przesuwając ostatni znak (bajt) z wiersza na pierwszą pozycję następnego wiersza
+ #Ctrl+Prawo#         Przesuwa wszystkie znaki (tryb #źródłowy#) lub bajty (tryb #hex#) w lewo
+przesuwając pierwszy znak (bajt) z rzędu na ostatnią pozycję poprzedniego wiersza
+
+ Następujące dodatkowe skróty dostępne są w trybie #hex#:
+
+ #Alt+Lewo#           ^<wrap>Zmniejszenie liczby bajtów w wierszu
+ #Alt+Prawo#          Zwiększenie liczby bajtów w wierszu
+ #Ctrl+Alt+Lewo#      Zmniejszenie liczby bajtów w wierszu do następnej wielokrotności 16 bajtów
+ #Ctrl+Alt+Prawo#     Zwiększenie liczby bajtów w wierszu do następnej wielokrotności 16 bajtów
 
  Polecenia podglądu
 
@@ -2961,6 +2966,8 @@ przełącza tryb #źródło# na #tekstowy#, i przełącza tryb #hex# na przeciwn
 do trybu podstawowego (#źródło# lub #tekst#) ostatnio wybranego w menu
 #Tryb widoku#. Uwaga: klawisze #F4# i #F2# przełączają tryb #hex# na inne tryby.
 
+ Zobacz także pełną listę ~poleceń podglądu~@Viewer@.
+
  Tryb #tekstowy#
 
  W trybie #tekstowym#, przeglądarka renderuje zawartość pliku bajt po bajcie
@@ -2995,7 +3002,8 @@ Dłuższe linie są dzielone na kilka wierszy, nawet w trybie #obcinania#.
 
  Tryb #źródło# (ang. dump)
 
- W trybie #źródła#, przeglądarka renderuje zawartość pliku znak po znaku
+ W trybie #źródłowym# nie ma pojęcia linii tekstu.
+Przeglądarka renderuje zawartość pliku znak po znaku
 bez uwzględniania znaków końca wiersza lub kodów sterujących, które traktowane
 są jak zwykłe znaki. Znaki są wyświetlane na ekranie rzędami od lewej
 do prawej. Po osiągnięciu końca wiersza, następny znak jest wyświetlany
@@ -3017,69 +3025,50 @@ znakiem #›# (kod znaku U+203A).
  Strona kodowa 1200 (UTF-16): każda pozycja na ekranie odpowiada dwóm
 kolejnym bajtom rozpoczynając od równego przesunięcia w pliku.
 
- W trybie #źródłowym# nie ma pojęcia linii tekstu. Zamiast przewijania
-w poziomie (tak jak w trybie #tekst# i #obcinanie#), tekst jest przesuwany
-o jeden znak. Klawisze #Ctrl+Prawo# przesuwają wszystkie znaki w lewo;
-pierwszy znak w rzędzie staje się ostatnim w poprzednim rzędzie.
-Klawisze #Ctrl+Lewo# przesuwają wszystkie znaki w prawo, przenosząc ostatni
-znak rzędu do pierwszej pozycji następnego rzędu. Tekst "przepływa" z wiersza
-do wiersza. Klawisze #Prawo# i #Lewo# są ignorowane.
-
  Tryb #hex# (kody szesnastkowe)
 
- W trybie #hex#, przeglądarka renderuje zawartość pliku w formacie
-16 bajtów na wiersz ekranu, z szesnastkowym przesunięciem pierwszego bajtu
-w każdym rzędzie w lewo, po którym następuje szesnastkowa reprezentacja
-każdego bajtu, a następnie reprezentację znaków.
+ W trybie #hex#, przeglądarka renderuje szesnastkowo reprezentację bajtów
+w pliku. Każdy wiersz rozpoczyna sie szesnastkową wartością przesunięcia
+od pierwszego bajtu pliku, a kończy reprezentacją znakową bajtów wiersza.
 
  Odwzorowanie zależy od kodowania zdefiniowanego przez bieżącą stronę kodową.
 Dla kodowań jednobajtowych (np. wszystkie strony kodowe ANSI), bajty w każdym
-wierszu są reprezentowane przez 16 dwucyfrowych wartości szesnastkowych
-po których następuje 16 znaków. Dla kodowania UTF-8, bajty są reprezentowane
-w ten sam sposób, gdy znaki są wyświetlanie w pozycjach bajtów wiodących
-sekwencji UTF-8, a bajty kontynuacji są wypełniane znakiem #›#
-(kod znaku U+203A). Dla kodowania UTF-16(BE) kodowanie wartości szesnastkowych
-przedstawia 8 znaków. Na przykład:
+wierszu są reprezentowane przez sekwencję dwucyfrowych wartości szesnastkowych,
+po których następuje sekwencja znaów o tej samej długości. Dla kodowania UTF-8,
+bajty są reprezentowane w ten sam sposób, podczas gdy znaki są wyświetlanie
+na pozycjach wiodących bajtów sekwencji UTF-8, a bajty kontynuacji są wypełniane
+znakiem #›# (kod znaku U+203A). W przypadku kodowania UTF-16(BE) każda para
+dwucyfrowych wartości szesnastkowych jest reprezentowana przez jeden znak.
+Na przykład:
 
  Strona kodowa 1250 (ANSI - Europa Środkowa)
 
 @-
  \1b0000000000: 44 6F 9C E6 20 62 B3 61 │ 7A 65 F1 73 74 77 2C 20  Dość błazeństw, \-
  \1b0000000010: BF 72 B9 20 6D F3 6A 20 │ 70 EA 6B 20 6C 75 9F 6E  żrą mój pęk luźn\-
- \1b0000000020: 79 63 68 20 66 69 67 0D │ 0A                       ych fig         \-
+ \1b0000000020: 79 63 68 20 66 69 67 2E │ 0D 0A                    ych fig.        \-
 @+
-Za: [L. Jakubowicz; "Wiadomości Literackie" (nr 1, 1936, str. 7)]
 
  Strona kodowa 65001 (UTF-8)
 
 @-
- \1b0000000035: D0 92 20 D1 87 D0 B0 D1 │ 89 D0 B0 D1 85 20 D1 8E  В› ч›а›щ›а›х› ю›\-
- \1b0000000045: D0 B3 D0 B0 20 D0 B6 D0 │ B8 D0 BB 2D D0 B1 D1 8B  г›а› ж›и›л›-б›ы›\-
- \1b0000000055: D0 BB 20 D1 86 D0 B8 D1 │ 82 D1 80 D1 83 D1 81 2C  л› ц›и›т›р›у›с›,\-
+ \1b0000000000: EF BB BF 44 6F C5 9B C4 │ 87 20 62 C5 82 61 7A 65  �››Doś›ć› bł›aze\-
+ \1b0000000010: C5 84 73 74 77 2C 20 C5 │ BC 72 C4 85 20 6D C3 B3  ń›stw, ż›rą› mó›\-
+ \1b0000000020: 6A 20 70 C4 99 6B 20 6C │ 75 C5 BA 6E 79 63 68 20  j pę›k luź›nych \-
+ \1b0000000030: 66 69 67 2E 0D 0A       │                          fig.            \-
 @+
 
  Strona kodowa 1200 (UTF-16)
 
 @-
- \1b00000000A2: 3D 04 3E 04 20 00 44 04 │ 30 04 3B 04 4C 04 48 04  но фальш\-
- \1b00000000B2: 38 04 32 04 4B 04 39 04 │ 20 00 4D 04 3A 04 37 04  ивый экз\-
- \1b00000000C2: 35 04 3C 04 3F 04 3B 04 │ 4F 04 40 04 2C 00 20 00  емпляр, \-
- \1b00000000D2: 34 04 30 04 2E 00 0D 00 │ 0A 00                    да.♪◙   \-
+ \1b0000000000: 44 00 6F 00 5B 01 07 01 │ 20 00 62 00 42 01 61 00  Dość bła\-
+ \1b0000000010: 7A 00 65 00 44 01 73 00 │ 74 00 77 00 2C 00 20 00  zeństw, \-
+ \1b0000000020: 7C 01 72 00 05 01 20 00 │ 6D 00 F3 00 6A 00 20 00  żrą mój \-
+ \1b0000000030: 70 00 19 01 6B 00 20 00 │ 6C 00 75 00 7A 01 6E 00  pęk luźn\-
+ \1b0000000040: 79 00 63 00 68 00 20 00 │ 66 00 69 00 67 00 2E 00  ych fig.\-
+ \1b0000000050: 0D 00 0A 00             │                                  \-
 @+
-
- Kombinacja klawiszy #Ctrl+Prawo# przesuwa wszystkie bajty w lewo; pierwszy
-bajt w wierszu staje się ostatnim w poprzednim wierszu. Kombinacja #Ctrl+Lewo#
-przesuwa wszystkie bajty w praco, przesuwając ostatni bajt w rzędzie do pierwszej
-pozycji następnie wiersza. Inaczej niż w trybie #źródłowym# zawartość jest
-przesuwana o bajt, a nie o znak.
-
- Kombinacja klawiszy #Alt+Prawo# zwiększa liczbę wyświetlanych bajtów w każdym
-rzędzie o jeden bajt. Kombinacja #Ctrl+Alt+Prawo# zwiększa liczbę bajtów
-o 16 jednocześnie. Kombinacja #Alt+Lewo# zmniejsza liczbę wyświetlanych bajtów
-w każdej linii o jeden bajt. Kombinacja #Ctrl+Alt+Lewo# zmniejsza liczbę bajtów
-o 16 jednocześnie.
-
- Klawisze #Prawy# i #Lewy# są ignorowane.
+ Za: [L. Jakubowicz; "Wiadomości Literackie" (nr 1, 1936, str. 7)]
 
 
 @ViewerGotoPos
@@ -6863,5 +6852,5 @@ tworzenia, usuwania lub zmiany nazw folderów.
 
 
 @Index
-$ #Index help file#
+$ #Indeks pliku pomocy#
 <%INDEX%>

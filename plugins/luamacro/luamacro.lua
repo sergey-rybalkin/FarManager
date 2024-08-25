@@ -339,16 +339,37 @@ local function Open_CommandLine (strCmdLine)
   if not prefix then return end -- this can occur with Plugin.Command()
   prefix = prefix:lower()
   if prefix == "lm" or prefix == "macro" then
-    if text=="" then ShowCmdLineHelp(); return;  end
+    if text == "" then
+      ShowCmdLineHelp(); return;
+    end
     local cmd = text:match("%S*"):lower()
     if cmd == "load" then
       local paths = text:match("%S.*",5)
       paths = paths and paths:gsub([[^"(.+)"$]], "%1")
       far.MacroLoadAll(paths)
-    elseif cmd == "save" then utils.WriteMacros()
-    elseif cmd == "unload" then utils.UnloadMacros()
-    elseif cmd == "about" then About()
-    elseif cmd ~= "" then ErrMsg(Msg.CL_UnsupportedCommand .. cmd) end
+    elseif cmd == "save" then
+      utils.WriteMacros()
+    elseif cmd == "unload" then
+      utils.UnloadMacros()
+    elseif cmd == "about" then
+      About()
+    elseif cmd == "test" then
+      far.MacroPost( [[
+        local function Quit(n) actl.Quit(n) Keys("Esc") end
+        local OK, R
+        R = win.JoinPath(far.PluginStartupInfo().ModuleDir, "macrotest.lua")
+        R = loadfile(R) or Quit(1)
+        OK, R = pcall(R)
+        OK = OK or Quit(2)
+        R.test_all = R.test_all or Quit(3)
+        OK = pcall(R.test_all)
+        Quit(OK and 0 or 4)
+      ]], 0, "CtrlShiftF12")
+    elseif cmd == "browser" then
+      macrobrowser()
+    elseif cmd ~= "" then
+      ErrMsg(Msg.CL_UnsupportedCommand .. cmd)
+    end
   elseif prefix == "lua" or prefix == "moon" or prefix == "luas" or prefix == "moons" then
     if text=="" then ShowCmdLineHelp(); return;  end
     local show = false
@@ -493,7 +514,7 @@ end
 -- TODO: when called from a module's panel, call that module's Configure()
 function export.Configure (guid)
   local items = utils.GetMenuItems()
-  if items[guid] then items[guid].action() end
+  if items[guid] then items[guid].action(guid) end
 end
 
 local function Init()

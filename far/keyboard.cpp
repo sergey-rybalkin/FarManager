@@ -61,7 +61,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Platform:
 #include "platform.hpp"
-#include "platform.version.hpp"
 
 // Common:
 #include "common/algorithm.hpp"
@@ -73,6 +72,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
+// Basic Latin         0020 - 007F
+// Latin-1 Supplement  00A0 - 00FF
+// Latin Extended-A    0100 - 017F
+// Latin Extended-B    0180 - 024F
+const auto latin_end = 0x250;
+
 /* start Глобальные переменные */
 
 FarKeyboardState IntKeyState{};
@@ -80,7 +85,7 @@ FarKeyboardState IntKeyState{};
 /* end Глобальные переменные */
 
 static std::array<short, WCHAR_MAX + 1> KeyToVKey;
-static std::array<wchar_t, 512> VKeyToASCII;
+static std::array<wchar_t, 512> VKeyToLatin;
 
 static unsigned int AltValue=0;
 static unsigned int KeyCodeForALT_LastPressed=0;
@@ -271,10 +276,10 @@ static const TFKey ModifKeyName[]
 	{ KEY_SHIFT,    lng::MKeyShift,  L"Shift"sv, },
 };
 
-static auto& Layout()
+static const auto& Layouts()
 {
-	static auto s_Layout = os::get_keyboard_layout_list();
-	return s_Layout;
+	static const auto s_Layouts = os::get_keyboard_layout_list();
+	return s_Layouts;
 }
 
 /*
@@ -285,7 +290,7 @@ static auto& Layout()
 void InitKeysArray()
 {
 	KeyToVKey.fill(0);
-	VKeyToASCII.fill(0);
+	VKeyToLatin.fill(0);
 
 	//KeyToVKey - используется чтоб проверить если два символа это одна и та же кнопка на клаве
 	//*********
@@ -297,33 +302,27 @@ void InitKeysArray()
 	//раскладки которая вернула этот символ
 	//
 
-	// https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-tounicodeex
-	// If bit 2 is set, keyboard state is not changed (Windows 10, version 1607 and newer)
-	const auto DontChangeKeyboardState = 0b100;
-	const auto ToUnicodeFlags = os::version::is_win10_1607_or_later()?
-		DontChangeKeyboardState :
-		0;
-
 	BYTE KeyState[256]{};
 
 	for (const auto j: std::views::iota(0, 2))
 	{
 		KeyState[VK_SHIFT] = j * 0x80;
 
-		for (const auto& i: Layout())
+		for (const auto& i: Layouts())
 		{
 			for (const auto VK : std::views::iota(0, 256))
 			{
-				if (wchar_t idx; ToUnicodeEx(VK, 0, KeyState, &idx, 1, ToUnicodeFlags, i) > 0)
+				if (wchar_t Buffer[2]; os::to_unicode(VK, 0, KeyState, Buffer, 0, i) > 0)
 				{
+					const auto idx = Buffer[0];
 					if (!KeyToVKey[idx])
 						KeyToVKey[idx] = VK + j * 0x100;
 
-					// VKeyToASCII - используется вместе с KeyToVKey чтоб подменить нац. символ на US-ASCII
+					// VKeyToLatin - используется вместе с KeyToVKey чтоб подменить нац. символ на Latin
 					// Имея мапирование юникод -> VK строим обратное мапирование
-					// VK -> символы с кодом меньше 0x80, т.е. только US-ASCII символы
-					if (idx < 0x80 && !VKeyToASCII[VK + j * 0x100])
-						VKeyToASCII[VK + j * 0x100] = upper(idx);
+					// VK -> символы с кодом меньше latin_end
+					if (idx < latin_end && !VKeyToLatin[VK + j * 0x100])
+						VKeyToLatin[VK + j * 0x100] = upper(idx);
 				}
 			}
 		}
@@ -350,10 +349,13 @@ bool KeyToKeyLayoutCompare(int Key, int CompareKey)
 //Должно вернуть клавишный Eng эквивалент Key
 int KeyToKeyLayout(int Key)
 {
+	if (Key < latin_end)
+		return Key;
+
 	const auto VK = KeyToVKey[Key&0xFFFF];
 
-	if (VK && VKeyToASCII[VK])
-		return VKeyToASCII[VK];
+	if (VK && VKeyToLatin[VK])
+		return VKeyToLatin[VK];
 
 	return Key;
 }
@@ -382,8 +384,16 @@ int SetFLockState(unsigned const vkKey, int const State)
 	{
 		if (State == 2 || (State==1 && !oldState) || (!State && oldState))
 		{
-			keybd_event(vkKey, 0, ExKey, 0);
-			keybd_event(vkKey, 0, ExKey | KEYEVENTF_KEYUP, 0);
+			if (oldState & 0x8000) // key is down
+			{
+				keybd_event(vkKey, 0, ExKey | KEYEVENTF_KEYUP, 0);
+				keybd_event(vkKey, 0, ExKey, 0);
+			}
+			else
+			{
+				keybd_event(vkKey, 0, ExKey, 0);
+				keybd_event(vkKey, 0, ExKey | KEYEVENTF_KEYUP, 0);
+			}
 		}
 	}
 
@@ -685,7 +695,7 @@ static bool ProcessMacros(INPUT_RECORD* rec, DWORD& Result)
 		rec->EventType =
 			in_closed_range(KEY_MACRO_BASE, static_cast<far_key_code>(MacroKey), KEY_MACRO_ENDBASE) ||
 			in_closed_range(KEY_OP_BASE, static_cast<far_key_code>(MacroKey), KEY_OP_ENDBASE) ||
-			(MacroKey&~0xFF000000) >= KEY_END_FKEY?
+			((MacroKey & ~0xFF000000) >= KEY_END_FKEY && !any_of(MacroKey & ~0xFF000000, KEY_NUMENTER, KEY_NUMDEL))?
 			0 : KEY_EVENT;
 
 		if (!(MacroKey&KEY_SHIFT))
@@ -1398,10 +1408,7 @@ int KeyNameToKey(string_view Name)
 				// если были модификаторы Alt/Ctrl, то преобразуем в "физическую клавишу" (независимо от языка)
 				if (Key&(KEY_ALT|KEY_RCTRL|KEY_CTRL|KEY_RALT))
 				{
-					if (Chr > 0x7F)
-						Chr=KeyToKeyLayout(Chr);
-
-					Chr=upper(Chr);
+					Chr = upper(KeyToKeyLayout(Chr));
 				}
 
 				Key|=Chr;
@@ -1534,6 +1541,7 @@ static int key_to_vk(unsigned int const Key)
 	case KEY_NUMENTER:    return VK_RETURN;
 	case KEY_ESC:         return VK_ESCAPE;
 	case KEY_SPACE:       return VK_SPACE;
+	case KEY_NUMDEL:      return VK_DELETE;
 	case KEY_NUMPAD5:     return VK_CLEAR;
 	default:              return 0;
 	}
@@ -1563,7 +1571,7 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 			short Vk = VkKeyScanEx(static_cast<wchar_t>(FKey), console.GetKeyboardLayout());
 			if (Vk == -1)
 			{
-				for (const auto& i: Layout())
+				for (const auto& i: Layouts())
 				{
 					if ((Vk = VkKeyScanEx(static_cast<wchar_t>(FKey), i)) != -1)
 						break;
@@ -1596,12 +1604,13 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 		{
 			static const std::pair<far_key_code, DWORD> ExtKeyMap[]
 			{
+				// the order is important, because "the key" is the last component of e.g. `CtrlAltShift`
 				{KEY_SHIFT, VK_SHIFT},
-				{KEY_CTRL, VK_CONTROL},
-				{KEY_ALT, VK_MENU},
 				{KEY_RSHIFT, VK_RSHIFT},
-				{KEY_RCTRL, VK_RCONTROL},
+				{KEY_ALT, VK_MENU},
 				{KEY_RALT, VK_RMENU},
+				{KEY_CTRL, VK_CONTROL},
+				{KEY_RCTRL, VK_RCONTROL},
 			};
 
 			// In case of CtrlShift, CtrlAlt, AltShift, CtrlAltShift there is no unambiguous mapping.
@@ -1614,13 +1623,6 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 			VirtKey=FKey;
 			switch (FKey)
 			{
-				case KEY_NUMDEL:
-					VirtKey=VK_DELETE;
-					break;
-				case KEY_NUMENTER:
-					VirtKey=VK_RETURN;
-					break;
-
 				case KEY_NONE:
 					EventType=MENU_EVENT;
 					break;
@@ -1722,10 +1724,18 @@ int TranslateKeyToVK(int Key, INPUT_RECORD* Rec)
 						KEY_DOWN,
 						KEY_INS,
 						KEY_DEL,
-						KEY_NUMENTER
+						KEY_NUMENTER,
+						//todo Browser*, Launch*, Media*, ... (Standby, Spec*, Oem* ?)
+						KEY_LWIN,
+						KEY_RWIN,
+						KEY_APPS,
+						KEY_PRNTSCRN,
+						KEY_BREAK,
+						KEY_DIVIDE,
+						KEY_NUMLOCK
 					};
 
-					if (contains(ExtKey, FKey))
+					if (contains(ExtKey, FKey) || VirtKey==VK_RCONTROL || VirtKey==VK_RMENU)
 						Rec->Event.KeyEvent.dwControlKeyState|=ENHANCED_KEY;
 				}
 				break;
@@ -2139,9 +2149,7 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 		return KEY_NONE;
 	}
 
-	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-mapvirtualkeyexw
-	// Dead keys (diacritics) are indicated by setting the top bit of the return value
-	if (!Char && MapVirtualKeyEx(KeyCode, MAPVK_VK_TO_CHAR, console.GetKeyboardLayout()) & 0x80000000)
+	if (!Char && os::is_dead_key(rec->Event.KeyEvent, console.GetKeyboardLayout()))
 		return KEY_NONE;
 
 	//прежде, чем убирать это шаманство, поставьте себе раскладку, в которой по ralt+символ можно вводить символы.
@@ -2298,4 +2306,33 @@ TEST_CASE("keyboard.KeyNames")
 			REQUIRE(Str.empty());
 	}
 }
+
+TEST_CASE("keyboard.TranslateKeyToVK")
+{
+	static const struct
+	{
+		far_key_code Key;
+		unsigned ExpectedVK;
+	}
+	Tests[]
+	{
+		{ KEY_ESC,           VK_ESCAPE, },
+		{ KEY_SHIFTSPACE,    VK_SPACE, },
+		{ KEY_ALTF1,         VK_F1, },
+		{ KEY_NUMENTER,      VK_RETURN, },
+		{ KEY_SHIFTNUMENTER, VK_RETURN, },
+		{ KEY_NUMDEL,        VK_DELETE, },
+		{ KEY_CTRLNUMDEL,    VK_DELETE, },
+	};
+
+	for (const auto& i: Tests)
+	{
+		INPUT_RECORD Record;
+		TranslateKeyToVK(i.Key, &Record);
+		REQUIRE(Record.EventType == KEY_EVENT);
+		REQUIRE(Record.Event.KeyEvent.bKeyDown);
+		REQUIRE(Record.Event.KeyEvent.wVirtualKeyCode == i.ExpectedVK);
+	}
+}
+
 #endif

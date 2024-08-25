@@ -55,6 +55,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common/2d/algorithm.hpp"
 #include "common/algorithm.hpp"
 #include "common/enum_substrings.hpp"
+#include "common/from_string.hpp"
 #include "common/io.hpp"
 #include "common/scope_exit.hpp"
 #include "common/view/enumerate.hpp"
@@ -66,7 +67,8 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #define ESC L"\u001b"
 #define CSI ESC L"["
-#define OSC(Command) ESC L"]" Command ESC L"\\"sv
+#define ST ESC L"\\"
+#define OSC(Command) ESC L"]" Command ST ""sv
 #define ANSISYSSC CSI L"s"
 #define ANSISYSRC CSI L"u"
 
@@ -532,6 +534,144 @@ protected:
 		bool m_Restore{};
 	};
 
+	class scoped_vt_output
+	{
+	public:
+		NONCOPYABLE(scoped_vt_output);
+
+		scoped_vt_output():
+			m_ConsoleMode(::console.UpdateMode(::console.GetOutputHandle(), ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING, 0))
+		{
+		}
+
+		~scoped_vt_output()
+		{
+			if (m_ConsoleMode)
+				::console.SetMode(::console.GetOutputHandle(), *m_ConsoleMode);
+		}
+
+		explicit operator bool() const
+		{
+			return m_ConsoleMode.has_value();
+		}
+
+	private:
+		std::optional<DWORD> m_ConsoleMode;
+	};
+
+	class scoped_vt_input
+	{
+	public:
+		NONCOPYABLE(scoped_vt_input);
+
+		scoped_vt_input():
+			m_ConsoleMode(::console.UpdateMode(::console.GetInputHandle(), ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_LINE_INPUT))
+		{
+		}
+
+		~scoped_vt_input()
+		{
+			if (m_ConsoleMode)
+				::console.SetMode(::console.GetInputHandle(), *m_ConsoleMode);
+		}
+
+		explicit operator bool() const
+		{
+			return m_ConsoleMode.has_value();
+		}
+
+	private:
+		std::optional<DWORD> m_ConsoleMode;
+	};
+
+	static string query_vt(string_view const Command)
+	{
+		// A VT query works as follows:
+		// - We cast an unpronounceable spell into the output stream.
+		// - If the terminal recognizes the spell, it conjures
+		//   an equally unpronounceable answer into the input stream.
+		//   Notably, it takes its time at that and answers asynchronously.
+		// - If the terminal does not recognize the spell, it does not
+		//   burden itself with explanations and stays silent.
+
+		// A classic, timeless design, a pinnacle of 70's or whatever.
+
+		// The only problem with it is that there is no way to tell what will happen.
+		// You conjure a dodgy incantation, which may or may not be supported, and pray.
+		// Maybe the response comes immediately.
+		// Maybe later.
+		// Maybe never.
+
+		// 🤦
+
+		// To make sure that we do not deadlock ourselves here we prepend & append
+		// this dummy DA command that always works (since it was in the initial WT release),
+		// so that the response is always non-empty and we know exactly where it starts and ends.
+		// In other words:
+		// - <attributes>[the response we are actually after]<attributes>: yay.
+		// - <attributes><attributes>: nay, the request is unsupported.
+
+		// Ah, and since it is input stream, the user can type any rubbish into it at the same time.
+		// Fortunately, it seems that user input is queued before and/or after the responses,
+		// but does not interlace with them.
+
+		// We also need to enable VT input, otherwise it will only work in a real console.
+		// Are you not entertained?
+
+		scoped_vt_input const VtInput;
+		if (!VtInput)
+			throw far_exception(L"scoped_vt_input"sv);
+
+		const auto Dummy = CSI L"0c"sv;
+
+		if (!::console.Write(concat(Dummy, Command, Dummy)))
+			throw far_exception(L"WriteConsole"sv);
+
+		string Response;
+
+		std::optional<size_t>
+			FirstTokenPrefixPos,
+			FirstTokenSuffixPos,
+			SecondTokenPrefixPos,
+			SecondTokenSuffixPos;
+
+		const auto
+			TokenPrefix = CSI "?"sv,
+			TokenSuffix = L"c"sv;
+
+		while (!SecondTokenSuffixPos)
+		{
+			wchar_t ResponseBuffer[8192];
+			size_t ResponseSize;
+
+			if (!::console.Read(ResponseBuffer, ResponseSize))
+				throw far_exception(L"ReadConsole"sv);
+
+			Response.append(ResponseBuffer, ResponseSize);
+
+			if (!FirstTokenPrefixPos)
+				if (const auto Pos = Response.find(TokenPrefix); Pos != Response.npos)
+					FirstTokenPrefixPos = Pos;
+
+			if (FirstTokenPrefixPos && !FirstTokenSuffixPos)
+				if (const auto Pos = Response.find(TokenSuffix, *FirstTokenPrefixPos + TokenPrefix.size()); Pos != Response.npos)
+					FirstTokenSuffixPos = Pos;
+
+			if (FirstTokenSuffixPos && !SecondTokenPrefixPos)
+				if (const auto Pos = Response.find(TokenPrefix, *FirstTokenSuffixPos + TokenSuffix.size()); Pos != Response.npos)
+					SecondTokenPrefixPos = Pos;
+
+			if (SecondTokenPrefixPos && !SecondTokenSuffixPos)
+				if (const auto Pos = Response.find(TokenSuffix, *SecondTokenPrefixPos + TokenPrefix.size()); Pos != Response.npos)
+					SecondTokenSuffixPos = Pos;
+		}
+
+		Response.resize(*SecondTokenPrefixPos);
+		Response.erase(0, *FirstTokenSuffixPos + TokenSuffix.size());
+
+		return Response;
+	}
+
 	console::console():
 		m_OriginalInputHandle(GetStdHandle(STD_INPUT_HANDLE)),
 		m_StreamBuffersOverrider(std::make_unique<stream_buffers_overrider>())
@@ -586,18 +726,21 @@ protected:
 		return m_OriginalInputHandle;
 	}
 
+	static bool is_pseudo_console(HWND const Window)
+	{
+		wchar_t ClassName[MAX_PATH];
+		const auto Size = GetClassName(Window, ClassName, static_cast<int>(std::size(ClassName)));
+		return string_view(ClassName, Size) == L"PseudoConsoleWindow"sv;
+	}
+
 	HWND console::GetWindow() const
 	{
 		const auto Window = GetConsoleWindow();
 
-		wchar_t ClassName[MAX_PATH];
-		if (const auto Size = GetClassName(Window, ClassName, static_cast<int>(std::size(ClassName))); Size)
+		if (is_pseudo_console(Window))
 		{
-			if (string_view(ClassName, Size) == L"PseudoConsoleWindow"sv)
-			{
-				if (const auto Owner = ::GetWindow(Window, GW_OWNER))
-					return Owner;
-			}
+			if (const auto Owner = ::GetWindow(Window, GW_OWNER))
+				return Owner;
 		}
 
 		return Window;
@@ -788,10 +931,7 @@ protected:
 	{
 		const auto ImeWnd = ImmGetDefaultIMEWnd(::console.GetWindow());
 		if (!ImeWnd)
-		{
-			LOGWARNING(L"ImmGetDefaultIMEWnd(): {}"sv, os::last_error());
 			return {};
-		}
 
 		const auto ThreadId = GetWindowThreadProcessId(ImeWnd, {});
 		if (!ThreadId)
@@ -883,6 +1023,19 @@ protected:
 		return true;
 	}
 
+	std::optional<DWORD> console::UpdateMode(HANDLE const ConsoleHandle, DWORD const ToSet, DWORD const ToClear) const
+	{
+		DWORD CurrentMode;
+
+		if (!GetMode(ConsoleHandle, CurrentMode))
+			return {};
+
+		if (const auto NewMode = (CurrentMode | ToSet) & ~ToClear; NewMode != CurrentMode && !SetMode(ConsoleHandle, NewMode))
+			return {};
+
+		return CurrentMode;
+	}
+
 	bool console::IsVtSupported() const
 	{
 		static const auto Result = [&]
@@ -908,6 +1061,65 @@ protected:
 		}();
 
 		return Result;
+	}
+
+	static bool layout_has_altgr(HKL const Layout)
+	{
+		static std::unordered_map<HKL, bool> LayoutState;
+		const auto [Iterator, Inserted] = LayoutState.emplace(Layout, false);
+		if (!Inserted)
+			return Iterator->second;
+
+		BYTE KeyState[256]{};
+		KeyState[VK_CONTROL] = 0b10000000;
+		KeyState[VK_MENU]    = 0b10000000;
+
+		for (const auto VK: std::views::iota(0, 256))
+		{
+			if (VK == VK_PACKET)
+				continue;
+
+			if (wchar_t Buffer[2]; os::to_unicode(VK, 0, KeyState, Buffer, 0, Layout) > 0)
+			{
+				return Iterator->second = true;
+			}
+		}
+
+		return false;
+	}
+
+	static void undo_altgr_if_redundant(KEY_EVENT_RECORD& KeyEvent)
+	{
+		const auto AltGr = LEFT_CTRL_PRESSED | RIGHT_ALT_PRESSED;
+
+		if ((KeyEvent.dwControlKeyState & AltGr) != AltGr)
+			return; // It's not AltGr
+
+		if (KeyEvent.uChar.UnicodeChar)
+			return; // It produces a character
+
+		const auto Layout = ::console.GetKeyboardLayout();
+
+		if (os::is_dead_key(KeyEvent, Layout))
+			return; // It produces a dead key
+
+		if (!layout_has_altgr(Layout))
+			return; // It's not AltGr
+
+		// It's AltGr that produces nothing. We can safely patch it to normal RAlt
+		KeyEvent.dwControlKeyState &= ~LEFT_CTRL_PRESSED;
+
+		BYTE KeyState[256]{};
+		KeyState[VK_SHIFT] = KeyEvent.dwControlKeyState & SHIFT_PRESSED? 0b10000000 : 0;
+		KeyState[VK_CAPITAL] = KeyEvent.dwControlKeyState & CAPSLOCK_ON? 0b00000001 : 0;
+
+		if (wchar_t Buffer[2]; os::to_unicode(KeyEvent.wVirtualKeyCode, KeyEvent.wVirtualScanCode, KeyState, Buffer, 0, Layout) > 0)
+			KeyEvent.uChar.UnicodeChar = Buffer[0];
+	}
+
+	static void postprocess_key_event(KEY_EVENT_RECORD& KeyEvent)
+	{
+		undo_altgr_if_redundant(KeyEvent);
 	}
 
 	static bool get_current_console_font(HANDLE OutputHandle, CONSOLE_FONT_INFO& FontInfo)
@@ -987,6 +1199,10 @@ protected:
 	{
 		switch (Record.EventType)
 		{
+		case KEY_EVENT:
+			postprocess_key_event(Record.Event.KeyEvent);
+			break;
+
 		case MOUSE_EVENT:
 			postprocess_mouse_event(Record.Event.MouseEvent);
 			break;
@@ -1577,6 +1793,32 @@ protected:
 				// Save cursor position
 				Str = ANSISYSSC L""sv;
 
+				std::vector<rectangle> ForeignBlocks;
+				std::optional<rectangle> ForeignBlock;
+
+				const auto queue_block = [&]
+				{
+					if (!ForeignBlock)
+						return;
+
+					for (auto& Block: ForeignBlocks)
+					{
+						if (
+							Block.left == ForeignBlock->left &&
+							Block.right == ForeignBlock->right &&
+							Block.bottom == ForeignBlock->top - 1
+							)
+						{
+							Block.bottom = ForeignBlock->bottom;
+							ForeignBlock.reset();
+							return;
+						}
+					}
+
+					ForeignBlocks.emplace_back(*ForeignBlock);
+					ForeignBlock.reset();
+				};
+
 				for (const auto i: std::views::iota(SubRect.top + SubrectOffset, std::min(SubRect.top + SubrectOffset + ViewportSize.y, SubRect.bottom + 1)))
 				{
 					if (i != SubRect.top + SubrectOffset)
@@ -1593,7 +1835,8 @@ protected:
 						LastColor = colors::default_color();
 					}
 
-					make_vt_sequence(Buffer[i].subspan(SubRect.left, SubRect.width()), Str, LastColor);
+					const auto BlockRow = Buffer[i].subspan(SubRect.left, SubRect.width());
+					make_vt_sequence(BlockRow, Str, LastColor);
 
 					if (SubRect.right == ScrX && i != ScrY)
 					{
@@ -1603,13 +1846,40 @@ protected:
 						// Surprisingly, it also fixes terminal#15153.
 						Str += L'\n';
 					}
+
+					for (const auto& Cell: BlockRow)
+					{
+						const auto CellIndex = &Cell - BlockRow.data();
+
+						if (
+							Cell.Attributes.Flags & FCF_FOREIGN &&
+							colors::is_transparent(Cell.Attributes.ForegroundColor) &&
+							colors::is_transparent(Cell.Attributes.BackgroundColor)
+						)
+						{
+							if (!ForeignBlock)
+								ForeignBlock.emplace(SubRect.left + CellIndex, i, SubRect.left + CellIndex, i);
+							else
+								++ForeignBlock->right;
+
+							continue;
+						}
+
+						queue_block();
+					}
+
+					queue_block();
 				}
+
+				queue_block();
 
 				if (!::console.Write(Str))
 					return false;
 
-				Str.clear();
+				for (const auto& Block: ForeignBlocks)
+					::console.unstash_output(Block);
 
+				Str.clear();
 			}
 
 			return ::console.Write(CSI L"m"sv);
@@ -1770,21 +2040,144 @@ protected:
 			return true;
 		}
 
-		static bool SetPaletteVT(std::array<COLORREF, 16> const& Palette)
+		static bool GetPaletteVT(std::array<COLORREF, 256>& Palette)
+		{
+			try
+			{
+				LOGDEBUG(L"Reading VT palette - here be dragons"sv);
+
+				const auto
+					OSCPrefix = ESC L"]4"sv,
+					OSCSuffix = ST L""sv;
+
+				string Request;
+				Request.reserve(OSCPrefix.size() + L";255;?"sv.size() * Palette.size() - 100 - 10 + OSCSuffix.size());
+
+				// A single OSC for the whole thing.
+				// Querying the palette was introduced after the terse syntax, so it's fine.
+				Request = OSCPrefix;
+
+				for (const auto i: std::views::iota(0uz, Palette.size()))
+					far::format_to(Request, L";{};?"sv, vt_color_index(static_cast<uint8_t>(i)));
+
+				Request += OSCSuffix;
+
+				const auto ResponseData = query_vt(Request);
+				if (ResponseData.empty())
+				{
+					LOGWARNING(L"OSC 4 query is not supported"sv, Request);
+					return false;
+				}
+
+				const auto give_up = [&]
+				{
+					throw far_exception(far::format(L"Incorrect response: {}"sv, ResponseData), false);
+				};
+
+				string_view Response = ResponseData;
+				if (!Response.ends_with(L'\\'))
+					give_up();
+
+				Response.remove_suffix(1);
+
+				const auto
+					Prefix = ESC "]"sv,
+					Suffix = ESC ""sv,
+					RGBPrefix = L"rgb:"sv;
+
+				size_t ColorsSet = 0;
+
+				for (auto PaletteToken: enum_tokens(Response, L"\\"sv))
+				{
+					if (!PaletteToken.starts_with(Prefix) || !PaletteToken.ends_with(Suffix))
+						give_up();
+
+					PaletteToken.remove_prefix(Prefix.size());
+					PaletteToken.remove_suffix(Suffix.size());
+
+					enum_tokens const Subtokens(PaletteToken, L";"sv);
+
+					auto SubIterator = Subtokens.cbegin();
+					if (SubIterator == Subtokens.cend())
+						give_up();
+
+					if (*SubIterator++ != L"4"sv)
+						give_up();
+
+					const auto VtIndex = from_string<unsigned>(*SubIterator++);
+					if (VtIndex >= Palette.size())
+						give_up();
+
+					auto& PaletteColor = Palette[vt_color_index(VtIndex)];
+
+					auto ColorStr = *SubIterator;
+					if (!ColorStr.starts_with(RGBPrefix))
+						give_up();
+
+					ColorStr.remove_prefix(RGBPrefix.size());
+
+					if (ColorStr.size() != L"0000"sv.size() * 3 + 2)
+						give_up();
+
+					const auto color = [&](size_t const Offset)
+					{
+						const auto Value = from_string<unsigned>(ColorStr.substr(Offset * L"0000/"sv.size(), 4), {}, 16);
+						if (Value > 0xffff)
+							give_up();
+
+						return Value / 0x0101;
+					};
+
+					PaletteColor = RGB(color(0), color(1), color(2));
+					++ColorsSet;
+				}
+
+				if (ColorsSet != Palette.size())
+					give_up();
+
+				LOGDEBUG(L"VT palette read successfuly"sv);
+				return true;
+			}
+			catch (far_exception const& e)
+			{
+				LOGERROR(L"{}"sv, e);
+				return false;
+			}
+		}
+
+		static bool GetPaletteNT(std::array<COLORREF, 256>& Palette)
+		{
+			if (!imports.GetConsoleScreenBufferInfoEx)
+				return false;
+
+			CONSOLE_SCREEN_BUFFER_INFOEX csbi{ sizeof(csbi) };
+			if (!imports.GetConsoleScreenBufferInfoEx(::console.GetOutputHandle(), &csbi))
+			{
+				LOGERROR(L"GetConsoleScreenBufferInfoEx(): {}"sv, os::last_error());
+				return false;
+			}
+
+			std::ranges::copy(csbi.ColorTable, Palette.begin());
+
+			return true;
+		}
+
+		static bool SetPaletteVT(std::array<COLORREF, 256> const& Palette)
 		{
 			string Str;
-			Str.reserve(OSC(L"4;15;rgb:ff/ff/ff").size() * 16);
+			Str.reserve(OSC(L"4;255;rgb:ff/ff/ff").size() * Palette.size() - 100 - 10);
 
 			for (const auto& [Color, i] : enumerate(Palette))
 			{
 				const auto RGBA = colors::to_rgba(Color);
+				// A separate OSC for every color: unfortunately the terse syntax was only added in 2020
 				far::format_to(Str, OSC(L"4;{};rgb:{:02x}/{:02x}/{:02x}"), vt_color_index(i), RGBA.r, RGBA.g, RGBA.b);
 			}
 
 			return ::console.Write(Str);
 		}
 
-		static bool SetPaletteNT(std::array<COLORREF, 16> const& Palette)
+		static bool SetPaletteNT(std::array<COLORREF, 256> const& Palette)
 		{
 			if (!imports.GetConsoleScreenBufferInfoEx)
 				return false;
@@ -1798,10 +2191,12 @@ protected:
 				return false;
 			}
 
-			if (std::ranges::equal(Palette, csbi.ColorTable))
+			std::span const NtPalette(Palette.data(), colors::index::nt_size);
+
+			if (std::ranges::equal(NtPalette, csbi.ColorTable))
 				return true;
 
-			std::ranges::copy(Palette, std::begin(csbi.ColorTable));
+			std::ranges::copy(NtPalette, std::begin(csbi.ColorTable));
 
 			if (!imports.SetConsoleScreenBufferInfoEx(Output, &csbi))
 			{
@@ -2097,8 +2492,8 @@ protected:
 	{
 		// https://github.com/microsoft/terminal/issues/10337
 
-		// As of 7 Oct 2022 GetLargestConsoleWindowSize is broken in WT.
-		// It takes the current screen resolution and divides it by an inadequate font size, e.g. 1x16.
+		// As of 15 Jul 2024 GetLargestConsoleWindowSize is broken in WT.
+		// It takes the current screen size in pixels and divides it by an inadequate font size, e.g. 1x16 or 1x1.
 
 		// It is unlikely that it is ever gonna be fixed, so we do a few very basic checks here to filter out obvious rubbish.
 
@@ -2115,6 +2510,20 @@ protected:
 		// The API works with SHORTs, anything larger than that makes no sense.
 		if (Size.x >= std::numeric_limits<SHORT>::max() || Size.y >= std::numeric_limits<SHORT>::max())
 			return false;
+
+		// If we got here, it is either legit or they used some fallback 1x1 font and the proportions are not screwed enough to fail the checks above.
+		if (const auto Monitor = MonitorFromWindow(::console.GetWindow(), MONITOR_DEFAULTTONEAREST))
+		{
+			if (MONITORINFO Info{ sizeof(Info) }; GetMonitorInfo(Monitor, &Info))
+			{
+				// The smallest selectable in the UI font is 5x2. Anything smaller than that is likely rubbish and unreadable anyway.
+				if (const auto AssumedFontHeight = (Info.rcWork.bottom - Info.rcWork.top) / Size.y; AssumedFontHeight < 5)
+					return false;
+
+				if (const auto AssumedFontWidth = (Info.rcWork.right - Info.rcWork.left) / Size.x; AssumedFontWidth < 2)
+					return false;
+			}
+		}
 
 		return true;
 	}
@@ -2188,6 +2597,25 @@ protected:
 				FillConsoleOutputAttribute(GetOutputHandle(), ConColor, RightSize, RightCoord, &CharsWritten);
 			}
 		}
+		return true;
+	}
+
+	bool console::Clear(const FarColor& Color) const
+	{
+		ClearExtraRegions(Color, CR_BOTH);
+
+		point ViewportSize;
+		if (!GetSize(ViewportSize))
+			return false;
+
+		const auto ConColor = colors::FarColorToConsoleColor(Color);
+		const DWORD Size = ViewportSize.x * ViewportSize.y;
+
+		COORD const Coord{ 0, GetDelta() };
+		DWORD CharsWritten;
+		FillConsoleOutputCharacter(GetOutputHandle(), L' ', Size, Coord, &CharsWritten);
+		FillConsoleOutputAttribute(GetOutputHandle(), ConColor, Size, Coord, &CharsWritten);
+
 		return true;
 	}
 
@@ -2484,7 +2912,7 @@ protected:
 			if (GetLastError() != ERROR_INVALID_HANDLE)
 				return false;
 
-			LOGINFO(L"Reinitializing");
+			LOGINFO(L"Reinitializing"sv);
 			initialize();
 			return false;
 		}
@@ -2510,31 +2938,34 @@ protected:
 		m_WidthTestScreen = {};
 	}
 
-	bool console::GetPalette(std::array<COLORREF, 16>& Palette) const
-	{
-		if (!imports.GetConsoleScreenBufferInfoEx)
-			return false;
-
-		CONSOLE_SCREEN_BUFFER_INFOEX csbi{ sizeof(csbi) };
-		if (!imports.GetConsoleScreenBufferInfoEx(GetOutputHandle(), &csbi))
-		{
-			LOGERROR(L"GetConsoleScreenBufferInfoEx(): {}"sv, os::last_error());
-			return false;
-		}
-
-		std::ranges::copy(csbi.ColorTable, Palette.begin());
-
-		return true;
-	}
-
-	bool console::SetPalette(std::array<COLORREF, 16> const& Palette) const
+	bool console::GetPalette(std::array<COLORREF, 256>& Palette) const
 	{
 		// Happy path
-		if (IsVtEnabled())
-			return implementation::SetPaletteVT(Palette);
+		const auto VtEnabled = IsVtEnabled();
+		if (VtEnabled && implementation::GetPaletteVT(Palette))
+			return true;
 
 		// Legacy console
-		if (!IsVtSupported())
+		if (VtEnabled || !IsVtSupported())
+			return implementation::GetPaletteNT(Palette);
+
+		// If VT is not enabled, we enable it temporarily and use VT method if we can:
+		if ([[maybe_unused]] scoped_vt_output const VtOutput{})
+			return implementation::GetPaletteVT(Palette);
+
+		// Otherwise fallback to NT
+		return implementation::GetPaletteNT(Palette);
+	}
+
+	bool console::SetPalette(std::array<COLORREF, 256> const& Palette) const
+	{
+		// Happy path
+		const auto VtEnabled = IsVtEnabled();
+		if (VtEnabled && implementation::SetPaletteVT(Palette))
+			return true;
+
+		// Legacy console
+		if (VtEnabled || !IsVtSupported())
 			return implementation::SetPaletteNT(Palette);
 
 		// These methods are currently not synchronized in WT 🤦
@@ -2542,11 +2973,8 @@ protected:
 		// VT does and updates the CSBI too.
 
 		// If VT is not enabled, we enable it temporarily and use VT method if we can:
-		if (std::pair<HANDLE, DWORD> Data{ GetOutputHandle(), 0 }; GetMode(Data.first, Data.second) && SetMode(Data.first, Data.second | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
-		{
-			SCOPE_EXIT { SetMode(Data.first, Data.second); };
+		if ([[maybe_unused]] scoped_vt_output const VtOutput{})
 			return implementation::SetPaletteVT(Palette);
-		}
 
 		// Otherwise fallback to NT
 		return implementation::SetPaletteNT(Palette);
@@ -2587,6 +3015,60 @@ protected:
 		send_vt_command(far::format(OSC(L"9;4;{};{}"), state_to_vt(State), Percent));
 	}
 
+// I'd prefer a more obscure number, but looks like only 1-6 are supported
+#define SERVICE_PAGE_NUMBER "3"
+
+	void console::stash_output() const
+	{
+		send_vt_command(CSI L";;;;1;;;" SERVICE_PAGE_NUMBER "$v"sv);
+	}
+
+	void console::unstash_output(rectangle const Coordinates) const
+	{
+		send_vt_command(far::format(
+			CSI L"{};{};{};{};" SERVICE_PAGE_NUMBER ";{};{};1$v"sv,
+			1 + Coordinates.top,
+			1 + Coordinates.left,
+			1 + Coordinates.bottom,
+			1 + Coordinates.right,
+			1 + Coordinates.top,
+			1 + Coordinates.left
+		));
+	}
+
+#undef SERVICE_PAGE_NUMBER
+
+	void console::start_prompt() const
+	{
+		send_vt_command(OSC("133;D"));
+		send_vt_command(OSC("133;A"));
+	}
+
+	void console::start_command() const
+	{
+		send_vt_command(OSC("133;B"));
+	}
+
+	void console::start_output() const
+	{
+		send_vt_command(OSC("133;C"));
+	}
+
+	void console::command_finished() const
+	{
+		send_vt_command(OSC("133;D"));
+	}
+
+	void console::command_finished(int const ExitCode) const
+	{
+		send_vt_command(far::format(OSC("133;D;{}"), ExitCode));
+	}
+
+	void console::command_not_found(string_view const Command) const
+	{
+		send_vt_command(far::format(OSC("9001;CmdNotFound;{}"), Command));
+	}
+
 	bool console::GetCursorRealPosition(point& Position) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
@@ -2619,11 +3101,8 @@ protected:
 			return false;
 
 		// If VT is not enabled, we enable it temporarily
-		if (std::pair<HANDLE, DWORD> Data{ GetOutputHandle(), 0 }; GetMode(Data.first, Data.second) && SetMode(Data.first, Data.second | ENABLE_VIRTUAL_TERMINAL_PROCESSING))
-		{
-			SCOPE_EXIT{ SetMode(Data.first, Data.second); };
+		if ([[maybe_unused]] scoped_vt_output const VtOutput{})
 			return Write(Command);
-		}
 
 		return false;
 	}

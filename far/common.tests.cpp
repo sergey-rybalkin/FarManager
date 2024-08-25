@@ -580,6 +580,23 @@ TEST_CASE("enumerator.dynamic")
 
 //----------------------------------------------------------------------------
 
+#include "common/expected.hpp"
+
+TEST_CASE("expected")
+{
+	expected<string, int> const GoodValue(L"42"s), BadValue(42);
+
+	REQUIRE(GoodValue.has_value());
+	REQUIRE(GoodValue.value() == L"42"sv);
+	REQUIRE_THROWS_AS(GoodValue.error(), std::logic_error);
+
+	REQUIRE(!BadValue.has_value());
+	REQUIRE(BadValue.error() == 42);
+	REQUIRE_THROWS_AS(BadValue.value(), int);
+}
+
+//----------------------------------------------------------------------------
+
 #include "common/from_string.hpp"
 
 TEST_CASE("from_string")
@@ -1874,14 +1891,13 @@ TEST_CASE("utility.is_aligned")
 	}
 
 	{
-		alignas(int) const char data[sizeof(int) * 2]{};
+		alignas(int) const char data[sizeof(int) * 3]{};
 		static_assert(sizeof(int) > sizeof(char));
 
 		REQUIRE(is_aligned(view_as<int>(data, 0)));
-		REQUIRE(!is_aligned(view_as<int>(data, 1)));
-		REQUIRE(!is_aligned(view_as<int>(data, sizeof(int) - 1)));
+		REQUIRE(!is_aligned(*std::bit_cast<int*>(data + 1))); // view_as asserts alignof(T)
 		REQUIRE(is_aligned(view_as<int>(data, sizeof(int))));
-		REQUIRE(!is_aligned(view_as<int>(data, sizeof(int) + 1)));
+		REQUIRE(!is_aligned(*std::bit_cast<int*>(data + sizeof(int) + 1))); // view_as asserts alignof(T)
 	}
 }
 

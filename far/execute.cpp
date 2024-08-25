@@ -59,6 +59,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "log.hpp"
 #include "char_width.hpp"
 #include "string_sort.hpp"
+#include "datetime.hpp"
 
 // Platform:
 #include "platform.hpp"
@@ -75,33 +76,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "format.hpp"
 
 //----------------------------------------------------------------------------
-
-static string short_name_if_too_long(string_view const LongName, size_t const MaxSize)
-{
-	return LongName.size() >= MaxSize? ConvertNameToShort(LongName) : string(LongName);
-}
-
-static auto short_file_name_if_too_long(const string& LongName)
-{
-	return short_name_if_too_long(LongName, MAX_PATH - 1);
-}
-
-static auto short_directory_name_if_too_long(const string& LongName)
-{
-	assert(!LongName.empty());
-
-	const auto HasEndSlash = path::is_separator(LongName.back());
-
-	auto Dir = short_name_if_too_long(LongName, MAX_PATH - (HasEndSlash? 1 : 2));
-
-	// For funny names that end with spaces
-	// We do this for SetCurrentDirectory already
-	// Here it is for paths that go into CreateProcess & ShellExecuteEx
-	if (!HasEndSlash)
-		AddEndSlash(Dir);
-
-	return Dir;
-}
 
 static bool FindObject(string_view const Command, string& strDest)
 {
@@ -476,6 +450,7 @@ static void detach(point const& ConsoleSize, rectangle const& ConsoleWindowRect)
 	console.Allocate();
 
 	InitConsole();
+	Global->ScrBuf->FillBuf();
 
 	console.SetSize(ConsoleSize);
 	console.SetWindowRect(ConsoleWindowRect);
@@ -502,35 +477,54 @@ static os::handle wait_for_process_or_detach(os::handle Process, int const Conso
 	return {};
 }
 
-static void log_process_exit_code(os::handle const& Process)
+static void log_process_exit_code(execute_info const& Info, os::handle const& Process, bool const UsingComspec)
 {
 	DWORD ExitCode;
 	if (!GetExitCodeProcess(Process.native_handle(), &ExitCode))
 	{
-		LOGWARNING(L"GetExitCodeProcess(): {}"sv, os::last_error());
+		LOGWARNING(L"GetExitCodeProcess({}): {}"sv, Info.Command, os::last_error());
 		return;
 	}
 
-	LOG(
-		ExitCode == EXIT_SUCCESS?
-			logging::level::debug :
-			logging::level::warning,
-		L"Exit code: {}"sv,
-		ExitCode
-	);
+	string ElapsedTime{ L"?s"sv };
+	if (os::chrono::time_point CreationTime; os::chrono::get_process_creation_time(Process.native_handle(), CreationTime))
+		ElapsedTime = duration_to_string_hr(os::chrono::nt_clock::now() - CreationTime);
+	else
+		LOGWARNING(L"get_process_creation_time(): {}"sv, os::last_error());
 
-	if (ExitCode != EXIT_SUCCESS && ExitCode != EXIT_FAILURE)
-	{
-		LOGWARNING(L"{}"sv, os::format_error(ExitCode));
-		LOGWARNING(L"{}"sv, os::format_ntstatus(ExitCode));
-	}
+	if (ExitCode == EXIT_SUCCESS)
+		LOGINFO(L"Command [{}] took {}"sv, Info.Command, ElapsedTime);
+	else
+		LOGWARNING(
+			L"Command [{}] took {} and failed (exit code {}{})"sv,
+			Info.Command,
+			ElapsedTime,
+			ExitCode,
+			ExitCode == EXIT_FAILURE?
+				L""sv :
+				far::format(L", {}"sv, os::error_state{ExitCode, static_cast<NTSTATUS>(ExitCode)}.to_string())
+		);
+
+	console.command_finished(ExitCode);
+
+	if (UsingComspec && ExitCode == EXIT_FAILURE)
+		console.command_not_found(Info.Command);
 }
 
-static void after_process_creation(os::handle Process, execute_info::wait_mode const WaitMode, os::handle Thread, point const& ConsoleSize, rectangle const& ConsoleWindowRect, function_ref<void(bool)> const ConsoleActivator)
+static void after_process_creation(
+	execute_info const& Info,
+	os::handle Process,
+	execute_info::wait_mode const WaitMode,
+	os::handle Thread,
+	point const& ConsoleSize,
+	rectangle const& ConsoleWindowRect,
+	function_ref<void()> const ConsoleActivator,
+	bool const UsingComspec
+)
 {
-	const auto resume_process = [&](bool const Consolise)
+	const auto resume_process = [&]
 	{
-		ConsoleActivator(Consolise);
+		ConsoleActivator();
 
 		if (Thread)
 		{
@@ -542,28 +536,34 @@ static void after_process_creation(os::handle Process, execute_info::wait_mode c
 	switch (WaitMode)
 	{
 	case execute_info::wait_mode::no_wait:
-		resume_process(false);
+		resume_process();
+		console.command_finished();
 		return;
 
 	case execute_info::wait_mode::if_needed:
 		{
 			const auto NeedWaiting = os::process::get_process_subsystem(Process.get()) != os::process::image_type::graphical;
 
-			resume_process(NeedWaiting);
+			resume_process();
 
 			if (!NeedWaiting)
+			{
+				console.command_finished();
 				return;
+			}
 
 			Process = wait_for_process_or_detach(std::move(Process), KeyNameToKey(Global->Opt->ConsoleDetachKey), ConsoleSize, ConsoleWindowRect);
 			if (Process)
-				log_process_exit_code(Process);
+				log_process_exit_code(Info, Process, UsingComspec);
+			else
+				console.command_finished();
 		}
 		return;
 
 	case execute_info::wait_mode::wait_finish:
-		resume_process(true);
+		resume_process();
 		Process.wait();
-		log_process_exit_code(Process);
+		log_process_exit_code(Info, Process, UsingComspec);
 		return;
 	}
 }
@@ -730,7 +730,7 @@ private:
 
 static bool execute_impl(
 	const execute_info& Info,
-	function_ref<void(bool)> const ConsoleActivator,
+	function_ref<void()> const ConsoleActivator,
 	string& FullCommand,
 	string& Command,
 	string& Parameters,
@@ -743,34 +743,67 @@ static bool execute_impl(
 	std::optional<external_execution_context> Context;
 	auto ConsoleActivatorInvoked = false;
 
-	const auto ExtendedActivator = [&](bool const Consolise)
+	const auto ExtendedActivator = [&]
 	{
 		if (Context)
 			return;
 
 		if (!ConsoleActivatorInvoked)
 		{
-			ConsoleActivator(Consolise);
+			ConsoleActivator();
 			ConsoleActivatorInvoked = true;
 		}
 
-		if (Consolise)
+		console.GetWindowRect(ConsoleWindowRect);
+		console.GetSize(ConsoleSize);
+		Context.emplace();
+	};
+
+	const auto exec_with_short_names_fallback = [&](auto Invocable, string const& ExecCommand, string const& ExecDirectory)
+	{
+		if (Invocable(ExecCommand, ExecDirectory))
+			return true;
+
+		string ShortCommand, ShortDirectory;
+
+		for ([[maybe_unused]] const auto i: std::views::iota(0uz, 2uz))
 		{
-			console.GetWindowRect(ConsoleWindowRect);
-			console.GetSize(ConsoleSize);
-			Context.emplace();
+			switch (os::last_error().Win32Error)
+			{
+			case ERROR_FILENAME_EXCED_RANGE:
+				if (!os::fs::shorten(ExecCommand, ShortCommand, os::fs::is_file_name_too_long))
+					continue;
+				break;
+
+			case ERROR_DIRECTORY:
+				if (!os::fs::shorten(ExecDirectory, ShortDirectory, os::fs::is_directory_name_too_long))
+					continue;
+				break;
+
+			default:
+				return false;
+			}
+
+			if (Invocable(ShortCommand.empty()? ExecCommand : ShortCommand, ShortDirectory.empty()? ExecDirectory : ShortDirectory))
+				return true;
 		}
+
+		return false;
 	};
 
 	const auto execute_process = [&]
 	{
 		PROCESS_INFORMATION pi{};
-		if (!execute_createprocess(Command, Parameters, CurrentDirectory, Info.RunAs, Info.WaitMode != execute_info::wait_mode::no_wait, pi))
+		const auto exec = [&](string const& ExecCommand, string const& ExecDirectory)
+		{
+			return execute_createprocess(ExecCommand, Parameters, ExecDirectory, Info.RunAs, Info.WaitMode != execute_info::wait_mode::no_wait, pi);
+		};
+
+		if (!exec_with_short_names_fallback(exec, Command, CurrentDirectory))
 			return false;
 
-		after_process_creation(os::handle(pi.hProcess), Info.WaitMode, os::handle(pi.hThread), ConsoleSize, ConsoleWindowRect, ExtendedActivator);
+		after_process_creation(Info, os::handle(pi.hProcess), Info.WaitMode, os::handle(pi.hThread), ConsoleSize, ConsoleWindowRect, ExtendedActivator, UsingComspec);
 		return true;
-
 	};
 
 	// Filter out the cases where the source is known, but is not a known executable (exe, com, bat, cmd, see IsExecutable in filelist.cpp)
@@ -783,19 +816,30 @@ static bool execute_impl(
 			return true;
 
 		if (os::last_error().Win32Error == ERROR_EXE_MACHINE_TYPE_MISMATCH)
+		{
+			SCOPED_ACTION(os::last_error_guard);
+			ExtendedActivator();
 			return false;
+		}
 	}
 
-	ExtendedActivator(Info.WaitMode != execute_info::wait_mode::no_wait);
+	ExtendedActivator();
 
 	const auto execute_shell = [&]
 	{
 		HANDLE Process;
-		if (!::execute_shell(Command, Parameters, CurrentDirectory, Info.SourceMode, Info.RunAs, Info.WaitMode != execute_info::wait_mode::no_wait, Process))
+
+		const auto exec = [&](string const& ExecCommand, string const& ExecDirectory)
+		{
+			return ::execute_shell(ExecCommand, Parameters, ExecDirectory, Info.SourceMode, Info.RunAs, Info.WaitMode != execute_info::wait_mode::no_wait, Process);
+		};
+
+		if (!exec_with_short_names_fallback(exec, Command, CurrentDirectory))
 			return false;
 
 		if (Process)
-			after_process_creation(os::handle(Process), Info.WaitMode, {}, ConsoleSize, ConsoleWindowRect, [](bool){});
+			after_process_creation(Info, os::handle(Process), Info.WaitMode, {}, ConsoleSize, ConsoleWindowRect, []{}, UsingComspec);
+
 		return true;
 	};
 
@@ -809,13 +853,17 @@ static bool execute_impl(
 	return execute_process() || execute_shell();
 }
 
-void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator)
+void Execute(execute_info& Info, function_ref<void()> const ConsoleActivator)
 {
+	auto CurrentDirectory = Info.Directory.empty()? os::fs::get_current_directory() : Info.Directory;
+	// For funny names that end with spaces
+	// We do this for SetCurrentDirectory already
+	// Here it is for paths that go into CreateProcess & ShellExecuteEx
+	AddEndSlash(CurrentDirectory);
+
 	// CreateProcess retardedly doesn't take into account CurrentDirectory when searching for the executable.
 	// SearchPath looks there as well and if it's set to something else we could get unexpected results.
-	const auto CurrentDirectory = short_directory_name_if_too_long(Info.Directory.empty()? os::fs::get_current_directory() : Info.Directory);
 	os::fs::process_current_directory_guard const Guard(CurrentDirectory);
-
 
 	string FullCommand, Command, Parameters;
 
@@ -829,7 +877,7 @@ void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator
 	if (Info.SourceMode != execute_info::source_mode::unknown)
 	{
 		FullCommand = Info.Command;
-		Command = short_file_name_if_too_long(Info.Command);
+		Command = Info.Command;
 	}
 	else
 	{
@@ -897,7 +945,12 @@ void Execute(execute_info& Info, function_ref<void(bool)> const ConsoleActivator
 	const auto ErrorState = os::last_error();
 
 	if (ErrorState.Win32Error == ERROR_CANCELLED)
+	{
+		console.command_finished();
 		return;
+	}
+
+	console.command_finished(ErrorState.Win32Error);
 
 	std::vector<string> Strings;
 	if (UsingComspec)

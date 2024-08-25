@@ -68,6 +68,7 @@ mf.mainmenu = function(param)
   local mprt =
     param == "fileassociations" and F.MPRT_FILEASSOCIATIONS or
     param == "filehighlight"    and F.MPRT_FILEHIGHLIGHT    or
+    param == "filemaskgroups"   and F.MPRT_FILEMASKGROUPS   or
     param == "filepanelmodes"   and F.MPRT_FILEPANELMODES   or
     param == "foldershortcuts"  and F.MPRT_FOLDERSHORTCUTS
   if mprt then
@@ -82,7 +83,7 @@ mf.iif = function(Expr, res1, res2)
 end
 
 mf.usermenu = function(mode, filename)
-  if Shared.OnlyEditorViewerUsed then return end -- mantis #2986 (crash)
+  if not panel.CheckPanelsExist() then return end -- mantis #2986 (crash)
   if mode and type(mode)~="number" then return end
   mode = mode or 0
   local sync_call = band(mode,0x100) ~= 0
@@ -413,19 +414,27 @@ local EVAL_MACROCANCELED = -3  -- было выведено меню выбор�
 local EVAL_RUNTIMEERROR  = -4  -- макрос был прерван в результате ошибки времени исполнения
 
 local function Eval_GetData (str) -- Получение данных макроса для Eval(S,2).
-  local Mode=far.MacroGetArea()
-  local UseCommon=false
+  local Mode = far.MacroGetArea()
+  local UseCommon = false
   str = str:match("^%s*(.-)%s*$")
 
-  local strArea,strKey = str:match("^(.-)/(.+)$")
-  if strArea then
+  local slash, strArea, strKey = str:match("^(/?)(.-)/(.+)$")
+  if slash == '/' then
+    strKey = str:sub(2)
+    UseCommon = true
+  elseif strArea then
     if strArea ~= "." then -- вариант "./Key" не подразумевает поиск в макрообласти Common
-      Mode=utils.GetAreaCode(strArea)
-      if Mode==nil then return end
+      local SpecifiedMode = utils.GetAreaCode(strArea)
+      if SpecifiedMode then
+        Mode = SpecifiedMode
+      else
+        strKey = str
+        UseCommon = true
+      end
     end
   else
-    strKey=str
-    UseCommon=true
+    strKey = str
+    UseCommon = true
   end
 
   return Mode, strKey, UseCommon

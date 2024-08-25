@@ -1181,7 +1181,7 @@ function MT.test_Mouse()
   assert_num (Mouse.LastCtrlState)
 end
 
-function MT.test_XPanel(pan) -- (@pan: either APanel or PPanel)
+local function test_XPanel(pan) -- (@pan: either APanel or PPanel)
   assert_bool (pan.Bof)
   assert_num  (pan.ColumnCount)
   assert_num  (pan.CurPos)
@@ -1216,6 +1216,9 @@ function MT.test_XPanel(pan) -- (@pan: either APanel or PPanel)
     Keys "Home" assert_true(pan.Bof)
   end
 end
+
+MT.test_APanel = function() test_XPanel(APanel) end
+MT.test_PPanel = function() test_XPanel(PPanel) end
 
 local function test_Panel_Item()
   for pt=0,1 do
@@ -2132,9 +2135,26 @@ local function test_Guids()
   test_one_guid( "EditorSearchId",           nil, "End F4 F7", 2)
   test_one_guid( "FarAskQuitId",             nil, "F10")
 
-  local assocmenu = function() mf.mainmenu("fileassociations") end
-  test_one_guid( "FileAssocMenuId",          assocmenu)
-  test_one_guid( "FileAssocModifyId",        assocmenu, "Ins", 2)
+  local myMenu
+  myMenu = function() mf.mainmenu("fileassociations") end
+  test_one_guid( "FileAssocMenuId",          myMenu)
+  test_one_guid( "FileAssocModifyId",        myMenu, "Ins", 2)
+
+  myMenu = function() mf.mainmenu("foldershortcuts") end
+  test_one_guid( "FolderShortcutsId",        myMenu)
+--test_one_guid( "FolderShortcutsDlgId",     myMenu, "F4", 2)
+
+  myMenu = function() mf.mainmenu("filehighlight") end
+  test_one_guid( "HighlightMenuId",          myMenu)
+  test_one_guid( "HighlightConfigId",        myMenu, "Ins", 2)
+
+  myMenu = function() mf.mainmenu("filepanelmodes") end
+  test_one_guid( "PanelViewModesId",         myMenu)
+  test_one_guid( "PanelViewModesEditId",     myMenu, "Enter", 2)
+
+  myMenu = function() mf.mainmenu("filemaskgroups") end
+  test_one_guid( "MaskGroupsMenuId",         myMenu)
+  test_one_guid( "EditMaskGroupId",          myMenu, "Ins", 2)
 
   test_one_guid( "FileAttrDlgId",            nil, "End CtrlA")
   test_one_guid( "FileOpenCreateId",         nil, "ShiftF4")
@@ -2142,29 +2162,14 @@ local function test_Guids()
   test_one_guid( "FiltersConfigId",          nil, "CtrlI Ins", 2)
   test_one_guid( "FiltersMenuId",            nil, "CtrlI")
   test_one_guid( "FindFileId",               nil, "AltF7")
-
-  local shortcutmenu = function() mf.mainmenu("foldershortcuts") end
-  test_one_guid( "FolderShortcutsId",        shortcutmenu)
---test_one_guid( "FolderShortcutsDlgId",     shortcutmenu, "Ins F4", 2)
-
   test_one_guid( "HardSymLinkId",            nil, "End AltF6")
   test_one_guid( "HelpSearchId",             nil, "F1 F7", 2)
-
-  local hilitemenu = function() mf.mainmenu("filehighlight") end
-  test_one_guid( "HighlightConfigId",        hilitemenu, "Ins", 2)
-  test_one_guid( "HighlightMenuId",          hilitemenu)
-
   test_one_guid( "HistoryCmdId",             nil, "AltF8")
   test_one_guid( "HistoryEditViewId",        nil, "AltF11")
   test_one_guid( "HistoryFolderId",          nil, "AltF12")
   test_one_guid( "MakeFolderId",             nil, "F7")
   test_one_guid( "MoveCurrentOnlyFileId",    nil, "End ShiftF6")
   test_one_guid( "MoveFilesId",              nil, "End F6")
-
-  local modesmenu = function() mf.mainmenu("filepanelmodes") end
-  test_one_guid( "PanelViewModesEditId",     modesmenu, "Enter", 2)
-  test_one_guid( "PanelViewModesId",         modesmenu)
-
   test_one_guid( "PluginInformationId",      nil, "F11 F3", 2)
   test_one_guid( "PluginsConfigMenuId",      nil, "AltShiftF9")
   test_one_guid( "PluginsMenuId",            nil, "F11")
@@ -2271,8 +2276,8 @@ function MT.test_all()
   MT.test_Object()
   MT.test_Panel()
   MT.test_Plugin()
-  MT.test_XPanel(APanel)
-  MT.test_XPanel(PPanel)
+  MT.test_APanel()
+  MT.test_PPanel()
   MT.test_mantis_1722()
   MT.test_luafar()
   MT.test_coroutine()

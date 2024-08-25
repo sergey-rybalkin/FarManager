@@ -525,10 +525,10 @@ void PutMouseEvent(lua_State *L, const MOUSE_EVENT_RECORD* rec, BOOL table_exist
 
 // convert a string from utf-8 to wide char and put it into a table,
 // to prevent stack overflow and garbage collection
-const wchar_t* StoreTempString(lua_State *L, int store_stack_pos, int* index)
+static const wchar_t* StoreTempString(lua_State *L, int store_stack_pos)
 {
 	const wchar_t *s = check_utf8_string(L,-1,NULL);
-	lua_rawseti(L, store_stack_pos, ++(*index));
+	luaL_ref(L, store_stack_pos);
 	return s;
 }
 
@@ -966,7 +966,7 @@ static int editor_UndoRedo(lua_State *L)
 
 static void FillKeyBarTitles(lua_State *L, int src_pos, struct KeyBarTitles *kbt)
 {
-	int store=0, store_pos, i;
+	int store_pos, i;
 	size_t size;
 	lua_newtable(L);
 	store_pos = lua_gettop(L);
@@ -992,10 +992,10 @@ static void FillKeyBarTitles(lua_State *L, int src_pos, struct KeyBarTitles *kbt
 		kbt->Labels[i].Key.ControlKeyState = CAST(DWORD,CheckFlagsFromTable(L, -1, "ControlKeyState"));
 		//-----------------------------------------------------------------------
 		lua_getfield(L, -1, "Text");
-		kbt->Labels[i].Text = StoreTempString(L, store_pos, &store);
+		kbt->Labels[i].Text = StoreTempString(L, store_pos);
 		//-----------------------------------------------------------------------
 		lua_getfield(L, -1, "LongText");
-		kbt->Labels[i].LongText = StoreTempString(L, store_pos, &store);
+		kbt->Labels[i].LongText = StoreTempString(L, store_pos);
 		//-----------------------------------------------------------------------
 		lua_pop(L, 1);
 	}
@@ -1684,56 +1684,63 @@ static int editor_SubscribeChangeEvent(lua_State *L)
 //     a nil    -- menu canceled by the user
 static int far_Menu(lua_State *L)
 {
+	enum {
+		POS_PROPS = 1, // properties
+		POS_ITEMS = 2, // items
+		POS_BKEYS = 3, // break keys
+		POS_STORE = 4, // temporary storage
+	};
+
 	TPluginData *pd = GetPluginData(L);
 	int X = -1, Y = -1, MaxHeight = 0;
 	UINT64 Flags = FMENU_WRAPMODE;
 	const wchar_t *Title = L"Menu", *Bottom = NULL, *HelpTopic = NULL;
 	intptr_t SelectIndex = 0, ItemsNumber, ret;
-	int store = 0, i;
+	int i;
 	intptr_t BreakCode = 0, *pBreakCode;
 	int NumBreakCodes = 0;
 	const GUID* MenuGuid = NULL;
 	struct FarMenuItem *Items, *pItem;
 	struct FarKey *pBreakKeys;
-	lua_settop(L, 3);     // cut unneeded parameters; make stack predictable
-	luaL_checktype(L, 1, LUA_TTABLE);
-	luaL_checktype(L, 2, LUA_TTABLE);
-	ItemsNumber = lua_objlen(L, 2);
 
-	if (!lua_isnil(L,3) && !lua_istable(L,3) && lua_type(L,3)!=LUA_TSTRING)
-		return luaL_argerror(L, 3, "must be table, string or nil");
+	luaL_checktype(L, POS_PROPS, LUA_TTABLE);
+	luaL_checktype(L, POS_ITEMS, LUA_TTABLE);
+	ItemsNumber = lua_objlen(L, POS_ITEMS);
 
+	lua_settop(L, POS_BKEYS);     // cut unneeded parameters; make stack predictable
 	lua_newtable(L); // temporary store; at stack position 4
+
+	if (!lua_isnil(L,POS_BKEYS) && !lua_istable(L,POS_BKEYS) && lua_type(L,POS_BKEYS)!=LUA_TSTRING)
+		return luaL_argerror(L, POS_BKEYS, "must be table, string or nil");
+
 	// Properties
-	lua_pushvalue(L,1);                 //+1
+	lua_pushvalue(L, POS_PROPS);
 	X = GetOptIntFromTable(L, "X", -1);
 	Y = GetOptIntFromTable(L, "Y", -1);
 	MaxHeight = GetOptIntFromTable(L, "MaxHeight", 0);
-	lua_getfield(L, 1, "Flags");        //+2
 
+	lua_getfield(L, POS_PROPS, "Flags");
 	if (!lua_isnil(L, -1)) Flags = CheckFlags(L, -1);
 
-	lua_getfield(L, 1, "Title");        //+3
+	lua_getfield(L, POS_PROPS, "Title");
+	if (lua_isstring(L,-1))    Title = StoreTempString(L, POS_STORE);
 
-	if (lua_isstring(L,-1))    Title = StoreTempString(L, 4, &store);
+	lua_getfield(L, POS_PROPS, "Bottom");
+	if (lua_isstring(L,-1))    Bottom = StoreTempString(L, POS_STORE);
 
-	lua_getfield(L, 1, "Bottom");       //+3
+	lua_getfield(L, POS_PROPS, "HelpTopic");
+	if (lua_isstring(L,-1))    HelpTopic = StoreTempString(L, POS_STORE);
 
-	if (lua_isstring(L,-1))    Bottom = StoreTempString(L, 4, &store);
-
-	lua_getfield(L, 1, "HelpTopic");    //+3
-
-	if (lua_isstring(L,-1))    HelpTopic = StoreTempString(L, 4, &store);
-
-	lua_getfield(L, 1, "SelectIndex");  //+3
+	lua_getfield(L, POS_PROPS, "SelectIndex");
 	if ((SelectIndex = lua_tointeger(L,-1)) > ItemsNumber)
 		SelectIndex = 0;
 
-	lua_getfield(L, 1, "Id");           //+4
+	lua_getfield(L, POS_PROPS, "Id");
 	if (lua_type(L,-1)==LUA_TSTRING && lua_objlen(L,-1)==sizeof(GUID))
 		MenuGuid = (const GUID*)lua_tostring(L, -1);
 
-	lua_pop(L, 4);
+	lua_settop (L, POS_STORE);
+
 	// Items
 	Items = (struct FarMenuItem*)lua_newuserdata(L, ItemsNumber*sizeof(struct FarMenuItem));
 	memset(Items, 0, ItemsNumber*sizeof(struct FarMenuItem));
@@ -1743,7 +1750,7 @@ static int far_Menu(lua_State *L)
 	{
 		static const char key[] = "text";
 		lua_pushinteger(L, i+1);
-		lua_gettable(L, 2);
+		lua_gettable(L, POS_ITEMS);
 
 		if (!lua_istable(L, -1))
 			return luaLF_SlotError(L, i+1, "table");
@@ -1751,7 +1758,7 @@ static int far_Menu(lua_State *L)
 		//-------------------------------------------------------------------------
 		lua_getfield(L, -1, key);
 
-		if (lua_isstring(L,-1))  pItem->Text = StoreTempString(L, 4, &store);
+		if (lua_isstring(L,-1))  pItem->Text = StoreTempString(L, POS_STORE);
 		else if (!lua_isnil(L,-1)) return luaLF_FieldError(L, key, "string");
 
 		if (!pItem->Text)
@@ -1809,9 +1816,9 @@ static int far_Menu(lua_State *L)
 	// Break Keys
 	pBreakKeys = NULL;
 	pBreakCode = NULL;
-	if (lua_type(L,3) == LUA_TSTRING)
+	if (lua_type(L, POS_BKEYS) == LUA_TSTRING)
 	{
-		const char *q, *ptr = lua_tostring(L,3);
+		const char *q, *ptr = lua_tostring(L, POS_BKEYS);
 		lua_newtable(L);
 		while (*ptr)
 		{
@@ -1824,10 +1831,10 @@ static int far_Menu(lua_State *L)
 			lua_setfield(L,-2,"BreakKey");
 			lua_rawseti(L,-2,++NumBreakCodes);
 		}
-		lua_replace(L,3);
+		lua_replace(L, POS_BKEYS);
 	}
 	else
-		NumBreakCodes = lua_istable(L,3) ? (int)lua_objlen(L,3) : 0;
+		NumBreakCodes = lua_istable(L,POS_BKEYS) ? (int)lua_objlen(L,POS_BKEYS) : 0;
 
 	if (NumBreakCodes)
 	{
@@ -1838,7 +1845,7 @@ static int far_Menu(lua_State *L)
 		lua_pushstring(L, FAR_VIRTUALKEYS);
 		lua_rawget(L, LUA_REGISTRYINDEX);
 		// push breakkeys table on top
-		lua_pushvalue(L, 3);              // vk=-2; bk=-1;
+		lua_pushvalue(L, POS_BKEYS);        // vk=-2; bk=-1;
 
 		for(ind=0; ind < NumBreakCodes; ind++)
 		{
@@ -1925,14 +1932,14 @@ static int far_Menu(lua_State *L)
 	if (NumBreakCodes && (BreakCode != -1))
 	{
 		lua_pushinteger(L, BreakCode+1);
-		lua_gettable(L, 3);
+		lua_gettable(L, POS_BKEYS);
 	}
 	else if (ret == -1)
 		return lua_pushnil(L), 1;
 	else
 	{
 		lua_pushinteger(L, ret+1);
-		lua_gettable(L, 2);
+		lua_gettable(L, POS_ITEMS);
 	}
 
 	lua_pushinteger(L, ret+1);
@@ -3658,75 +3665,75 @@ static int DoSendDlgMessage (lua_State *L, intptr_t Msg, int delta)
 	return 1;
 }
 
-#define DlgMethod(name,msg,delta) \
-static int dlg_##name(lua_State *L) { return DoSendDlgMessage(L,msg,delta); }
+#define DlgMethod(name,msg) \
+static int dlg_##name(lua_State *L) { return DoSendDlgMessage(L,msg,1); }
 
 static int far_SendDlgMessage(lua_State *L) { return DoSendDlgMessage(L,0,0); }
 
-DlgMethod( AddHistory,             DM_ADDHISTORY, 1)
-DlgMethod( Close,                  DM_CLOSE, 1)
-DlgMethod( EditUnchangedFlag,      DM_EDITUNCHANGEDFLAG, 1)
-DlgMethod( Enable,                 DM_ENABLE, 1)
-DlgMethod( EnableRedraw,           DM_ENABLEREDRAW, 1)
-DlgMethod( GetCheck,               DM_GETCHECK, 1)
-DlgMethod( GetComboboxEvent,       DM_GETCOMBOBOXEVENT, 1)
-DlgMethod( GetConstTextPtr,        DM_GETCONSTTEXTPTR, 1)
-DlgMethod( GetCursorPos,           DM_GETCURSORPOS, 1)
-DlgMethod( GetCursorSize,          DM_GETCURSORSIZE, 1)
-DlgMethod( GetDialogInfo,          DM_GETDIALOGINFO, 1)
-DlgMethod( GetDialogTitle,         DM_GETDIALOGTITLE, 1)
-DlgMethod( GetDlgData,             DM_GETDLGDATA, 1)
-DlgMethod( GetDlgItem,             DM_GETDLGITEM, 1)
-DlgMethod( GetDlgRect,             DM_GETDLGRECT, 1)
-DlgMethod( GetDropdownOpened,      DM_GETDROPDOWNOPENED, 1)
-DlgMethod( GetEditPosition,        DM_GETEDITPOSITION, 1)
-DlgMethod( GetFocus,               DM_GETFOCUS, 1)
-DlgMethod( GetItemData,            DM_GETITEMDATA, 1)
-DlgMethod( GetItemPosition,        DM_GETITEMPOSITION, 1)
-DlgMethod( GetSelection,           DM_GETSELECTION, 1)
-DlgMethod( GetText,                DM_GETTEXT, 1)
-DlgMethod( Key,                    DM_KEY, 1)
-DlgMethod( ListAdd,                DM_LISTADD, 1)
-DlgMethod( ListAddStr,             DM_LISTADDSTR, 1)
-DlgMethod( ListDelete,             DM_LISTDELETE, 1)
-DlgMethod( ListFindString,         DM_LISTFINDSTRING, 1)
-DlgMethod( ListGetCurPos,          DM_LISTGETCURPOS, 1)
-DlgMethod( ListGetData,            DM_LISTGETDATA, 1)
-DlgMethod( ListGetDataSize,        DM_LISTGETDATASIZE, 1)
-DlgMethod( ListGetItem,            DM_LISTGETITEM, 1)
-DlgMethod( ListGetTitles,          DM_LISTGETTITLES, 1)
-DlgMethod( ListInfo,               DM_LISTINFO, 1)
-DlgMethod( ListInsert,             DM_LISTINSERT, 1)
-DlgMethod( ListSet,                DM_LISTSET, 1)
-DlgMethod( ListSetCurPos,          DM_LISTSETCURPOS, 1)
-DlgMethod( ListSetData,            DM_LISTSETDATA, 1)
-DlgMethod( ListSetTitles,          DM_LISTSETTITLES, 1)
-DlgMethod( ListSort,               DM_LISTSORT, 1)
-DlgMethod( ListUpdate,             DM_LISTUPDATE, 1)
-DlgMethod( MoveDialog,             DM_MOVEDIALOG, 1)
-DlgMethod( Redraw,                 DM_REDRAW, 1)
-DlgMethod( ResizeDialog,           DM_RESIZEDIALOG, 1)
-DlgMethod( Set3State,              DM_SET3STATE, 1)
-DlgMethod( SetCheck,               DM_SETCHECK, 1)
-DlgMethod( SetComboboxEvent,       DM_SETCOMBOBOXEVENT, 1)
-DlgMethod( SetCursorPos,           DM_SETCURSORPOS, 1)
-DlgMethod( SetCursorSize,          DM_SETCURSORSIZE, 1)
-DlgMethod( SetDlgData,             DM_SETDLGDATA, 1)
-DlgMethod( SetDlgItem,             DM_SETDLGITEM, 1)
-DlgMethod( SetDropdownOpened,      DM_SETDROPDOWNOPENED, 1)
-DlgMethod( SetEditPosition,        DM_SETEDITPOSITION, 1)
-DlgMethod( SetFocus,               DM_SETFOCUS, 1)
-DlgMethod( SetHistory,             DM_SETHISTORY, 1)
-DlgMethod( SetInputNotify,         DM_SETINPUTNOTIFY, 1)
-DlgMethod( SetItemData,            DM_SETITEMDATA, 1)
-DlgMethod( SetItemPosition,        DM_SETITEMPOSITION, 1)
-DlgMethod( SetMaxTextLength,       DM_SETMAXTEXTLENGTH, 1)
-DlgMethod( SetSelection,           DM_SETSELECTION, 1)
-DlgMethod( SetText,                DM_SETTEXT, 1)
-DlgMethod( SetTextPtr,             DM_SETTEXTPTR, 1)
-DlgMethod( ShowDialog,             DM_SHOWDIALOG, 1)
-DlgMethod( ShowItem,               DM_SHOWITEM, 1)
-DlgMethod( User,                   DM_USER, 1)
+DlgMethod( AddHistory,             DM_ADDHISTORY)
+DlgMethod( Close,                  DM_CLOSE)
+DlgMethod( EditUnchangedFlag,      DM_EDITUNCHANGEDFLAG)
+DlgMethod( Enable,                 DM_ENABLE)
+DlgMethod( EnableRedraw,           DM_ENABLEREDRAW)
+DlgMethod( GetCheck,               DM_GETCHECK)
+DlgMethod( GetComboboxEvent,       DM_GETCOMBOBOXEVENT)
+DlgMethod( GetConstTextPtr,        DM_GETCONSTTEXTPTR)
+DlgMethod( GetCursorPos,           DM_GETCURSORPOS)
+DlgMethod( GetCursorSize,          DM_GETCURSORSIZE)
+DlgMethod( GetDialogInfo,          DM_GETDIALOGINFO)
+DlgMethod( GetDialogTitle,         DM_GETDIALOGTITLE)
+DlgMethod( GetDlgData,             DM_GETDLGDATA)
+DlgMethod( GetDlgItem,             DM_GETDLGITEM)
+DlgMethod( GetDlgRect,             DM_GETDLGRECT)
+DlgMethod( GetDropdownOpened,      DM_GETDROPDOWNOPENED)
+DlgMethod( GetEditPosition,        DM_GETEDITPOSITION)
+DlgMethod( GetFocus,               DM_GETFOCUS)
+DlgMethod( GetItemData,            DM_GETITEMDATA)
+DlgMethod( GetItemPosition,        DM_GETITEMPOSITION)
+DlgMethod( GetSelection,           DM_GETSELECTION)
+DlgMethod( GetText,                DM_GETTEXT)
+DlgMethod( Key,                    DM_KEY)
+DlgMethod( ListAdd,                DM_LISTADD)
+DlgMethod( ListAddStr,             DM_LISTADDSTR)
+DlgMethod( ListDelete,             DM_LISTDELETE)
+DlgMethod( ListFindString,         DM_LISTFINDSTRING)
+DlgMethod( ListGetCurPos,          DM_LISTGETCURPOS)
+DlgMethod( ListGetData,            DM_LISTGETDATA)
+DlgMethod( ListGetDataSize,        DM_LISTGETDATASIZE)
+DlgMethod( ListGetItem,            DM_LISTGETITEM)
+DlgMethod( ListGetTitles,          DM_LISTGETTITLES)
+DlgMethod( ListInfo,               DM_LISTINFO)
+DlgMethod( ListInsert,             DM_LISTINSERT)
+DlgMethod( ListSet,                DM_LISTSET)
+DlgMethod( ListSetCurPos,          DM_LISTSETCURPOS)
+DlgMethod( ListSetData,            DM_LISTSETDATA)
+DlgMethod( ListSetTitles,          DM_LISTSETTITLES)
+DlgMethod( ListSort,               DM_LISTSORT)
+DlgMethod( ListUpdate,             DM_LISTUPDATE)
+DlgMethod( MoveDialog,             DM_MOVEDIALOG)
+DlgMethod( Redraw,                 DM_REDRAW)
+DlgMethod( ResizeDialog,           DM_RESIZEDIALOG)
+DlgMethod( Set3State,              DM_SET3STATE)
+DlgMethod( SetCheck,               DM_SETCHECK)
+DlgMethod( SetComboboxEvent,       DM_SETCOMBOBOXEVENT)
+DlgMethod( SetCursorPos,           DM_SETCURSORPOS)
+DlgMethod( SetCursorSize,          DM_SETCURSORSIZE)
+DlgMethod( SetDlgData,             DM_SETDLGDATA)
+DlgMethod( SetDlgItem,             DM_SETDLGITEM)
+DlgMethod( SetDropdownOpened,      DM_SETDROPDOWNOPENED)
+DlgMethod( SetEditPosition,        DM_SETEDITPOSITION)
+DlgMethod( SetFocus,               DM_SETFOCUS)
+DlgMethod( SetHistory,             DM_SETHISTORY)
+DlgMethod( SetInputNotify,         DM_SETINPUTNOTIFY)
+DlgMethod( SetItemData,            DM_SETITEMDATA)
+DlgMethod( SetItemPosition,        DM_SETITEMPOSITION)
+DlgMethod( SetMaxTextLength,       DM_SETMAXTEXTLENGTH)
+DlgMethod( SetSelection,           DM_SETSELECTION)
+DlgMethod( SetText,                DM_SETTEXT)
+DlgMethod( SetTextPtr,             DM_SETTEXTPTR)
+DlgMethod( ShowDialog,             DM_SHOWDIALOG)
+DlgMethod( ShowItem,               DM_SHOWITEM)
+DlgMethod( User,                   DM_USER)
 
 int PushDNParams (lua_State *L, intptr_t Msg, intptr_t Param1, void *Param2)
 {
@@ -3978,7 +3985,7 @@ intptr_t LF_DlgProc(lua_State *L, HANDLE hDlg, intptr_t Msg, intptr_t Param1, vo
 	PSInfo *Info = GetPluginData(L)->Info;
 	TDialogData *dd = (TDialogData*) Info->SendDlgMessage(hDlg,DM_GETDLGDATA,0,0);
 
-	if (Msg == DN_INITDIALOG && NonModal(dd))
+	if (Msg == DN_INITDIALOG && dd->hDlg == INVALID_HANDLE_VALUE)
 	{
 		dd->hDlg = hDlg;
 	}
@@ -4046,7 +4053,6 @@ static int far_DialogInit(lua_State *L)
 	// 8-th parameter (flags)
 	Flags = OptFlags(L, 8, 0);
 	dd = NewDialogData(L, pd->Info, INVALID_HANDLE_VALUE, TRUE);
-	dd->isModal = (Flags&FDLG_NONMODAL) == 0;
 	// 9-th parameter (DlgProc function)
 	Proc = NULL;
 	Param = NULL;
@@ -4084,6 +4090,10 @@ static int far_DialogInit(lua_State *L)
 	{
 		RemoveDialogFromRegistry(L, dd);
 		lua_pushnil(L);
+	}
+	else
+	{
+		dd->isModal = (Flags&FDLG_NONMODAL) == 0;
 	}
 
 	return 1;
@@ -5034,31 +5044,31 @@ static int DoAdvControl (lua_State *L, int Command, int Delta)
 	return 1;
 }
 
-#define AdvCommand(name,command,delta) \
-static int adv_##name(lua_State *L) { return DoAdvControl(L,command,delta); }
+#define AdvCommand(name,command) \
+static int adv_##name(lua_State *L) { return DoAdvControl(L,command,1); }
 
 static int far_AdvControl(lua_State *L) { return DoAdvControl(L,0,0); }
 
-AdvCommand( Commit,                 ACTL_COMMIT, 1)
-AdvCommand( GetArrayColor,          ACTL_GETARRAYCOLOR, 1)
-AdvCommand( GetColor,               ACTL_GETCOLOR, 1)
-AdvCommand( GetCursorPos,           ACTL_GETCURSORPOS, 1)
-AdvCommand( GetFarHwnd,             ACTL_GETFARHWND, 1)
-AdvCommand( GetFarmanagerVersion,   ACTL_GETFARMANAGERVERSION, 1)
-AdvCommand( GetFarRect,             ACTL_GETFARRECT, 1)
-AdvCommand( GetWindowCount,         ACTL_GETWINDOWCOUNT, 1)
-AdvCommand( GetWindowInfo,          ACTL_GETWINDOWINFO, 1)
-AdvCommand( GetWindowType,          ACTL_GETWINDOWTYPE, 1)
-AdvCommand( ProgressNotify,         ACTL_PROGRESSNOTIFY, 1)
-AdvCommand( Quit,                   ACTL_QUIT, 1)
-AdvCommand( RedrawAll,              ACTL_REDRAWALL, 1)
-AdvCommand( SetArrayColor,          ACTL_SETARRAYCOLOR, 1)
-AdvCommand( SetCurrentWindow,       ACTL_SETCURRENTWINDOW, 1)
-AdvCommand( SetCursorPos,           ACTL_SETCURSORPOS, 1)
-AdvCommand( SetProgressState,       ACTL_SETPROGRESSSTATE, 1)
-AdvCommand( SetProgressValue,       ACTL_SETPROGRESSVALUE, 1)
-AdvCommand( Synchro,                ACTL_SYNCHRO, 1)
-AdvCommand( Waitkey,                ACTL_WAITKEY, 1)
+AdvCommand( Commit,                 ACTL_COMMIT)
+AdvCommand( GetArrayColor,          ACTL_GETARRAYCOLOR)
+AdvCommand( GetColor,               ACTL_GETCOLOR)
+AdvCommand( GetCursorPos,           ACTL_GETCURSORPOS)
+AdvCommand( GetFarHwnd,             ACTL_GETFARHWND)
+AdvCommand( GetFarmanagerVersion,   ACTL_GETFARMANAGERVERSION)
+AdvCommand( GetFarRect,             ACTL_GETFARRECT)
+AdvCommand( GetWindowCount,         ACTL_GETWINDOWCOUNT)
+AdvCommand( GetWindowInfo,          ACTL_GETWINDOWINFO)
+AdvCommand( GetWindowType,          ACTL_GETWINDOWTYPE)
+AdvCommand( ProgressNotify,         ACTL_PROGRESSNOTIFY)
+AdvCommand( Quit,                   ACTL_QUIT)
+AdvCommand( RedrawAll,              ACTL_REDRAWALL)
+AdvCommand( SetArrayColor,          ACTL_SETARRAYCOLOR)
+AdvCommand( SetCurrentWindow,       ACTL_SETCURRENTWINDOW)
+AdvCommand( SetCursorPos,           ACTL_SETCURSORPOS)
+AdvCommand( SetProgressState,       ACTL_SETPROGRESSSTATE)
+AdvCommand( SetProgressValue,       ACTL_SETPROGRESSVALUE)
+AdvCommand( Synchro,                ACTL_SYNCHRO)
+AdvCommand( Waitkey,                ACTL_WAITKEY)
 
 static int far_MacroLoadAll(lua_State* L)
 {
@@ -5287,13 +5297,12 @@ static int far_MakeMenuItems(lua_State *L)
 	{
 		int item = 1, i;
 		char delim[] = { 226,148,130,0 };        // Unicode char 9474 in UTF-8
-		char buf_prefix[64], buf_space[64], buf_format[64];
+		char buf_prefix[64], buf_space[64];
 		int maxno = 0;
 		size_t len_prefix;
 
 		for (i=argn; i; maxno++,i/=10) {}
 		len_prefix = sprintf(buf_space, "%*s%s ", maxno, "", delim);
-		sprintf(buf_format, "%%%dd%%s ", maxno);
 
 		for(i=1; i<=argn; i++)
 		{
@@ -5314,7 +5323,7 @@ static int far_MakeMenuItems(lua_State *L)
 			if (lua_type(L, -1) != LUA_TSTRING)
 				luaL_error(L, "tostring() returned a non-string value");
 
-			sprintf(buf_prefix, buf_format, i, delim);
+			sprintf(buf_prefix, "%*d%s ", maxno, i, delim);
 			start = lua_tolstring(L, -1, &len_arg);
 			str = (char*) malloc(len_arg + 1);
 			memcpy(str, start, len_arg + 1);
