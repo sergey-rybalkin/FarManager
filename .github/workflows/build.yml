@@ -153,12 +153,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sys: [mingw32, clang32, mingw64, ucrt64, clang64]
+        sys: [mingw32, mingw64, ucrt64, clang64]
         compiler: [gcc, clang]
         build_type: [Release, Debug]
         exclude:
-          - sys: clang32
-            compiler: gcc
           - sys: clang64
             compiler: gcc
 
@@ -183,6 +181,7 @@ jobs:
         with:
           update: true
           msystem: ${{ matrix.sys }}
+          install: unzip
           pacboy: toolchain:p
 
       - name: Setup clang build
@@ -196,6 +195,7 @@ jobs:
         run: |
           echo "DEBUG=1" >> "$GITHUB_ENV"
           echo "USE_LLD=1" >> "$GITHUB_ENV"
+          test "${{ matrix.sys }}" = "ucrt64" -o "${{ matrix.sys }}" = "clang64" && echo "USER_LIBS=-lucrtbased" >> "$GITHUB_ENV" || true
           pacboy --noconfirm -S --needed lld:p
 
       - name: Build Far
@@ -236,7 +236,7 @@ jobs:
       CLANG: 1
       PYTHON: 1
       SYS_LUA: 1
-      LUA_VER: '5.1.5'
+      LUA_VER: '5.1'
       ENABLE_TESTS: 0
 
     steps:
@@ -249,13 +249,10 @@ jobs:
         with:
           languages: cpp
 
-      - name: Install luver
-        uses: MunifTanjim/luver-action@v1
-
       - name: Install lua ${{ env.LUA_VER }}
         run: |
-          luver install lua $LUA_VER
-          luver use $LUA_VER
+          sudo apt-get update
+          sudo apt-get install lua${{ env.LUA_VER }}
 
       - name: Download llvm-mingw
         id: download_llvm_mingw
@@ -277,6 +274,7 @@ jobs:
         run: |
           echo "DEBUG=1" >> "$GITHUB_ENV"
           echo "USE_LLD=1" >> "$GITHUB_ENV"
+          test "${{ matrix.c_lib }}" = "ucrt" && echo "USER_LIBS=-lucrtbased" >> "$GITHUB_ENV" || true
 
       - name: Build far
         working-directory: far

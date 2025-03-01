@@ -872,7 +872,7 @@ static bool InputVariablesDialog(string& strStr, subst_data& SubstData, string_v
 		if (!i.strHistory.empty() && i.strHistory != GenerateHistoryName(Index))
 		{
 			replace_icase(strTmpStr, L'%' + i.strHistory, i.strData);
-			SubstData.Variables->emplace(i.strHistory, i.strData);
+			SubstData.Variables->try_emplace(i.strHistory, i.strData);
 		}
 	}
 
@@ -958,7 +958,7 @@ bool SubstFileName(
 	{
 		Str = ProcessMetasymbols(Str, SubstData);
 	}
-	catch (far_exception const& e)
+	catch (std::exception const& e)
 	{
 		Message(MSG_WARNING, e,
 			msg(lng::MError),

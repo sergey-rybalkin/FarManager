@@ -331,7 +331,7 @@ void UserMenu::SaveMenu(string_view const MenuFileName) const
 			Stream << StrStream.rdbuf();
 		});
 	}
-	catch (far_exception const& e)
+	catch (std::exception const& e)
 	{
 		Message(MSG_WARNING, e,
 			msg(lng::MError),
@@ -833,7 +833,10 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 					*/
 
 					bool PreserveLFN = false;
-					if (SubstFileName(strCommand, Context, &PreserveLFN, false, CurrentLabel) && !strCommand.empty())
+					if (!SubstFileName(strCommand, Context, &PreserveLFN, false, CurrentLabel))
+						return EC_CLOSE_MENU;
+
+					if (!strCommand.empty())
 					{
 						SCOPED_ACTION(PreserveLongName)(strName, PreserveLFN);
 

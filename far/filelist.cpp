@@ -511,8 +511,8 @@ FileList::FileList(private_tag, window_ptr Owner):
 {
 	if (const auto& data = msg(lng::MPanelBracketsForLongName); data.size() > 1)
 	{
-		*openBracket = data[0];
-		*closeBracket = data[1];
+		openBracket = data[0];
+		closeBracket = data[1];
 	}
 
 	m_CurDir = os::fs::get_current_directory();
@@ -1937,8 +1937,10 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 						{
 							if (EnableExternal)
 							{
-								ProcessExternal(Global->Opt->strExternalEditor, strFileName, strShortFileName, PluginMode, TemporaryDirectory);
-								UploadFile = file_state::get(strFileName) != SavedState;
+								UploadFile =
+									ProcessExternal(Global->Opt->strExternalEditor, strFileName, strShortFileName, PluginMode, TemporaryDirectory) &&
+									file_state::get(strFileName) != SavedState;
+
 								Modaling = PluginMode; // External editor from plugin panel is Modal!
 							}
 							else if (PluginMode)
@@ -3742,9 +3744,11 @@ bool FileList::FindPartName(string_view const Name,int Next,int Direct)
 	strMask = exclude_sets(strMask + L'*');
 */
 
+	const auto CurrentTime = os::chrono::nt_clock::now();
+
 	for (int I = m_CurFile + (Next ? Direct : 0); I >= 0 && static_cast<size_t>(I) < m_ListData.size(); I += Direct)
 	{
-		if (GetPlainString(Dest,I) && contains(upper(Dest), strMask))
+		if (GetPlainString(Dest,I, CurrentTime) && contains(upper(Dest), strMask))
 		//if (CmpName(strMask,ListData[I].FileName,true,I==CurFile))
 		{
 			if (!IsParentDirectory(m_ListData[I]))
@@ -3763,7 +3767,7 @@ bool FileList::FindPartName(string_view const Name,int Next,int Direct)
 	for (int I = (Direct > 0)? 0 : static_cast<int>(m_ListData.size() - 1); (Direct > 0)? I < m_CurFile : I > m_CurFile; I += Direct)
 	{
 		if (
-			!GetPlainString(Dest, I) ||
+			!GetPlainString(Dest, I, CurrentTime) ||
 			!contains(upper(Dest), strMask) ||
 			IsParentDirectory(m_ListData[I]) ||
 			(DirFind && !(m_ListData[I].Attributes & FILE_ATTRIBUTE_DIRECTORY))
@@ -3782,7 +3786,7 @@ bool FileList::FindPartName(string_view const Name,int Next,int Direct)
 }
 
 // собрать в одну строку все данные в отображаемых колонках
-bool FileList::GetPlainString(string& Dest, int ListPos) const
+bool FileList::GetPlainString(string& Dest, int ListPos, os::chrono::time_point const CurrentTime) const
 {
 	Dest.clear();
 
@@ -3892,7 +3896,7 @@ bool FileList::GetPlainString(string& Dest, int ListPos) const
 					break;
 				}
 
-				Dest += FormatStr_DateTime(std::invoke(FileTime, m_ListData[ListPos]), Column.type, Column.type_flags, Column.width); // BUGBUG width_type
+				Dest += FormatStr_DateTime(std::invoke(FileTime, m_ListData[ListPos]), Column.type, Column.type_flags, Column.width, CurrentTime); // BUGBUG width_type
 				break;
 			}
 
@@ -4869,7 +4873,7 @@ void FileList::SelectSortMode()
 		}
 	}
 
-	const auto& SetCheckAndSelect = [&](size_t const Index)
+	const auto SetCheckAndSelect = [&](size_t const Index)
 	{
 		auto& MenuItem = SortMenu[Index];
 		MenuItem.SetCustomCheck(order_indicator(m_ReverseSortOrder? sort_order::descend : sort_order::ascend));
@@ -5176,7 +5180,11 @@ bool FileList::ApplyCommand()
 				break;
 
 			bool PreserveLFN = false;
-			if (string strConvertedCommand = strCommand; SubstFileName(strConvertedCommand, { i.FileName, i.AlternateFileName() }, &PreserveLFN) && !strConvertedCommand.empty())
+			string strConvertedCommand = strCommand;
+			if (!SubstFileName(strConvertedCommand, { i.FileName, i.AlternateFileName() }, &PreserveLFN))
+				break;
+
+			if (!strConvertedCommand.empty())
 			{
 				SCOPED_ACTION(PreserveLongName)(i.FileName, PreserveLFN);
 
@@ -5536,8 +5544,8 @@ bool FileList::PluginPanelHelp(const plugin_panel* hPlugin) const
 {
 	string_view strPath = hPlugin->plugin()->ModuleName();
 	CutToSlash(strPath);
-	const auto [File, Name, Codepage] = OpenLangFile(strPath, Global->HelpFileMask, Global->Opt->strHelpLanguage);
-	if (!File)
+	const auto HelpFile = OpenLangFile(strPath, Global->HelpFileMask, Global->Opt->strHelpLanguage);
+	if (!HelpFile)
 		return false;
 
 	help::show(help::make_link(strPath, L"Contents"sv));
@@ -8056,28 +8064,24 @@ void FileList::ShowFileList(bool Fast)
 
 FarColor FileList::GetShowColor(int Position, bool FileColor) const
 {
-	auto ColorAttr = colors::PaletteColorToFarColor(COL_PANELTEXT);
-
 	if (static_cast<size_t>(Position) >= data_size())
-		return ColorAttr;
+		return colors::PaletteColorToFarColor(COL_PANELTEXT);
 
 	const auto DataLock = lock_data();
 	const auto& m_ListData = *DataLock;
 
-	int Pos = highlight::color::normal;
+	auto ColorIndex = highlight::color::normal;
 
 	if (m_CurFile == Position && IsFocused() && !m_ListData.empty())
 	{
-		Pos=m_ListData[Position].Selected? highlight::color::selected_current : highlight::color::normal_current;
+		ColorIndex = m_ListData[Position].Selected? highlight::color::selected_current : highlight::color::normal_current;
 	}
 	else if (m_ListData[Position].Selected)
 	{
-		Pos = highlight::color::selected;
+		ColorIndex = highlight::color::selected;
 	}
 
-	const auto HighlightingEnabled = Global->Opt->Highlight && (m_PanelMode != panel_mode::PLUGIN_PANEL || !(m_CachedOpenPanelInfo.Flags & OPIF_DISABLEHIGHLIGHTING));
-
-	if (HighlightingEnabled)
+	if (Global->Opt->Highlight && (m_PanelMode != panel_mode::PLUGIN_PANEL || !(m_CachedOpenPanelInfo.Flags & OPIF_DISABLEHIGHLIGHTING)))
 	{
 		if (!m_ListData[Position].Colors)
 		{
@@ -8085,25 +8089,14 @@ FarColor FileList::GetShowColor(int Position, bool FileColor) const
 			m_ListData[Position].Colors = Global->CtrlObject->HiFiles->GetHiColor(m_ListData[Position], this, UseAttrHighlighting);
 		}
 
-		auto Colors = m_ListData[Position].Colors->Color[Pos];
-		highlight::configuration::ApplyFinalColor(Colors, Pos);
-		ColorAttr = FileColor ? Colors.FileColor : Colors.MarkColor;
+		auto Colors = m_ListData[Position].Colors->Color;
+		highlight::configuration::ApplyFinalColor(Colors, ColorIndex);
+		return FileColor? Colors[ColorIndex].FileColor : Colors[ColorIndex].MarkColor;
 	}
 
-	if (!HighlightingEnabled || (!ColorAttr.ForegroundColor && !ColorAttr.BackgroundColor)) // black on black, default
-	{
-		static const PaletteColors PalColor[]
-		{
-			COL_PANELTEXT,
-			COL_PANELSELECTEDTEXT,
-			COL_PANELCURSOR,
-			COL_PANELSELECTEDCURSOR
-		};
-
-		ColorAttr=colors::PaletteColorToFarColor(PalColor[Pos]);
-	}
-
-	return ColorAttr;
+	FarColor Result{};
+	highlight::configuration::InheritPaletteColor(Result, ColorIndex);
+	return Result;
 }
 
 void FileList::SetShowColor(int Position, bool FileColor) const
@@ -8292,12 +8285,15 @@ bool FileList::ConvertName(const string_view SrcName, string& strDest, const siz
 		auto SpacesBetween =
 			VisualNameLength + AlignedVisualExtensionLength <= MaxLength?
 				MaxLength - VisualNameLength - AlignedVisualExtensionLength:
-				1;
+				0;
 
-		if (!SpacesBetween && VisualNameLength + VisualExtensionLength < MaxLength)
+		if (!SpacesBetween && VisualNameLength + VisualExtensionLength <= MaxLength)
 			SpacesBetween = MaxLength - VisualNameLength - VisualExtensionLength;
 
-		const auto SpacesAfter = MaxLength - VisualNameLength - SpacesBetween - VisualExtensionLength;
+		const auto SpacesAfter =
+			VisualNameLength + SpacesBetween + VisualExtensionLength <= MaxLength?
+			MaxLength - VisualNameLength - SpacesBetween - VisualExtensionLength :
+			0;
 
 		strDest += Name;
 		strDest.append(SpacesBetween, L' ');
@@ -8587,6 +8583,8 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 	int MaxLeftPos=0,MinLeftPos=FALSE;
 	size_t ColumnCount=ShowStatus ? m_ViewSettings.StatusColumns.size() : m_ViewSettings.PanelColumns.size();
 	const auto& Columns = ShowStatus ? m_ViewSettings.StatusColumns : m_ViewSettings.PanelColumns;
+
+	const auto CurrentTime = os::chrono::nt_clock::now();
 
 	for (int I = m_Where.top + 1 + Global->Opt->ShowColumnTitles, J = m_CurTopFile; I < m_Where.bottom - 2 * Global->Opt->ShowPanelStatus; I++, J++)
 	{
@@ -8926,7 +8924,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								break;
 							}
 
-							Text(FormatStr_DateTime(std::invoke(FileTime, m_ListData[ListPos]), ColumnType, Columns[K].type_flags, ColumnWidth));
+							Text(FormatStr_DateTime(std::invoke(FileTime, m_ListData[ListPos]), ColumnType, Columns[K].type_flags, ColumnWidth, CurrentTime));
 							break;
 						}
 

@@ -51,6 +51,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filemasks.hpp"
 #include "filepanels.hpp"
 #include "flink.hpp"
+#include "history.hpp"
 #include "global.hpp"
 #include "interf.hpp"
 #include "keyboard.hpp"
@@ -1017,7 +1018,11 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 							clipboard_mode::internal: clipboard_mode::system);
 						break;
 					case IMP_KEYNAMETOKEY:
-						if (Data->Count > 1) api.PassValue(KeyNameToKey(Data->Values[1].String));
+						if (Data->Count > 1)
+						{
+							const auto Key = KeyNameToKey(Data->Values[1].String);
+							api.PassValue(Key? Key : -1);
+						}
 						break;
 					case IMP_KEYTOTEXT:
 						if (Data->Count > 1)
@@ -1200,6 +1205,23 @@ void KeyMacro::CallFar(intptr_t CheckCode, FarMacroCall* Data)
 			}
 
 			return api.PassValue(tmpVar);
+		}
+
+		case MCODE_V_MENU_HORIZONTALALIGNMENT:
+		{
+			long long Result = -1;
+
+			const auto CurArea = GetArea();
+
+			if (IsMenuArea(CurArea) || CurArea == MACROAREA_DIALOG)
+			{
+				if (CurrentWindow)
+				{
+					Result = CurrentWindow->VMProcess(CheckCode);
+				}
+			}
+
+			return api.PassValue(Result);
 		}
 	}
 }
@@ -1715,8 +1737,10 @@ void FarMacroApi::promptFunc() const
 
 	const auto oldHistoryDisable = GetHistoryDisableMask();
 
-	if (history.empty()) // Mantis#0001743: Возможность отключения истории
-		SetHistoryDisableMask(8); // если не указан history, то принудительно отключаем историю для ЭТОГО prompt()
+	// Mantis#0001743: Возможность отключения истории
+	// если не указан history, то принудительно отключаем историю для ЭТОГО prompt()
+	if (history.empty())
+		SetHistoryDisableMask(1 << HISTORYTYPE_DIALOG);
 
 	if (GetString(title, prompt, history, src, strDest, {}, (Flags&~FIB_CHECKBOX) | FIB_ENABLEEMPTY))
 		PassValue(strDest);
@@ -2296,11 +2320,10 @@ void FarMacroApi::farcfggetFunc() const
 // V=Far.GetConfig(Key.Name)
 void FarMacroApi::fargetconfigFunc() const
 {
-	const wchar_t *Keyname = (mData->Count >= 1 && mData->Values[0].Type==FMVT_STRING) ?
+	const auto Keyname = (mData->Count >= 1 && mData->Values[0].Type==FMVT_STRING) ?
 		mData->Values[0].String : L"";
 
-	const auto Dot = wcsrchr(Keyname, L'.');
-	if (Dot)
+	if (const auto Dot = std::wcsrchr(Keyname, L'.'))
 	{
 		const string_view Key(Keyname, Dot - Keyname);
 

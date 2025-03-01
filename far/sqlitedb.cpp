@@ -210,7 +210,7 @@ void SQLiteDb::SQLiteStmt::stmt_deleter::operator()(sqlite::sqlite3_stmt* Object
 	});
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::Reset()
+SQLiteDb::SQLiteStmt const& SQLiteDb::SQLiteStmt::Reset() const
 {
 	invoke(db(), [&]{ return sqlite::sqlite3_clear_bindings(m_Stmt.get()) == SQLITE_OK; }, sql());
 
@@ -259,29 +259,25 @@ void SQLiteDb::SQLiteStmt::Execute() const
 	sql());
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(int Value)
+void SQLiteDb::SQLiteStmt::BindImpl(int const Value) const
 {
 	invoke(db(), [&]
 	{
 		return sqlite::sqlite3_bind_int(m_Stmt.get(), ++m_Param, Value) == SQLITE_OK;
 	},
 	sql());
-
-	return *this;
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(long long Value)
+void SQLiteDb::SQLiteStmt::BindImpl(long long const Value) const
 {
 	invoke(db(), [&]
 	{
 		return sqlite::sqlite3_bind_int64(m_Stmt.get(), ++m_Param, Value) == SQLITE_OK;
 	},
 	sql());
-
-	return *this;
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(const string_view Value)
+void SQLiteDb::SQLiteStmt::BindImpl(string_view const Value) const
 {
 	// https://www.sqlite.org/c3ref/bind_blob.html
 	// If the third parameter to sqlite3_bind_text() or sqlite3_bind_text16() or sqlite3_bind_blob() is a NULL pointer
@@ -295,19 +291,15 @@ SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(const string_view Value)
 		return sqlite::sqlite3_bind_text(m_Stmt.get(), ++m_Param, NullToEmpty(ValueUtf8.data()), static_cast<int>(ValueUtf8.size()), sqlite::transient_destructor) == SQLITE_OK;
 	},
 	sql());
-
-	return *this;
 }
 
-SQLiteDb::SQLiteStmt& SQLiteDb::SQLiteStmt::BindImpl(bytes_view const Value)
+void SQLiteDb::SQLiteStmt::BindImpl(bytes_view const Value) const
 {
 	invoke(db(), [&]
 	{
 		return sqlite::sqlite3_bind_blob(m_Stmt.get(), ++m_Param, Value.data(), static_cast<int>(Value.size()), sqlite::transient_destructor) == SQLITE_OK;
 	},
 	sql());
-
-	return *this;
 }
 
 sqlite::sqlite3* SQLiteDb::SQLiteStmt::db() const
@@ -525,22 +517,15 @@ SQLiteDb::database_ptr SQLiteDb::Open(string_view const Path, busy_handler BusyH
 		implementation::open(memory_db_name, {});
 }
 
-void SQLiteDb::Exec(std::string const& Command) const
-{
-	Exec(std::string_view(Command));
-}
-
 void SQLiteDb::Exec(std::string_view const Command) const
 {
-	Exec(span{ Command });
+	create_stmt(Command, false).Execute();
 }
 
 void SQLiteDb::Exec(std::span<std::string_view const> const Commands) const
 {
 	for (const auto& i: Commands)
-	{
-		create_stmt(i, false).Execute();
-	}
+		Exec(i);
 }
 
 void SQLiteDb::BeginTransaction()
@@ -602,7 +587,11 @@ void SQLiteDb::SetWALJournalingMode() const
 
 void SQLiteDb::EnableForeignKeysConstraints() const
 {
-	Exec("PRAGMA foreign_keys = ON;"sv);
+	invoke(m_Db.get(), [&]
+	{
+		int NewValue;
+		return sqlite::sqlite3_db_config(m_Db.get(), SQLITE_DBCONFIG_ENABLE_FKEY, 1, &NewValue) == SQLITE_OK && NewValue;
+	});
 }
 
 template<typename char_type>
@@ -611,36 +600,81 @@ static auto view(const void* const Data, int const Size)
 	return std::basic_string_view<char_type>{ static_cast<char_type const*>(Data), static_cast<size_t>(Size) / sizeof(char_type) };
 }
 
-template<auto comparer>
+using comparer = std::strong_ordering(string_view, string_view);
+
+struct collation_context
+{
+	static inline struct cache
+	{
+		std::string Utf8String;
+		string WideString;
+	}
+	CollationCache[2];
+
+	comparer* Comparer;
+	int Encoding;
+};
+
+static void context_deleter(void* Param)
+{
+	std::unique_ptr<collation_context>(static_cast<collation_context*>(Param));
+}
+
 static int combined_comparer(void* const Param, int const Size1, const void* const Data1, int const Size2, const void* const Data2)
 {
-	if (view<char>(Data1, Size1) == view<char>(Data2, Size2))
+	std::string_view const RawView[]
+	{
+		view<char>(Data1, Size1),
+		view<char>(Data2, Size2),
+	};
+
+	if (RawView[0] == RawView[1])
 		return 0;
 
-	if (std::bit_cast<intptr_t>(Param) == SQLITE_UTF16)
+	const auto Context = static_cast<collation_context*>(Param);
+
+	if (Context->Encoding == SQLITE_UTF16)
 	{
-		return string_sort::ordering_as_int(comparer(
+		return string_sort::ordering_as_int(Context->Comparer(
 			view<wchar_t>(Data1, Size1),
 			view<wchar_t>(Data2, Size2)
 		));
 	}
 
-	// TODO: stack buffer optimisation
-	return string_sort::ordering_as_int(comparer(
-		encoding::utf8::get_chars(view<char>(Data1, Size1)),
-		encoding::utf8::get_chars(view<char>(Data2, Size2))
+	const auto convert = [&](size_t const Index)
+	{
+		const auto& In = RawView[Index];
+		auto& Out = Context->CollationCache[Index];
+
+		if (In == Out.Utf8String)
+			return;
+
+		encoding::utf8::get_chars(In, Out.WideString);
+		Out.Utf8String = In;
+	};
+
+	convert(0);
+	convert(1);
+
+	return string_sort::ordering_as_int(Context->Comparer(
+		Context->CollationCache[0].WideString,
+		Context->CollationCache[1].WideString
 	));
 }
 
-using comparer_type = int(void*, int, const void*, int, const void*);
-
-static void create_combined_collation(sqlite::sqlite3* const Db, const char* const Name, comparer_type Comparer)
+static void create_combined_collation(sqlite::sqlite3* const Db, const char* const Name, comparer* const Comparer)
 {
 	const auto create_collation = [&](int const Encoding)
 	{
 		invoke(Db, [&]
 		{
-			return sqlite::sqlite3_create_collation(Db, Name, Encoding, ToPtr(Encoding), Comparer) == SQLITE_OK;
+			auto Context = std::make_unique<collation_context>(Comparer, Encoding);
+
+			if (sqlite::sqlite3_create_collation_v2(Db, Name, Encoding, Context.get(), combined_comparer, context_deleter) != SQLITE_OK)
+				return false;
+
+			Context.release();
+			return true;
 		});
 	};
 
@@ -650,10 +684,10 @@ static void create_combined_collation(sqlite::sqlite3* const Db, const char* con
 
 void SQLiteDb::add_nocase_collation() const
 {
-	create_combined_collation(m_Db.get(), "nocase", combined_comparer<string_sort::keyhole::compare_ordinal_icase>);
+	create_combined_collation(m_Db.get(), "nocase", &string_sort::keyhole::compare_ordinal_icase);
 }
 
 void SQLiteDb::add_numeric_collation() const
 {
-	create_combined_collation(m_Db.get(), "numeric", combined_comparer<string_sort::keyhole::compare_ordinal_numeric>);
+	create_combined_collation(m_Db.get(), "numeric", &string_sort::keyhole::compare_ordinal_numeric);
 }

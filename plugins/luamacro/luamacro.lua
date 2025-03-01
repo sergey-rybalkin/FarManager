@@ -514,7 +514,7 @@ end
 -- TODO: when called from a module's panel, call that module's Configure()
 function export.Configure (guid)
   local items = utils.GetMenuItems()
-  if items[guid] then items[guid].action(guid) end
+  if items[guid] then items[guid].action() end
 end
 
 local function Init()
@@ -558,12 +558,7 @@ local function Init()
 
   macrobrowser = RunPluginFile("mbrowser.lua", Shared)
 
-  do -- force MoonScript to load lpeg.dll residing in %farhome%
-    local cpath = package.cpath
-    package.cpath = win.GetEnv("farhome").."\\?.dll"
-    RunPluginFile("moonscript.lua")
-    package.cpath = cpath
-  end
+  RunPluginFile("moonscript.lua")
 
   if bit and jit then
     RunPluginFile("winapi.lua")

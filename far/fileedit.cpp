@@ -1881,7 +1881,7 @@ int FileEditor::SaveFile(const string_view Name, bool bSaveAs, error_state_ex& E
 		Show();
 		return SAVEFILE_SUCCESS;
 	}
-	catch (far_exception const& e)
+	catch (std::exception const& e)
 	{
 		ErrorState = e;
 		Show();
@@ -2073,13 +2073,13 @@ void FileEditor::SetFileName(const string_view NewFileName)
 		strStartDir,
 		far::vformat(
 			msg(lng::MNewFileName),
-			LocalTime.wYear,
-			LocalTime.wMonth,
-			LocalTime.wDay,
-			LocalTime.wHour,
-			LocalTime.wMinute,
-			LocalTime.wSecond,
-			LocalTime.wMilliseconds
+			LocalTime.Year,
+			LocalTime.Month,
+			LocalTime.Day,
+			LocalTime.Hours,
+			LocalTime.Minutes,
+			LocalTime.Seconds,
+			LocalTime.Hectonanoseconds / (1ms / 1_hns)
 		)
 	);
 }

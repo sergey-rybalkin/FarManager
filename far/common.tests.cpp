@@ -38,6 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "platform.headers.hpp"
 
 // Internal:
+#include "exception.hpp"
 #include "testing.hpp"
 
 // Platform:
@@ -110,6 +111,12 @@ TEST_CASE("cpp.const_return")
 
 #include "common/2d/matrix.hpp"
 
+namespace detail
+{
+	template<typename T>
+	constexpr bool is_const = std::is_const_v<std::remove_reference_t<T>>;
+};
+
 TEST_CASE("2d.matrix")
 {
 	static const size_t Data[]
@@ -126,9 +133,33 @@ TEST_CASE("2d.matrix")
 	matrix Copy(Matrix);
 	Copy = Matrix;
 
+	matrix_view<const size_t> const ConstView(Copy);
+
 	REQUIRE(Matrix.width() == Width);
 	REQUIRE(Matrix.height() == Height);
 	REQUIRE(Matrix.size() == Height * Width);
+
+	REQUIRE(std::views::reverse(Matrix).front().front() == Data[Width * (Height - 1)]);
+
+	STATIC_REQUIRE(detail::is_const<decltype(*Matrix.data())>);
+	STATIC_REQUIRE(detail::is_const<decltype(*Matrix[0].data())>);
+	STATIC_REQUIRE(detail::is_const<decltype(*Matrix.front().data())>);
+	STATIC_REQUIRE(detail::is_const<decltype(Matrix.at(0, 0))>);
+
+	STATIC_REQUIRE(!detail::is_const<decltype(*Copy.data())>);
+	STATIC_REQUIRE(!detail::is_const<decltype(*Copy[0].data())>);
+	STATIC_REQUIRE(!detail::is_const<decltype(*Copy.front().data())>);
+	STATIC_REQUIRE(!detail::is_const<decltype(Copy.at(0, 0))>);
+
+	STATIC_REQUIRE(!detail::is_const<decltype(*std::as_const(Copy).data())>);
+	STATIC_REQUIRE(!detail::is_const<decltype(*std::as_const(Copy)[0].data())>);
+	STATIC_REQUIRE(!detail::is_const<decltype(*std::as_const(Copy).front().data())>);
+	STATIC_REQUIRE(!detail::is_const<decltype(std::as_const(Copy).at(0, 0))>);
+
+	STATIC_REQUIRE(detail::is_const<decltype(*ConstView.data())>);
+	STATIC_REQUIRE(detail::is_const<decltype(*ConstView[0].data())>);
+	STATIC_REQUIRE(detail::is_const<decltype(*ConstView.front().data())>);
+	STATIC_REQUIRE(detail::is_const<decltype(ConstView.at(0, 0))>);
 
 	size_t Counter = 0;
 	size_t RowNumber = 0;
@@ -197,7 +228,7 @@ TEST_CASE("algorithm.repeat")
 {
 	auto Value = 0;
 	auto const Count = 7;
-	auto Increment = [&]{ ++Value; };
+	const auto Increment = [&]{ ++Value; };
 
 	repeat(Count, Increment);
 
@@ -616,21 +647,33 @@ TEST_CASE("from_string")
 	REQUIRE(from_string<uint64_t>(L"18446744073709551615"sv) == std::numeric_limits<uint64_t>::max());
 	REQUIRE(from_string<double>(L"0.03125"sv) == 0.03125);
 
-	REQUIRE_THROWS_AS(from_string<uint64_t>(L"18446744073709551616"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int64_t>(L"-9223372036854775809"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int64_t>(L"9223372036854775808"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<uint32_t>(L"4294967296"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int32_t>(L"-2147483649"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int32_t>(L"2147483648"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<uint16_t>(L"65536"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int16_t>(L"-32769"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int16_t>(L"32768"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<unsigned int>(L"-42"sv), std::out_of_range);
-	REQUIRE_THROWS_AS(from_string<int>(L"fubar"sv), std::invalid_argument);
-	REQUIRE_THROWS_AS(from_string<int>({}), std::invalid_argument);
-	REQUIRE_THROWS_AS(from_string<int>(L" 42"sv), std::invalid_argument);
-	REQUIRE_THROWS_AS(from_string<int>(L" +42"sv), std::invalid_argument);
-	REQUIRE_THROWS_AS(from_string<double>(L"1"sv, {}, 3), std::invalid_argument);
+	const auto make_matcher = [](string_view const Message)
+	{
+		return generic_exception_matcher{[Message](std::any const& e)
+		{
+			return contains(std::any_cast<far_exception const&>(e).message(), Message);
+		}};
+	};
+
+	const auto
+		InvalidArgumentMatcher = make_matcher(L"invalid from_string argument"sv),
+		OutOfRangeMatcher = make_matcher(L"from_string argument is out of range"sv);
+
+	REQUIRE_THROWS_MATCHES(from_string<uint64_t>(L"18446744073709551616"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int64_t>(L"-9223372036854775809"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int64_t>(L"9223372036854775808"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<uint32_t>(L"4294967296"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int32_t>(L"-2147483649"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int32_t>(L"2147483648"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<uint16_t>(L"65536"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int16_t>(L"-32769"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int16_t>(L"32768"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<unsigned int>(L"-42"sv), far_exception, OutOfRangeMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int>(L"fubar"sv), far_exception, InvalidArgumentMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int>({}), far_exception, InvalidArgumentMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int>(L" 42"sv), far_exception, InvalidArgumentMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<int>(L" +42"sv), far_exception, InvalidArgumentMatcher);
+	REQUIRE_THROWS_MATCHES(from_string<double>(L"1"sv, {}, 3), far_exception, InvalidArgumentMatcher);
 
 	{
 		int Value;

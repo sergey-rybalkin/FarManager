@@ -148,6 +148,12 @@ void wakeup_for_screensaver(bool Value)
 	s_WakeupForScreensaver = Value;
 }
 
+static std::chrono::minutes s_WakeupForScreensaverTime{};
+void wakeup_for_screensaver_time(std::chrono::minutes const Value)
+{
+	s_WakeupForScreensaverTime = Value;
+}
+
 /* ----------------------------------------------------------------- */
 struct TFKey
 {
@@ -888,8 +894,7 @@ static unsigned int CalcKeyCode(INPUT_RECORD* rec, bool RealKey, bool* NotMacros
 
 static DWORD GetInputRecordImpl(INPUT_RECORD *rec,bool ExcludeMacro,bool ProcessMouse)
 {
-	if (!os::handle::is_signaled(console.GetInputHandle()))
-		message_manager::instance().dispatch();
+	message_manager::instance().dispatch();
 
 	DWORD CalcKey;
 
@@ -970,25 +975,28 @@ static DWORD GetInputRecordImpl(INPUT_RECORD *rec,bool ExcludeMacro,bool Process
 			return KEY_NONE;
 		}
 
-		if (!os::handle::is_signaled(console.GetInputHandle()) && message_manager::instance().dispatch())
+		if (message_manager::instance().dispatch())
 		{
 			*rec = {};
 			return KEY_NONE;
 		}
 
 		static auto LastActivity = std::chrono::steady_clock::now();
+		const auto CanRunScreensaver = IsWindowFocused && s_WakeupForScreensaver && s_WakeupForScreensaverTime != 0s;
 
-		std::optional<std::chrono::milliseconds> Timeout;
-		if (s_WakeupForClock || s_WakeupForScreensaver)
-			Timeout = till_next_minute();
-
-		const auto Status = os::handle::wait_any({ console.GetInputHandle(), wake_event::ref().native_handle() }, Timeout);
+		const auto Status =
+			s_WakeupForClock?
+				// If the clock is enabled, we have to wake up when the minute changes to update the time
+				os::handle::wait_any(till_next_minute(), console.GetInputHandle(), wake_event::ref()) :
+			CanRunScreensaver?
+				// If the clock is not enabled, but the screensaver is enabled, we have to wake up after the screensaver timeout to run it
+				os::handle::wait_any(s_WakeupForScreensaverTime, console.GetInputHandle(), wake_event::ref()) :
+				// Otherwise, we can sleep indefinitely until the next event
+				os::handle::wait_any(console.GetInputHandle(), wake_event::ref());
 
 		if (!Status)
 		{
-			if (IsWindowFocused && Global->Opt->ScreenSaver &&
-				Global->Opt->ScreenSaverTime > 0 &&
-				std::chrono::steady_clock::now() - LastActivity >= std::chrono::minutes(Global->Opt->ScreenSaverTime))
+			if (CanRunScreensaver && std::chrono::steady_clock::now() - LastActivity >= s_WakeupForScreensaverTime)
 			{
 				ScreenSaver();
 			}

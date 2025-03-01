@@ -747,7 +747,11 @@ static void WriteTree(auto& Name, std::ranges::range auto const& Container, cons
 		}
 		catch (far_exception const& e)
 		{
-			ErrorState = e;
+			ErrorState = static_cast<error_state_ex const&>(e);
+		}
+		catch (std::exception const& e)
+		{
+			ErrorState.emplace(os::last_error(), encoding::utf8::get_chars(e.what()));
 		}
 
 		TreeFile.SetEnd();
@@ -1351,7 +1355,7 @@ int TreeList::GetNextNavPos() const
 {
 	int NextPos=m_CurFile;
 
-	if (static_cast<size_t>(m_CurFile + 1) < m_ListData.size())
+	if (static_cast<size_t>(m_CurFile) + 1 < m_ListData.size())
 	{
 		const auto CurDepth = m_ListData[m_CurFile].Depth;
 
@@ -1705,7 +1709,7 @@ bool TreeList::ReadTreeFile()
 	return FillLastData();
 }
 
-bool TreeList::GetPlainString(string& Dest, int ListPos) const
+bool TreeList::GetPlainString(string& Dest, int ListPos, os::chrono::time_point CurrentTime) const
 {
 	Dest.clear();
 

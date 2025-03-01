@@ -1,5 +1,5 @@
 ﻿m4_include(`farversion.m4')m4_dnl
-.Language=Polish,Polish (Polski)
+.Language=Polish,Polski
 .Options CtrlColorChar=\
 .Options CtrlStartPosChar=^<wrap>
 
@@ -501,7 +501,7 @@ $ #Tryby sortowania#
 
 @PanelSortCriteria
 $ #Kryteria sortowania#
- Kiedy pliki są traktowane równoważnie używając wybranego trybu sortowania, pod uwagę brane są dodatkowe ktyteria sortowania.
+ Kiedy pliki są traktowane równoważnie używając wybranego trybu sortowania, pod uwagę brane są dodatkowe kryteria sortowania.
  Na przykład, jeżeli pliki są sortowane wg wielkości i zarówno "a.txt" i "b.txt" mają tę samą wielkość, "a.txt"
  będzie wyświetlane pierwszy, tak jakby były posortowane według nazw.
 	W tym menu można dostosować zestawy kryteriów związanych z wybranym trybem sortowania.
@@ -849,7 +849,7 @@ ponieważ będą zapisane w historii.
  Przeskocz na domyślny element okna dialogowego           #PgDn, End#
 
  Klawisze #Home# i #End# przenoszą fokus, jeżeli nie jest on aktualnie
-na kontrolce, która obsługuje te klawisze wewnętznie, np. kontrolka
+na kontrolce, która obsługuje te klawisze wewnętrznie, np. kontrolka
 edycji.
 
  Poniższe kombinacje klawiszy są dostępne dla wszystkich pól edycji
@@ -1557,7 +1557,7 @@ $ #Menu: menu opcje#
 
  #Język programu#        Wybór języka programu i pomocy. Użyj opcji "Zapisz ustawienia",
                        aby zapamiętać wybrany język
-                       Możesz ~dostosować elementy interfesju~@CustomizingUI@ do własnych potrzeb i wymagań.
+                       Możesz ~dostosować elementy interfejsu~@CustomizingUI@ do własnych potrzeb i wymagań.
 
  #Konfiguracja#          Pokazuje okno ~konfiguracji wtyczek~@PluginsConfig@.
  #wtyczek#
@@ -3028,13 +3028,13 @@ kolejnym bajtom rozpoczynając od równego przesunięcia w pliku.
  Tryb #hex# (kody szesnastkowe)
 
  W trybie #hex#, przeglądarka renderuje szesnastkowo reprezentację bajtów
-w pliku. Każdy wiersz rozpoczyna sie szesnastkową wartością przesunięcia
+w pliku. Każdy wiersz rozpoczyna się szesnastkową wartością przesunięcia
 od pierwszego bajtu pliku, a kończy reprezentacją znakową bajtów wiersza.
 
  Odwzorowanie zależy od kodowania zdefiniowanego przez bieżącą stronę kodową.
 Dla kodowań jednobajtowych (np. wszystkie strony kodowe ANSI), bajty w każdym
 wierszu są reprezentowane przez sekwencję dwucyfrowych wartości szesnastkowych,
-po których następuje sekwencja znaów o tej samej długości. Dla kodowania UTF-8,
+po których następuje sekwencja znaków o tej samej długości. Dla kodowania UTF-8,
 bajty są reprezentowane w ten sam sposób, podczas gdy znaki są wyświetlanie
 na pozycjach wiodących bajtów sekwencji UTF-8, a bajty kontynuacji są wypełniane
 znakiem #›# (kod znaku U+203A). W przypadku kodowania UTF-16(BE) każda para
@@ -3207,7 +3207,7 @@ kodowa ANSI, ale można zmienić to ustawienie w oknie ~Ustawień edytora~@Edito
  #F7#                      ~Szukaj~@EditorSearch@
  #Ctrl+F7#                 ~Zastąp~@EditorSearch@
  #Shift+F7#                Kontynuuje szukanie lub zastępowanie w kierunku końca pliku
- #Alt+F7#                  Kontynnuje szukanie lub zastępowanie w kierunku początku pliku
+ #Alt+F7#                  Kontynuuje szukanie lub zastępowanie w kierunku początku pliku
  #F8#                      Przełącza strony kodowe OEM/ANSI
  #Shift+F8#                Wybiera stronę kodową
  #Alt+F8#                  ~Przechodzi do~@EditorGotoPos@ podanej linii i kolumny
@@ -3597,7 +3597,7 @@ $ #Menu strony kodowe#
  Główne jedno-bajtowe strony kodowe - ANSI i OEM.
 
  #Unicode#
- Strony kodowe Unicode (wielo-bajtowe).
+ Strony kodowe Unicode (wielobajtowe).
 
  #Ulubione#
  Strony kodowe wybrane przez użytkownika.
@@ -4376,15 +4376,18 @@ podczas przetwarzania plików Far zawsze używa oryginalnych wielkości znaków.
 
 @ColorGroups
 $ #Grupy kolorów#
- To menu pozwala na wybór kolorów dla różnych elementów ekranu lub ustawić domyślne kolory.
+ To menu pozwala na wybór kolorów dla różnych elementów ekranu lub wybrać jeden z ~predefiniowanych motywów~@ColorThemes@.
 
- #Ustaw kolory domyślne#
+
+@ColorThemes
+$ #Motywy kolorów#
+ #Domyślny#
  Przywraca kolory do wartości domyślnych, wyrażonych jako indeksy w palecie kolorów.
 
- #Ustaw kolory domyślne (RGB)#
- Przyraca kolory do wartości domyślnych, wyrażonych jako kolory w przestrzeni barw RGB,
+ #Domyślny (RGB)#
+ Przywraca kolory do wartości domyślnych, wyrażonych jako kolory w przestrzeni barw RGB,
 normalnie używanych do odpowiednich indeksów palety konsoli.
- W przeciwieństwie do indeksów palety konsoli, wartości RGB są niezleżne od urządzenia
+ W przeciwieństwie do indeksów palety konsoli, wartości RGB są niezależne od urządzenia
 i zawsze będą tak samo wyglądać w dowolnym terminalu.
  Na przykład, domyślna #indeksu# tła panelu jest #1#, który zwykle (ale nie zawsze),
 jest mapowany na jakiś nieokreślony odcień koloru niebieskiego.
@@ -4405,6 +4408,9 @@ na zbliżone do najbliższych indeksów palety konsoli.
  \(T0:T000000)  \(T0:T000080)  \(T0:T008000)  \(T0:T008080)  \(T0:T800000)  \(T0:T800080)  \(T0:T808000)  \(T0:TC0C0C0)  \-
  \(T0:T808080)  \(T0:T0000FF)  \(T0:T00FF00)  \(T0:T00FFFF)  \(T0:TFF0000)  \(T0:TFF00FF)  \(T0:TFFFF00)  \(T0:TFFFFFF)  \-
 
+ #Motywy użytkownika#
+ Możesz także wybrać jeden z motywów kolorów dostarczonych przez współtwórców społeczności, umieszczonych w folderze %FARHOME%\\Addons\\Colors\\Interface.
+
 
 @ColorPicker
 $ #Wybór kolorów#
@@ -4412,7 +4418,7 @@ $ #Wybór kolorów#
 
  Kolory wyświetlanych znaków i tła mogą być:
  - jednym z 16 kolorów ze standardowej palety Konsoli Windows,
- - jednym z 256 kolorów z palety Xterm, lub
+ - jednym z 256 kolorów z palety ANSI, lub
  - jednym z 16 milionów kolorów z przestrzeni barw RGB.
 
  Standardowa 16-kolorowa paleta jest dostępna w oknie dialogowym.
@@ -4426,6 +4432,8 @@ mogą go obsługiwać inaczej, np. renderować jako półprzezroczysty.
  - #AA______# - kanał alfa, oznaczający stopień przezroczystości od pełnej przejrzystości (00) do pełnego koloru (FF).
  - #______##### - indeks palety od 00 do FF.
  - #__RRGGBB# - kanały czerwony (Red), zielony (Green) i niebieski (Blue) z przestrzeni barw RGB, każdy od 00 do FF.
+
+ Indeksy palety 00-0F są ułożone zgodnie z systemem Windows/DOS/CGA/IBC PC, a nie ANSI (np. kolor ##1 to niebieskie, a nie czerwony).
 
  Jeżeli kolor nie jest w pełni nieprzezroczysty, brany jest pod uwagę poprzedni kolor w logicznym porządku Z.
 
@@ -4461,7 +4469,7 @@ Więcej informacji znajdziesz ~tutaj~@https://docs.microsoft.com/en-us/windows/c
 
 @ColorPicker256
 $ #Wybór z 256 kolorów#
- To okno dialogowe pozwala wybrać kolor z 256-kolorowej palety Xterm.
+ To okno dialogowe pozwala wybrać kolor z 256-kolorowej palety ANSI.
 
  Pierwsze 16 kolorów są takie same, jak standardowa paleta dostępna w ~głównym oknie~@ColorPicker@.
 
@@ -5268,7 +5276,7 @@ zostanie skierowane, należy do lokalizacji w której
  - zrzuty ekranu, pionowe menu.
 
  Nie można przypisać makropolecenia do już użytego skrótu.
-Przy próbie takiego przypisania, zostanie wyświetlony komunikat ostzegawczy
+Przy próbie takiego przypisania, zostanie wyświetlony komunikat ostrzegawczy
 informujący, że makropolecenie przypisane do tego skrótu zostanie usunięte.
 
  W taki sposób można mieć identyczne skróty dla różnych makropoleceń,
@@ -5340,7 +5348,7 @@ ustawienia. Wciśnięcie drugiej kombinacji kończy nagrywanie
 makropoleceń i wyświetla okno ~ustawień~@KeyMacroSetting@ makropolecenia.
 
  #Przypisane skrótu do makropolecenia#
- Po zakończeniu nagrywania makropoleceniaa i ustawieniu wszystkich opcji, wyświetlone
+ Po zakończeniu nagrywania makropolecenia i ustawieniu wszystkich opcji, wyświetlone
 zostanie okno ~przypisania klawiszy skrótu ~@KeyMacroSetting@, gdzie można
 ustawić klawisz szybkiego dostępu, który będzie użyty do wykonania nagranej
 sekwencji.

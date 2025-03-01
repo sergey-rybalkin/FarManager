@@ -78,9 +78,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 static const FarColor DefaultColor
 {
-	FCF_FG_INDEX | FCF_BG_INDEX | FCF_INHERIT_STYLE,
-	{colors::transparent(F_BLACK)},
-	{colors::transparent(F_BLACK)}
+	FCF_INDEXMASK | FCF_INHERIT_STYLE,
+	{colors::transparent(C_BLACK)},
+	{colors::transparent(C_BLACK)},
+	{colors::transparent(C_BLACK)}
 };
 
 namespace names
@@ -167,12 +168,12 @@ static void SetHighlighting(bool DeleteOld, HierarchicalConfig& cfg)
 	}
 	DefaultHighlighting[]
 	{
-		{ {},          FILE_ATTRIBUTE_HIDDEN,    MakeFarColor(F_CYAN),         MakeFarColor(F_DARKGRAY) },
-		{ {},          FILE_ATTRIBUTE_SYSTEM,    MakeFarColor(F_CYAN),         MakeFarColor(F_DARKGRAY) },
-		{ {},          FILE_ATTRIBUTE_DIRECTORY, MakeFarColor(F_WHITE),        MakeFarColor(F_WHITE) },
-		{ L"<exec>"sv, 0,                        MakeFarColor(F_LIGHTGREEN),   MakeFarColor(F_LIGHTGREEN) },
-		{ L"<arc>"sv,  0,                        MakeFarColor(F_LIGHTMAGENTA), MakeFarColor(F_LIGHTMAGENTA) },
-		{ L"<temp>"sv, 0,                        MakeFarColor(F_BROWN),        MakeFarColor(F_BROWN) },
+		{ {},          FILE_ATTRIBUTE_HIDDEN,    MakeFarColor(C_CYAN),         MakeFarColor(C_DARKGRAY) },
+		{ {},          FILE_ATTRIBUTE_SYSTEM,    MakeFarColor(C_CYAN),         MakeFarColor(C_DARKGRAY) },
+		{ {},          FILE_ATTRIBUTE_DIRECTORY, MakeFarColor(C_WHITE),        MakeFarColor(C_WHITE) },
+		{ L"<exec>"sv, 0,                        MakeFarColor(C_LIGHTGREEN),   MakeFarColor(C_LIGHTGREEN) },
+		{ L"<arc>"sv,  0,                        MakeFarColor(C_LIGHTMAGENTA), MakeFarColor(C_LIGHTMAGENTA) },
+		{ L"<temp>"sv, 0,                        MakeFarColor(C_BROWN),        MakeFarColor(C_BROWN) },
 	};
 
 	const auto root = cfg.CreateKey(cfg.root_key, names::Highlight);
@@ -204,6 +205,19 @@ static void SetHighlighting(bool DeleteOld, HierarchicalConfig& cfg)
 			cfg.SetValue(Key, j, view_bytes(DefaultColor));
 		}
 	}
+}
+
+FarColor const& highlight::color::ToFarColor(index const Index)
+{
+	static constexpr PaletteColors PalColor[]
+	{
+		COL_PANELTEXT,
+		COL_PANELSELECTEDTEXT,
+		COL_PANELCURSOR,
+		COL_PANELSELECTEDCURSOR
+	};
+
+	return colors::PaletteColorToFarColor(PalColor[Index]);
 }
 
 highlight::element::colors::colors():
@@ -300,7 +314,7 @@ void highlight::configuration::ClearData()
 	FirstCount=UpperCount=LowerCount=LastCount=0;
 }
 
-static void ApplyBlackOnBlackColor(highlight::element::colors_array::value_type& Colors, DWORD PaletteColor)
+static void ApplyBlackOnBlackColor(highlight::element::colors_array::value_type& Colors, FarColor const& PaletteColor)
 {
 	const auto InheritColor = [](FarColor& Color, const FarColor& Base)
 	{
@@ -316,22 +330,14 @@ static void ApplyBlackOnBlackColor(highlight::element::colors_array::value_type&
 		Color = colors::merge(Base, Color);
 	};
 
-	InheritColor(Colors.FileColor, Global->Opt->Palette[PaletteColor]);
+	InheritColor(Colors.FileColor, PaletteColor);
 	InheritColor(Colors.MarkColor, Colors.FileColor);
 }
 
-static const DWORD PalColor[]
-{
-	COL_PANELTEXT,
-	COL_PANELSELECTEDTEXT,
-	COL_PANELCURSOR,
-	COL_PANELSELECTEDCURSOR
-};
-
 static void ApplyBlackOnBlackColors(highlight::element::colors_array& Colors)
 {
-	for (const auto& [Color, Index]: zip(Colors, PalColor))
-		ApplyBlackOnBlackColor(Color, Index);
+	for (auto& Color: Colors)
+		ApplyBlackOnBlackColor(Color, highlight::color::ToFarColor(static_cast<highlight::color::index>(&Color - Colors.data())));
 }
 
 static void ApplyColors(highlight::element& DestColors, const highlight::element& Src)
@@ -356,19 +362,112 @@ static void ApplyColors(highlight::element& DestColors, const highlight::element
 	}
 }
 
-void highlight::configuration::ApplyFinalColor(element::colors_array::value_type& Colors, size_t PaletteIndex)
+namespace colors
 {
-	const auto PaletteColor = PalColor[PaletteIndex];
+	template<typename... args>
+	FarColor merge(FarColor Bottom, FarColor Top, args... Args)
+	{
+		return merge(merge(Bottom, Top), Args...);
+	}
+}
 
+void highlight::configuration::InheritPaletteColor(FarColor& Color, color::index const ColorIndex)
+{
+	switch (ColorIndex)
+	{
+	case color::normal:
+		Color = colors::merge(color::ToFarColor(color::normal), Color);
+		break;
+
+	case color::selected:
+		// Selection lies on top of text and can inherit its color
+		Color = colors::merge(color::ToFarColor(color::normal), color::ToFarColor(color::selected), Color);
+		break;
+
+	case color::normal_current:
+		// Cursor lies on top of text and can inherit its color
+		Color = colors::merge(color::ToFarColor(color::normal), color::ToFarColor(color::normal_current), Color);
+		break;
+
+	case color::selected_current:
+		// Selected cursor lies on top of selection and can inherit its color
+		// Selection lies on top of text and can inherit its color
+		Color = colors::merge(color::ToFarColor(color::normal), color::ToFarColor(color::selected), color::ToFarColor(color::selected_current), Color);
+		break;
+
+	default:
+		std::unreachable();
+	}
+}
+
+static void inherit_color(highlight::element::colors_array& Colors, highlight::color::index const ColorIndex)
+{
+	const auto get_and_inherit = [&](highlight::color::index const Index) -> decltype(auto)
+	{
+		auto& Color = Colors[Index];
+		highlight::configuration::InheritPaletteColor(Color.FileColor, Index);
+		return Color;
+	};
+
+	switch (ColorIndex)
+	{
+	case highlight::color::normal:
+		// Mark lies on top of text and can inherit its color
+		{
+			auto& Top = get_and_inherit(highlight::color::normal);
+
+			Top.MarkColor = colors::merge(Top.FileColor, Top.MarkColor);
+		}
+		break;
+
+	case highlight::color::selected:
+		// Selection lies on top of text and can inherit its color
+		{
+			auto& Top = get_and_inherit(highlight::color::selected);
+			const auto& Bottom = get_and_inherit(highlight::color::normal);
+
+			//highlight::configuration::InheritPaletteColor(Bottom.FileColor, highlight::color::normal);
+
+			Top.FileColor = colors::merge(Bottom.FileColor, Top.FileColor);
+			Top.MarkColor = colors::merge(Bottom.MarkColor, Top.FileColor, Top.MarkColor);
+		}
+		break;
+
+	case highlight::color::normal_current:
+		// Cursor lies on top of text and can inherit its color
+		{
+			auto& Top = get_and_inherit(highlight::color::normal_current);
+			const auto& Bottom = get_and_inherit(highlight::color::normal);
+
+			Top.FileColor = colors::merge(Bottom.FileColor, Top.FileColor);
+			Top.MarkColor = colors::merge(Bottom.MarkColor, Top.FileColor, Top.MarkColor);
+		}
+		break;
+
+	case highlight::color::selected_current:
+		// Selected cursor lies on top of selection and can inherit its color
+		// Selection lies on top of text and can inherit its color
+		{
+			auto& Top = get_and_inherit(highlight::color::selected_current);
+			const auto& Bottom2 = get_and_inherit(highlight::color::selected);
+			const auto& Bottom1 = get_and_inherit(highlight::color::normal);
+
+			Top.FileColor = colors::merge(Bottom1.FileColor, Bottom2.FileColor, Top.FileColor);
+			Top.MarkColor = colors::merge(Bottom1.MarkColor, Bottom2.MarkColor, Top.FileColor, Top.MarkColor);
+		}
+		break;
+
+	default:
+		std::unreachable();
+	}
+}
+
+void highlight::configuration::ApplyFinalColor(element::colors_array& Colors, color::index const ColorIndex)
+{
 	//Обработаем black on black чтоб после наследования были правильные цвета.
-	ApplyBlackOnBlackColor(Colors, PaletteColor);
+	ApplyBlackOnBlackColor(Colors[ColorIndex], color::ToFarColor(ColorIndex));
 
-	Colors.FileColor = colors::merge(Global->Opt->Palette[PaletteColor], Colors.FileColor);
-	Colors.MarkColor = colors::merge(Colors.FileColor, Colors.MarkColor);
-
-	//Паранойя но случится может:
-	//Обработаем black on black снова чтоб обработались унаследованные цвета.
-	ApplyBlackOnBlackColor(Colors, PaletteColor);
+	inherit_color(Colors, ColorIndex);
 }
 
 void highlight::configuration::UpdateCurrentTime()
@@ -537,12 +636,11 @@ void HighlightDlgUpdateUserControl(matrix_view<FAR_CHAR_INFO> const& VBufColorEx
 
 void HighlightDlgUpdateUserControl(matrix_view<FAR_CHAR_INFO> const& VBufColorExample, const highlight::element &Colors)
 {
-	const size_t ColorIndices[]{ highlight::color::normal, highlight::color::selected, highlight::color::normal_current, highlight::color::selected_current };
-
-	for (const auto& [ColorRef, Index, Row]: zip(Colors.Color, ColorIndices, VBufColorExample))
+	for (const auto& [Index, Row]: zip(std::views::iota(0, highlight::color::count), VBufColorExample))
 	{
-		auto BakedColor = ColorRef;
-		highlight::configuration::ApplyFinalColor(BakedColor, Index);
+		auto BakedColors = Colors.Color;
+		const auto ColorIndex = static_cast<highlight::color::index>(Index);
+		highlight::configuration::ApplyFinalColor(BakedColors, ColorIndex);
 
 		Row.front() = { BoxSymbols[BS_V2], {}, {}, colors::PaletteColorToFarColor(COL_PANELBOX) };
 
@@ -551,7 +649,7 @@ void HighlightDlgUpdateUserControl(matrix_view<FAR_CHAR_INFO> const& VBufColorEx
 		if (!Colors.Mark.Mark.empty() && !Colors.Mark.Inherit)
 		{
 			Iterator->Char = Colors.Mark.Mark.front();
-			Iterator->Attributes = BakedColor.MarkColor;
+			Iterator->Attributes = BakedColors[ColorIndex].MarkColor;
 			++Iterator;
 		}
 
@@ -560,7 +658,7 @@ void HighlightDlgUpdateUserControl(matrix_view<FAR_CHAR_INFO> const& VBufColorEx
 
 		for (const auto& [Cell, Char]: zip(FileArea, Str))
 		{
-			Cell = { Char, {}, {}, BakedColor.FileColor };
+			Cell = { Char, {}, {}, BakedColors[ColorIndex].FileColor};
 		}
 
 		Row.back() = { BoxSymbols[BS_V1], {}, {}, Row.front().Attributes };

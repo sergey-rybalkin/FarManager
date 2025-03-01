@@ -45,7 +45,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "farversion.hpp"
 #include "lang.hpp"
 #include "message.hpp"
-#include "regex_helpers.hpp"
 #include "global.hpp"
 #include "stddlg.hpp"
 #include "log.hpp"
@@ -187,38 +186,7 @@ private:
 
 namespace
 {
-
-class [[nodiscard]] xml_enum: noncopyable, public enumerator<xml_enum, const tinyxml::XMLElement*, true>
-{
-	IMPLEMENTS_ENUMERATOR(xml_enum);
-
-public:
-	xml_enum(const tinyxml::XMLNode& base, const char* name):
-		m_name(name),
-		m_base(&base)
-	{
-	}
-
-	xml_enum(tinyxml::XMLHandle base, const char* name):
-		xml_enum(*base.ToNode(), name)
-	{
-	}
-
-private:
-	[[nodiscard, maybe_unused]]
-	bool get(bool Reset, value_type& value) const
-	{
-		value =
-			!Reset? value->NextSiblingElement(m_name) :
-			m_base? m_base->FirstChildElement(m_name) :
-			nullptr;
-
-		return value != nullptr;
-	}
-
-	const char* m_name;
-	const tinyxml::XMLNode* m_base;
-};
+using xml_enum = xml::enum_nodes;
 
 void serialise_integer(tinyxml::XMLElement& e, long long const Value)
 {
@@ -238,30 +206,30 @@ void serialise_blob(tinyxml::XMLElement& e, bytes_view const Value)
 	SetAttribute(e, "value", base64::encode(Value));
 }
 
-bool deserialise_value(char const* Type, char const* Value, auto const& Setter)
+bool deserialise_value(std::string_view const Type, char const* Value, auto const& Setter)
 {
-	if (!strcmp(Type, "qword"))
+	if (Type == "qword"sv)
 	{
 		if (Value)
 			Setter(strtoull(Value, nullptr, 16));
 		return true;
 	}
 
-	if (!strcmp(Type, "text"))
+	if (Type == "text"sv)
 	{
 		if (Value)
 			Setter(encoding::utf8::get_chars(Value));
 		return true;
 	}
 
-	if (!strcmp(Type, "base64"))
+	if (Type == "base64"sv)
 	{
 		if (Value)
 			Setter(base64::decode(Value));
 		return true;
 	}
 
-	if (!strcmp(Type, "hex"))
+	if (Type == "hex"sv)
 	{
 		if (Value)
 			Setter(HexStringToBlob(encoding::utf8::get_chars(Value)));
@@ -311,14 +279,14 @@ protected:
 private:
 	static void Initialise(const db_initialiser& Db)
 	{
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS general_config(key TEXT NOT NULL, name TEXT NOT NULL, value BLOB, PRIMARY KEY (key, name));"sv,
 		};
 
 		Db.Exec(Schema);
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtSetValue,              "REPLACE INTO general_config VALUES (?1,?2,?3);"sv },
 			{ stmtGetValue,              "SELECT value FROM general_config WHERE key=?1 AND name=?2;"sv },
@@ -426,11 +394,19 @@ private:
 		for(const auto& e: xml_enum(Representation.Root().FirstChildElement(GetKeyName()), "setting"))
 		{
 			const auto key = e.Attribute("key");
-			const auto name = e.Attribute("name");
-			const auto type = e.Attribute("type");
-			const auto value = e.Attribute("value");
+			if (!key)
+				continue;
 
-			if (!key || !name || !type || !value)
+			const auto name = e.Attribute("name");
+			if (!name)
+				continue;
+
+			const auto type = e.Attribute("type");
+			if (!type)
+				continue;
+
+			const auto value = e.Attribute("value");
+			if (!value)
 				continue;
 
 			const auto Key = encoding::utf8::get_chars(key);
@@ -535,7 +511,7 @@ private:
 
 		Db.add_numeric_collation();
 
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS table_keys(id INTEGER PRIMARY KEY, parent_id INTEGER NOT NULL, name TEXT NOT NULL, description TEXT, FOREIGN KEY(parent_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, UNIQUE (parent_id,name));"sv,
 			"CREATE TABLE IF NOT EXISTS table_values(key_id INTEGER NOT NULL, name TEXT NOT NULL, value BLOB, FOREIGN KEY(key_id) REFERENCES table_keys(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (key_id, name), CHECK (key_id <> 0));"sv,
@@ -545,7 +521,7 @@ private:
 
 		Db.Exec(Schema);
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtCreateKey,             "INSERT OR IGNORE INTO table_keys VALUES (NULL,?1,?2,NULL);"sv },
 			{ stmtFindKey,               "SELECT id FROM table_keys WHERE parent_id=?1 AND name=?2 AND id<>0;"sv },
@@ -781,11 +757,14 @@ private:
 		for (const auto& e: xml_enum(key, "value"))
 		{
 			const auto name = e.Attribute("name");
-			const auto type = e.Attribute("type");
-			const auto value = e.Attribute("value");
-
-			if (!name || !type)
+			if (!name)
 				continue;
+
+			const auto type = e.Attribute("type");
+			if (!type)
+				continue;
+
+			const auto value = e.Attribute("value");
 
 			const auto Name = encoding::utf8::get_chars(name);
 
@@ -865,27 +844,41 @@ void color_to_xml(bytes_view const Blob, tinyxml::XMLElement& e)
 	}
 }
 
-FarColor color_from_xml(tinyxml::XMLElement const& e)
+}
+
+FarColor deserialize_color(function_ref<char const* (char const* Name)> const Getter, FarColor const& Default)
 {
-	const auto process_color = [&](const char* const Name, COLORREF& Color)
+	const auto process_color = [&](char const* const Name, COLORREF& Color)
 	{
-		if (const auto Value = e.Attribute(Name))
-			Color = std::strtoul(Value, nullptr, 16);
+		if (const auto Value = Getter(Name))
+		{
+			char* EndPtr;
+			if (const auto Result = std::strtoul(Value, &EndPtr, 16); EndPtr != Value)
+				Color = Result;
+		}
 	};
 
-	FarColor Color{};
+	auto Color = Default;
 
 	process_color("background", Color.BackgroundColor);
 	process_color("foreground", Color.ForegroundColor);
 	process_color("underline", Color.UnderlineColor);
 
-	if (const auto flags = e.Attribute("flags"))
+	if (const auto flags = Getter("flags"))
 	{
 		const auto FlagsStr = encoding::utf8::get_chars(flags);
 		Color.Flags = colors::ColorStringToFlags(FlagsStr) | StringToFlags(FlagsStr, LegacyColorFlagNames);
 	}
 
 	return Color;
+}
+
+namespace
+{
+
+FarColor color_from_xml(tinyxml::XMLElement const& e)
+{
+	return deserialize_color([&](char const* const AttributeName){ return e.Attribute(AttributeName); }, {});
 }
 
 class HighlightHierarchicalConfigDb final: public HierarchicalConfigDb
@@ -940,14 +933,14 @@ private:
 	{
 		Db.add_numeric_collation();
 
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS colors(name TEXT NOT NULL PRIMARY KEY, value BLOB);"sv,
 		};
 
 		Db.Exec(Schema);
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtSetValue,              "REPLACE INTO colors VALUES (?1,?2);"sv },
 			{ stmtGetValue,              "SELECT value FROM colors WHERE name=?1;"sv },
@@ -1031,7 +1024,7 @@ private:
 	{
 		Db.EnableForeignKeysConstraints();
 
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS filetypes(id INTEGER PRIMARY KEY, weight INTEGER NOT NULL, mask TEXT, description TEXT);"sv,
 			"CREATE TABLE IF NOT EXISTS commands(ft_id INTEGER NOT NULL, type INTEGER NOT NULL, enabled INTEGER NOT NULL, command TEXT, FOREIGN KEY(ft_id) REFERENCES filetypes(id) ON UPDATE CASCADE ON DELETE CASCADE, PRIMARY KEY (ft_id, type));"sv,
@@ -1039,7 +1032,7 @@ private:
 
 		Db.Exec(Schema);
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtReorder,               "UPDATE filetypes SET weight=weight+1 WHERE weight>(CASE ?1 WHEN 0 THEN 0 ELSE (SELECT weight FROM filetypes WHERE id=?1) END);"sv },
 			{ stmtAddType,               "INSERT INTO filetypes VALUES (NULL,(CASE ?1 WHEN 0 THEN 1 ELSE (SELECT weight FROM filetypes WHERE id=?1)+1 END),?2,?3);"sv },
@@ -1292,7 +1285,7 @@ private:
 		Db.SetWALJournalingMode();
 		Db.EnableForeignKeysConstraints();
 
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS cachename(id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);"sv,
 			"CREATE TABLE IF NOT EXISTS preload(cid INTEGER NOT NULL PRIMARY KEY, enabled INTEGER NOT NULL, FOREIGN KEY(cid) REFERENCES cachename(id) ON UPDATE CASCADE ON DELETE CASCADE);"sv,
@@ -1311,7 +1304,7 @@ private:
 
 		Db.Exec(Schema);
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtCreateCache,           "INSERT INTO cachename VALUES (NULL,?1);"sv },
 			{ stmtFindCacheName,         "SELECT id FROM cachename WHERE name=?1;"sv },
@@ -1623,14 +1616,14 @@ public:
 private:
 	static void Initialise(const db_initialiser& Db)
 	{
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			"CREATE TABLE IF NOT EXISTS pluginhotkeys(pluginkey TEXT NOT NULL, menuguid TEXT NOT NULL, type INTEGER NOT NULL, hotkey TEXT, PRIMARY KEY(pluginkey, menuguid, type));"sv,
 		};
 
 		Db.Exec(Schema);
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtGetHotkey,             "SELECT hotkey FROM pluginhotkeys WHERE pluginkey=?1 AND menuguid=?2 AND type=?3;"sv },
 			{ stmtSetHotkey,             "REPLACE INTO pluginhotkeys VALUES (?1,?2,?3,?4);"sv },
@@ -1738,11 +1731,13 @@ private:
 						DelHotkey(Key, *Uuid, Type);
 				};
 
-				if (!strcmp(stype, "drive"))
+				std::string_view const TypeStr(stype);
+
+				if (TypeStr == "drive"sv)
 					ProcessHotkey(hotkey_type::drive_menu);
-				else if (!strcmp(stype, "config"))
+				else if (TypeStr == "config"sv)
 					ProcessHotkey(hotkey_type::config_menu);
-				else if (!strcmp(stype, "plugins"))
+				else if (TypeStr == "plugins"sv)
 					ProcessHotkey(hotkey_type::plugins_menu);
 			}
 
@@ -1775,7 +1770,7 @@ public:
 	}
 
 private:
-	os::event StopEvent{os::event::type::automatic, os::event::state::nonsignaled};
+	os::event StopEvent{os::event::type::manual, os::event::state::nonsignaled};
 	os::event AsyncDeleteAddDone{os::event::type::manual, os::event::state::signaled};
 	os::event AsyncCommitDone{os::event::type::manual, os::event::state::signaled};
 	os::event AsyncWork{os::event::type::automatic, os::event::state::nonsignaled};
@@ -1799,7 +1794,7 @@ private:
 
 	void WaitAllAsync() const
 	{
-		os::handle::wait_all({ AsyncDeleteAddDone.native_handle(), AsyncCommitDone.native_handle() });
+		os::handle::wait_all(AsyncDeleteAddDone, AsyncCommitDone);
 	}
 
 	void WaitCommitAsync() const
@@ -1813,7 +1808,7 @@ private:
 
 		// TODO: SEH guard, try/catch, exception_ptr
 
-		while (os::handle::wait_any({ AsyncWork.native_handle(), StopEvent.native_handle() }) != 1)
+		while (os::handle::wait_any(AsyncWork, StopEvent) != 1)
 		{
 			bool bAddDelete=false, bCommit=false;
 
@@ -1900,7 +1895,7 @@ private:
 
 		Db.add_nocase_collation();
 
-		static const std::string_view Schema[]
+		static constexpr std::string_view Schema[]
 		{
 			//command,view,edit,folder,dialog history
 			"CREATE TABLE IF NOT EXISTS history(id INTEGER PRIMARY KEY, kind INTEGER NOT NULL, key TEXT NOT NULL, type INTEGER NOT NULL, lock INTEGER NOT NULL, name TEXT NOT NULL, time INTEGER NOT NULL, guid TEXT NOT NULL, file TEXT NOT NULL, data TEXT NOT NULL);"sv,
@@ -1924,7 +1919,7 @@ private:
 		// Must be after reindex
 		Db.EnableForeignKeysConstraints();
 
-		static const stmt_init<statement_id> Statements[]
+		static constexpr stmt_init<statement_id> Statements[]
 		{
 			{ stmtEnum,                  "SELECT id, name, type, lock, time, guid, file, data FROM history WHERE kind=?1 AND key=?2 AND (?3 OR name COLLATE NOCASE =?4) ORDER BY time;"sv },
 			{ stmtEnumDesc,              "SELECT id, name, type, lock, time, guid, file, data FROM history WHERE kind=?1 AND key=?2 AND (?3 OR name COLLATE NOCASE =?4) ORDER BY lock DESC, time DESC;"sv },
@@ -2388,7 +2383,7 @@ void config_provider::TryImportDatabase(representable& p, const char* NodeName, 
 			for (const auto& i: xml_enum(root.FirstChildElement("pluginsconfig"), "plugin"))
 			{
 				const auto Uuid = i.Attribute("guid");
-				if (Uuid && 0 == strcmp(Uuid, NodeName))
+				if (Uuid && !std::strcmp(Uuid, NodeName))
 				{
 					m_TemplateSource->SetRoot(&const_cast<tinyxml::XMLElement&>(i));
 					p.Import(*m_TemplateSource);

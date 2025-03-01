@@ -1,3 +1,99 @@
+shmuel 2025-02-28 16:21:34+02:00 - build 868
+
+1. Revert build 846.
+
+shmuel 2025-01-31 19:49:10+02:00 - build 867
+
+1. Revert builds 861-864 since the current far.Timer behavior is questionable.
+
+shmuel 2025-01-29 20:14:04+02:00 - build 866
+
+1. LuaFAR (generic plugin): "%FARPROFILE%\luafar_init.lua" is run by default.
+   That can be prevented by defining a compilation flag -DNO_RUN_LUAFAR_INIT.
+
+2. Plugin LuaMacro is built with this flag not defined.
+
+
+MZK 2025-01-25 20:59:20-05:00 - build 865
+
+1. gh-802: Macro API to report VMenu alignment state: Menu.HorizontalAlignment.
+
+shmuel 2025-01-23 00:39:05+02:00 - build 864
+
+1. LuaFAR: a temporary workaround in processing timer events.
+
+shmuel 2025-01-22 20:36:47+02:00 - build 863
+
+1. LuaFAR plugins: the timer queue is closed in DllMain/DLL_PROCESS_DETACH.
+   Was: in ExitFARW.
+
+shmuel 2025-01-21 21:18:49+02:00 - build 862
+
+1. Force garbage collection on reloading macrofiles
+   (required after build 861).
+
+shmuel 2025-01-19 20:14:03+02:00 - build 861
+
+1. LuaFAR: Timer objects are garbage-collected as any other full userdata.
+     Was: "a timer object is garbage-collected only when its lua_State closes".
+     Reason: reloading macros didn't release timers and their associated code.
+     In some cases with frequent macros reloading it could lead to slowing down Far.
+
+shmuel 2024-11-16 12:39:17+02:00 - build 860
+
+1. Fix winapi.lua for arm64
+
+shmuel 2024-11-11 17:26:22+02:00 - build 859
+
+1. LuaFAR: allow another API for actl.Synchro
+
+shmuel 2024-11-07 19:43:26+02:00 - build 858
+
+1. LuaFAR: prevent a certain kind of crashes
+   E.g. lua:far.Timer(1000, function() error {} end)
+
+shmuel 2024-11-06 23:51:17+02:00 - build 857
+
+1. LuaFAR: change win.JoinPath a little (see the manual)
+
+shmuel 2024-10-31 22:45:33+02:00 - build 856
+
+1. LuaFAR: fix actl.GetFarmanagerVersion(true)
+
+2. LuaFAR: rename actl.GetFarmanagerVersion to actl.GetFarManagerVersion
+
+shmuel 2024-10-28 21:17:03+02:00 - build 855
+
+1. LuaFAR: viewer.Quit() returns a boolean (was: nothing).
+
+shmuel 2024-10-09 23:52:28+03:00 - build 854
+
+1. Refactoring
+
+shmuel 2024-10-09 17:41:49+03:00 - build 853
+
+1. Lpeg is now part of LuaFAR (no need for lpeg.dll).
+
+shmuel 2024-10-03 22:53:54+03:00 - build 852
+
+1. LuaFAR: refactoring.
+
+shmuel 2024-10-03 22:41:21+03:00 - build 851
+
+1. LuaFAR: refactoring.
+
+drkns 2024-09-24 16:09:16+01:00 - build 850
+
+1. Initialize all fields in user controls.
+
+shmuel 2024-09-21 01:58:53+03:00 - build 849
+
+1. LuaFAR: a fix in makefarkeys.lua.
+
+shmuel 2024-09-01 22:41:48+03:00 - build 848
+
+1. Macrobrowser: refactoring.
+
 shmuel 2024-08-17 10:06:48+03:00 - build 847
 
 1. LuaFAR:

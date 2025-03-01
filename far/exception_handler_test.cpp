@@ -218,10 +218,28 @@ namespace tests
 				do_throw();
 			}();
 		}
-		catch (far_exception const&)
+		catch (std::exception const&)
 		{
 			std::unreachable();
 		}
+	}
+
+	static void cpp_dtor_throw()
+	{
+		struct test
+		{
+			void throw_exception()
+			{
+				if ([[maybe_unused]] volatile auto Throw = true)
+					throw far_exception(L"Dtor exception"s);
+			}
+
+			~test()
+			{
+				throw_exception();
+			}
+		}
+		Test;
 	}
 
 	static void cpp_reach_unreachable()
@@ -393,7 +411,7 @@ namespace tests
 			});
 		});
 
-		const auto Result = os::handle::wait_any({ Thread.native_handle(), SehException.native_handle() });
+		const auto Result = os::handle::wait_any(Thread, SehException);
 
 		assert(Result == 1);
 		if (Result == 1)
@@ -602,6 +620,7 @@ static bool ExceptionTestHook(Manager::Key const& key)
 		{ tests::cpp_terminate,                L"terminate"sv },
 		{ tests::cpp_terminate_unwind,         L"terminate unwind"sv },
 		{ tests::cpp_noexcept_throw,           L"noexcept throw"sv },
+		{ tests::cpp_dtor_throw,               L"dtor throw"sv },
 		{ tests::cpp_reach_unreachable,        L"reach unreachable"sv },
 		{ tests::cpp_pure_virtual_call,        L"pure virtual call"sv },
 		{ tests::cpp_memory_leak,              L"memory leak"sv },

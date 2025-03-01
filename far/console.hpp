@@ -190,7 +190,9 @@ namespace console_detail
 		bool ExternalRendererLoaded() const;
 
 		[[nodiscard]]
-		bool IsWidePreciseExpensive(char32_t Codepoint);
+		size_t GetWidthPreciseExpensive(string_view Str);
+		[[nodiscard]]
+		size_t GetWidthPreciseExpensive(char32_t Codepoint);
 		void ClearWideCache();
 
 		bool GetPalette(std::array<COLORREF, 256>& Palette) const;
@@ -213,6 +215,9 @@ namespace console_detail
 		void command_not_found(string_view Command) const;
 
 		[[nodiscard]]
+		std::optional<bool> is_grapheme_clusters_on() const;
+
+		[[nodiscard]]
 		short GetDelta() const;
 
 		class input_queue_inspector
@@ -223,6 +228,9 @@ namespace console_detail
 		private:
 			std::vector<INPUT_RECORD> m_Buffer{ 256 };
 		};
+
+		[[nodiscard]]
+		std::wostream& OriginalOutputStream();
 
 	private:
 		class implementation;
@@ -241,6 +249,9 @@ namespace console_detail
 		HANDLE m_OriginalInputHandle;
 		HANDLE m_ActiveConsoleScreenBuffer{};
 		mutable string m_Title;
+
+		std::unique_ptr<std::wstreambuf> m_StreamBuf;
+		std::wostream m_OutputStream{ m_StreamBuf.get() };
 
 		class stream_buffers_overrider;
 		std::unique_ptr<stream_buffers_overrider> m_StreamBuffersOverrider;

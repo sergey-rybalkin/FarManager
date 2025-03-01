@@ -78,6 +78,7 @@ struct MacroPanelSelect
 };
 
 class Dialog;
+struct DlgParam;
 
 class KeyMacro: noncopyable
 {
@@ -93,7 +94,7 @@ public:
 	static bool IsHistoryDisabled(int TypeHistory);
 	static bool MacroExists(int Key, FARMACROAREA Area, bool UseCommon);
 	static void RunStartMacro();
-	static bool SaveMacros(bool always);
+	static bool SaveMacros();
 	static void SetMacroConst(int ConstIndex, long long Value);
 	static long long GetMacroConst(int ConstIndex);
 	static bool PostNewMacro(const wchar_t* Sequence, FARKEYMACROFLAGS InputFlags, DWORD AKey = 0);
@@ -117,13 +118,13 @@ public:
 private:
 	static int GetExecutingState();
 	intptr_t AssignMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* Param2);
-	int  AssignMacroKey(DWORD& MacroKey, unsigned long long& Flags);
+	bool AssignMacroKey(DlgParam *Param);
 	bool GetMacroSettings(int Key, unsigned long long &Flags, string_view Src = {}, string_view Descr = {});
 	intptr_t ParamMacroDlgProc(Dialog* Dlg,intptr_t Msg,intptr_t Param1,void* Param2);
 	void RestoreMacroChar() const;
 
 	FARMACROAREA m_Area;
-	FARMACROAREA m_StartMode;
+	FARMACROAREA m_StartArea;
 	FARMACROSTATE m_Recording;
 	string m_RecCode;
 	string m_RecDescription;

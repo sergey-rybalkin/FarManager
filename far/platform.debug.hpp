@@ -84,6 +84,7 @@ namespace os::debug
 		{
 			string_view Name;
 			size_t Displacement{};
+			bool IsFake{};
 		};
 
 		struct location
@@ -98,12 +99,14 @@ namespace os::debug
 		void clean();
 
 		void get(
-			string_view ModuleName,
 			std::span<stack_frame const> BackTrace,
 			std::unordered_map<uintptr_t, map_file>& MapFiles,
-			function_ref<void(uintptr_t, string_view, bool, symbol, location)> Consumer
+			function_ref<void(uintptr_t, uintptr_t, string_view, bool, symbol, location)> Consumer
 		);
 	}
+
+	string demangle(const char* SymbolName);
+	void demangle(string& SymbolName);
 
 	void crt_report_to_ui();
 	void crt_report_to_stderr();

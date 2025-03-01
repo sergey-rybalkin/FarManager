@@ -364,6 +364,8 @@ void Options::InterfaceSettings()
 	Builder.AddEditField(strTitleAddons, 47);
 	Builder.AddOKCancel();
 
+	const auto PreviousFullWidthAwareRendering = FullWidthAwareRendering.Get();
+
 	if (Builder.ShowDialog())
 	{
 		if (CMOpt.CopyTimeRule)
@@ -378,6 +380,20 @@ void Options::InterfaceSettings()
 		Panels->SetScreenPosition();
 		// $ 10.07.2001 SKV ! надо это делать, иначе если кейбар спрятали, будет полный рамс.
 		Panels->Redraw();
+
+		if (!PreviousFullWidthAwareRendering && FullWidthAwareRendering && char_width::is_grapheme_clusters_on())
+		{
+			Message(FMSG_WARNING, msg(lng::MWarning),
+			{
+				msg(lng::MConfigFullWidthAwareRenderingGraphemeClustersDected1),
+				msg(lng::MConfigFullWidthAwareRenderingGraphemeClustersDected2),
+				msg(lng::MConfigFullWidthAwareRenderingGraphemeClustersDected3),
+				msg(lng::MConfigFullWidthAwareRenderingGraphemeClustersDected4),
+			},
+			{
+				lng::MOk
+			});
+		}
 	}
 }
 
@@ -1774,6 +1790,11 @@ Options::Options():
 		wakeup_for_screensaver(Value);
 	}));
 
+	ScreenSaverTime.SetCallback(option::notifier([](long long const Value)
+	{
+		wakeup_for_screensaver_time(Value * 1min);
+	}));
+
 	ClipboardUnicodeWorkaround.SetCallback(option::notifier([](bool const Value)
 	{
 		os::clipboard::enable_ansi_to_unicode_conversion_workaround(Value);
@@ -2480,7 +2501,7 @@ void Options::Save(bool Manual)
 	filters::Save(Manual);
 	SavePanelModes(Manual);
 	SaveSortLayers(Manual);
-	Global->CtrlObject->Macro.SaveMacros(Manual);
+	Global->CtrlObject->Macro.SaveMacros();
 }
 
 enum
@@ -3341,8 +3362,14 @@ void Options::ShellOptions(bool LastCommand, const MOUSE_EVENT_RECORD *MouseEven
 				break;
 			case MENU_OPTIONS_LANGUAGES:   // Languages
 				{
-					auto InterfaceLanguage = strLanguage.Get();
-					if (SelectInterfaceLanguage(InterfaceLanguage))
+					const auto InterfaceLanguage = SelectInterfaceLanguage(strLanguage);
+
+					// User pressed Esc, quit
+					if (InterfaceLanguage.empty())
+						break;
+
+					// Try to load only if changed
+					if (InterfaceLanguage != strLanguage.Get())
 					{
 						try
 						{
@@ -3359,18 +3386,27 @@ void Options::ShellOptions(bool LastCommand, const MOUSE_EVENT_RECORD *MouseEven
 								{ lng::MOk });
 						}
 
-						auto HelpLanguage = strHelpLanguage.Get();
-						if (SelectHelpLanguage(HelpLanguage))
+						// Update only if loaded
+						if (strLanguage.Get() == InterfaceLanguage)
 						{
-							strHelpLanguage = HelpLanguage;
+							Global->CtrlObject->Plugins->ReloadLanguage();
+							os::env::set(L"FARLANG"sv, strLanguage);
+							PrepareUnitStr();
+							Global->WindowManager->InitKeyBar();
+							Global->CtrlObject->Cp()->RedrawKeyBar();
+							Global->CtrlObject->Cp()->SetScreenPosition();
 						}
-						Global->CtrlObject->Plugins->ReloadLanguage();
-						os::env::set(L"FARLANG"sv, strLanguage);
-						PrepareUnitStr();
-						Global->WindowManager->InitKeyBar();
-						Global->CtrlObject->Cp()->RedrawKeyBar();
-						Global->CtrlObject->Cp()->SetScreenPosition();
 					}
+
+					const auto HelpLanguage = SelectHelpLanguage(strHelpLanguage);
+
+					// User pressed Esc, quit
+					if (HelpLanguage.empty())
+						break;
+
+					// Try to load only if changed
+					if (HelpLanguage != strHelpLanguage.Get())
+						strHelpLanguage = HelpLanguage;
 
 					break;
 				}

@@ -58,6 +58,11 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <crtdbg.h>
 
+#if !IS_MICROSOFT_SDK()
+#include <cxxabi.h>
+#endif
+
+
 //----------------------------------------------------------------------------
 
 namespace os::debug
@@ -246,6 +251,7 @@ namespace os::debug
 			ContextRecord.R11,
 			ContextRecord.Sp
 #else
+			COMPILER_WARNING("Unknown platform")
 			IMAGE_FILE_MACHINE_UNKNOWN
 #endif
 		};
@@ -258,33 +264,9 @@ namespace os::debug
 		return ADDRESS64{ Offset, 0, AddrModeFlat };
 	};
 
-	template<typename T>
-	static void stack_walk(auto const& Data, function_ref<bool(T&)> const& Walker, function_ref<void(uintptr_t, DWORD)> const& Handler)
+	static BOOL WINAPI legacy_walk(DWORD const MachineType, HANDLE const Process, HANDLE const Thread, LPSTACKFRAME_EX const StackFrame, PVOID const ContextRecord, PREAD_PROCESS_MEMORY_ROUTINE64 const ReadMemoryRoutine, PFUNCTION_TABLE_ACCESS_ROUTINE64 const FunctionTableAccessRoutine, PGET_MODULE_BASE_ROUTINE64 const GetModuleBaseRoutine, PTRANSLATE_ADDRESS_ROUTINE64 const TranslateAddress, DWORD)
 	{
-		T StackFrame{};
-		StackFrame.AddrPC = address(Data.PC);
-		StackFrame.AddrFrame = address(Data.Frame);
-		StackFrame.AddrStack = address(Data.Stack);
-
-		if constexpr (std::same_as<T, STACKFRAME_EX>)
-		{
-			StackFrame.StackFrameSize = sizeof(StackFrame);
-		}
-
-		while (Walker(StackFrame))
-		{
-			// Cast to uintptr_t is ok here: although this function can be used
-			// to capture a stack of 64-bit process from a 32-bit one,
-			// we always use it with the current process only.
-
-			DWORD InlineFrameContext;
-			if constexpr (std::same_as<T, STACKFRAME_EX>)
-				InlineFrameContext = StackFrame.InlineFrameContext;
-			else
-				InlineFrameContext = 0;
-
-			Handler(static_cast<uintptr_t>(StackFrame.AddrPC.Offset), InlineFrameContext);
-		}
+		return imports.StackWalk64(MachineType, Process, Thread, std::bit_cast<LPSTACKFRAME64>(StackFrame), ContextRecord, ReadMemoryRoutine, FunctionTableAccessRoutine, GetModuleBaseRoutine, TranslateAddress);
 	}
 
 	// StackWalk64() may modify context record passed to it, so we will use a copy.
@@ -295,59 +277,26 @@ namespace os::debug
 		if (!imports.StackWalkEx && !imports.StackWalk64)
 			return Result;
 
-		const auto Process = GetCurrentProcess();
 		const auto Data = platform_specific_data(ContextRecord);
 
 		if (Data.MachineType == IMAGE_FILE_MACHINE_UNKNOWN || (!Data.PC && !Data.Frame && !Data.Stack))
 			return Result;
 
-		const auto handler = [&](uintptr_t const Address, DWORD const InlineFrameContext)
-		{
-			Result.push_back({ Address, InlineFrameContext });
-		};
+		STACKFRAME_EX StackFrame{};
+		StackFrame.AddrPC = address(Data.PC);
+		StackFrame.AddrFrame = address(Data.Frame);
+		StackFrame.AddrStack = address(Data.Stack);
+		StackFrame.StackFrameSize = sizeof(StackFrame);
 
-		if (imports.StackWalkEx)
+		const auto Walker = imports.StackWalkEx? *imports.StackWalkEx : legacy_walk;
+		const auto Process = GetCurrentProcess();
+
+		while (Walker(Data.MachineType, Process, ThreadHandle, &StackFrame, &ContextRecord, {}, imports.SymFunctionTableAccess64, imports.SymGetModuleBase64, {}, SYM_STKWALK_DEFAULT))
 		{
-			stack_walk<STACKFRAME_EX>(
-				Data,
-				[&](STACKFRAME_EX& StackFrame)
-				{
-					return imports.StackWalkEx(
-						Data.MachineType,
-						Process,
-						ThreadHandle,
-						&StackFrame,
-						&ContextRecord,
-						{},
-						imports.SymFunctionTableAccess64,
-						imports.SymGetModuleBase64,
-						{},
-						SYM_STKWALK_DEFAULT
-					);
-				},
-				handler
-			);
-		}
-		else
-		{
-			stack_walk<STACKFRAME64>(
-				Data,
-				[&](STACKFRAME64& StackFrame)
-				{
-					return imports.StackWalk64(
-						Data.MachineType,
-						Process,
-						ThreadHandle,
-						&StackFrame,
-						&ContextRecord,
-						{},
-						imports.SymFunctionTableAccess64,
-						imports.SymGetModuleBase64,
-						{}
-					);
-				},
-				handler
-			);
+			// Cast to uintptr_t is ok here: although this function can be used
+			// to capture a stack of 64-bit process from a 32-bit one,
+			// we always use it with the current process only.
+			Result.emplace_back(static_cast<uintptr_t>(StackFrame.AddrPC.Offset), StackFrame.InlineFrameContext);
 		}
 
 		return Result;
@@ -370,6 +319,93 @@ namespace os::debug
 			return false;
 
 		return (frameContext.FrameType & STACK_FRAME_TYPE_INLINE) != 0;
+	}
+
+#if !IS_MICROSOFT_SDK()
+	static bool demangle_abi(const char* const SymbolName, string& Dest)
+	{
+		auto Status = -1;
+
+		struct free_deleter
+		{
+			void operator()(void* Ptr) const
+			{
+				free(Ptr);
+			}
+		};
+
+		std::unique_ptr<char, free_deleter> const DemangledName(abi::__cxa_demangle(SymbolName, {}, {}, &Status));
+
+		if (Status || !DemangledName.get())
+			return false;
+
+		Dest = encoding::utf8::get_chars(DemangledName.get());
+		return true;
+	}
+#endif
+
+	constexpr auto UndecorateFlags =
+		UNDNAME_NO_FUNCTION_RETURNS |
+		UNDNAME_NO_ALLOCATION_MODEL |
+		UNDNAME_NO_ALLOCATION_LANGUAGE |
+		UNDNAME_NO_ACCESS_SPECIFIERS |
+		UNDNAME_NO_MEMBER_TYPE |
+		UNDNAME_32_BIT_DECODE;
+
+	static bool demangle(const char* const SymbolName, string& Dest)
+	{
+		if (char Buffer[MAX_SYM_NAME]; imports.UnDecorateSymbolName && imports.UnDecorateSymbolName(SymbolName, Buffer, static_cast<DWORD>(std::size(Buffer)), UndecorateFlags))
+		{
+			// Sanity check + the symobol name can be demangled already and thus longer than MAX_SYM_NAME, we don't want to truncate it.
+			if (*Buffer && !std::string_view(SymbolName).starts_with(Buffer))
+			{
+				Dest = encoding::ansi::get_chars(Buffer);
+				return true;
+			}
+		}
+
+		// Empty or the same or failed to demangle
+		// For non-MSVC builds try to demangle it using ABI
+#if !IS_MICROSOFT_SDK()
+		return demangle_abi(SymbolName, Dest);
+#else
+		return false;
+#endif
+	}
+
+	string demangle(const char* const SymbolName)
+	{
+		string Result;
+
+		if (!demangle(SymbolName, Result))
+			Result = encoding::ansi::get_chars(SymbolName);
+
+		return Result;
+	}
+
+	void demangle(string& SymbolName)
+	{
+		if (!imports.UnDecorateSymbolNameW)
+		{
+			demangle(encoding::ansi::get_bytes(SymbolName).c_str(), SymbolName);
+			return;
+		}
+
+		if (wchar_t Buffer[MAX_SYM_NAME]; imports.UnDecorateSymbolNameW(SymbolName.c_str(), Buffer, static_cast<DWORD>(std::size(Buffer)), UndecorateFlags))
+		{
+			// Sanity check + the symobol name can be demangled already and thus longer than MAX_SYM_NAME, we don't want to truncate it.
+			if (*Buffer && !SymbolName.starts_with(Buffer))
+			{
+				SymbolName = Buffer;
+				return;
+			}
+		}
+
+		// Empty or the same or failed to demangle
+		// For non-MSVC builds try to demangle it using ABI
+#if !IS_MICROSOFT_SDK()
+		demangle_abi(encoding::ansi::get_bytes(SymbolName).c_str(), SymbolName);
+#endif
 	}
 
 	void crt_report_to_ui()
@@ -632,12 +668,6 @@ namespace os::debug::symbols
 
 			using char_type = std::ranges::range_value_t<decltype(info.Name)>;
 			char_type name[max_name_size + 1];
-
-			struct symbol
-			{
-				std::basic_string_view<char_type> Name;
-				size_t Displacement;
-			};
 		};
 
 		struct symbol_storage
@@ -653,12 +683,22 @@ namespace os::debug::symbols
 			string
 				SymbolName,
 				FileName;
+
+			string_view convert_symbol_name(string_view const Name)
+			{
+				return Name;
+			}
+
+			string_view convert_symbol_name(std::string_view const Name)
+			{
+				return SymbolName = encoding::ansi::get_chars(Name);
+			}
 		};
 	}
 
 	static symbol frame_get_symbol(HANDLE const Process, uintptr_t const Address, symbol_storage& Storage)
 	{
-		const auto Get = [&]<typename T>(auto const& Getter, package<T>& Buffer) -> typename package<T>::symbol
+		const auto Get = [&]<typename T>(auto const& Getter, package<T>& Buffer) -> symbol
 		{
 			Buffer.info.SizeOfStruct = sizeof(Buffer.info);
 
@@ -687,36 +727,26 @@ namespace os::debug::symbols
 				NameSize = Buffer.info.NameLen;
 			}
 
-			// Old dbghelp versions (e.g. XP) not always populate NameLen
-			return { { Buffer.info.Name, NameSize? NameSize : std::char_traits<typename package<T>::char_type>::length(Buffer.info.Name) }, static_cast<size_t>(Displacement) };
+			return
+			{
+				// Old dbghelp versions (e.g. XP) not always populate NameLen
+				Storage.convert_symbol_name({ Buffer.info.Name, NameSize? NameSize : std::char_traits<typename package<T>::char_type>::length(Buffer.info.Name) }),
+				static_cast<size_t>(Displacement),
+				// Fake symbol, generated by the OS from the DLL export table.
+				// The name is usually rubbish.
+				// We will try to source it from the map file.
+				(Buffer.info.Flags & SYMFLAG_EXPORT) != 0
+			};
 		};
 
 		if (imports.SymFromAddrW)
-		{
-			const auto Symbol = Get(imports.SymFromAddrW, Storage.SymbolInfo.emplace<0>());
-			if (Symbol.Name.empty())
-				return {};
-
-			return { Symbol.Name, Symbol.Displacement };
-		}
+			return Get(imports.SymFromAddrW, Storage.SymbolInfo.emplace<0>());
 
 		if (imports.SymFromAddr)
-		{
-			const auto Symbol = Get(imports.SymFromAddr, Storage.SymbolInfo.emplace<1>());
-			if (Symbol.Name.empty())
-				return {};
-
-			return { Storage.SymbolName = encoding::ansi::get_chars(Symbol.Name), Symbol.Displacement };
-		}
+			return Get(imports.SymFromAddr, Storage.SymbolInfo.emplace<1>());
 
 		if (imports.SymGetSymFromAddr64)
-		{
-			const auto Symbol = Get(imports.SymGetSymFromAddr64, Storage.SymbolInfo.emplace<2>());
-			if (Symbol.Name.empty())
-				return {};
-
-			return { Storage.SymbolName = encoding::ansi::get_chars(Symbol.Name), Symbol.Displacement };
-		}
+			return Get(imports.SymGetSymFromAddr64, Storage.SymbolInfo.emplace<2>());
 
 		return {};
 	}
@@ -795,12 +825,11 @@ namespace os::debug::symbols
 
 	static void handle_frame(
 		HANDLE const Process,
-		string_view const ModuleName,
 		stack_frame const& Frame,
 		bool const IsInlineFrame,
 		symbol_storage& Storage,
 		std::unordered_map<uintptr_t, map_file>& MapFiles,
-		function_ref<void(uintptr_t, string_view, bool, symbol, location)> const Consumer
+		function_ref<void(uintptr_t, uintptr_t, string_view, bool, symbol, location)> const Consumer
 	)
 	{
 		std::optional<IMAGEHLP_MODULEW64> Module(std::in_place);
@@ -829,26 +858,8 @@ namespace os::debug::symbols
 				Module.reset();
 		}
 
-		const auto BaseAddress = [&]() -> uintptr_t
-		{
-			if (Module)
-				return static_cast<uintptr_t>(Module->BaseOfImage);
-
-			const auto ModuleNamePtr = EmptyToNull(null_terminated(ModuleName).c_str());
-
-			if (const auto ModuleBaseAddress = std::bit_cast<uintptr_t>(GetModuleHandle(ModuleNamePtr)); ModuleBaseAddress < Frame.Address)
-				return ModuleBaseAddress;
-
-			if (!ModuleNamePtr)
-				return 0;
-
-			if (const auto ModuleBaseAddress = std::bit_cast<uintptr_t>(GetModuleHandle({})); ModuleBaseAddress < Frame.Address)
-				return ModuleBaseAddress;
-
-			return 0;
-		}();
-
-		const auto ImageName = Module && *Module->ImageName? Module->ImageName : ModuleName;
+		const auto BaseAddress = Module? Module->BaseOfImage : 0;
+		const auto ImageName = Module? Module->ImageName : L"";
 
 		symbol Symbol;
 		location Location;
@@ -866,12 +877,17 @@ namespace os::debug::symbols
 				Location = frame_get_location(Process, Frame.Address, Storage);
 			}
 
-			if (Symbol.Name.empty() && BaseAddress)
+			if ((Symbol.Name.empty() || Symbol.IsFake) && BaseAddress && *ImageName)
 			{
 				auto& MapFile = MapFiles.try_emplace(BaseAddress, ImageName).first->second;
 				const auto Info = MapFile.get(Frame.Address - BaseAddress);
-				Symbol.Name = Info.Symbol;
-				Symbol.Displacement = Info.Displacement;
+
+				if (!Info.Symbol.empty())
+				{
+					Symbol.Name = Info.Symbol;
+					Symbol.Displacement = Info.Displacement;
+					Symbol.IsFake = false;
+				}
 
 				if (Location.FileName.empty())
 				{
@@ -881,10 +897,9 @@ namespace os::debug::symbols
 			}
 		}
 
-		const auto Fixup = IsInlineFrame && !is_inline_frame(Frame.InlineContext)? 1 : 0;
-
 		Consumer(
-			Frame.Address? Frame.Address + Fixup - BaseAddress : 0,
+			Frame.Address,
+			BaseAddress,
 			ImageName,
 			IsInlineFrame,
 			Symbol,
@@ -893,10 +908,9 @@ namespace os::debug::symbols
 	}
 
 	void get(
-		string_view const ModuleName,
 		std::span<stack_frame const> const BackTrace,
 		std::unordered_map<uintptr_t, map_file>& MapFiles,
-		function_ref<void(uintptr_t, string_view, bool, symbol, location)> const Consumer
+		function_ref<void(uintptr_t, uintptr_t, string_view, bool, symbol, location)> const Consumer
 	)
 	{
 		const auto Process = GetCurrentProcess();
@@ -907,32 +921,34 @@ namespace os::debug::symbols
 			if (i.InlineContext)
 			{
 				// If InlineContext is populated, the frames are from StackWalkEx and any inline frames are already included.
-				handle_frame(Process, ModuleName, i, is_inline_frame(i.InlineContext), Storage, MapFiles, Consumer);
+				handle_frame(Process, i, is_inline_frame(i.InlineContext), Storage, MapFiles, Consumer);
 				continue;
 			}
 
 			// StackWalk64 and RtlCaptureStackBackTrace do not include inline frames, we have to ask for them manually.
 			if (imports.SymAddrIncludeInlineTrace)
 			{
-				auto Frame = i;
-				if (Frame.Address != 0)
-					--Frame.Address;
+				const auto Address = i.Address? i.Address - 1 : i.Address;
+				DWORD InlineContext{};
 
-				if (const auto InlineFramesCount = imports.SymAddrIncludeInlineTrace(Process, Frame.Address))
+				if (const auto InlineFramesCount = imports.SymAddrIncludeInlineTrace(Process, Address))
 				{
 					ULONG FrameIndex{};
-					if (imports.SymQueryInlineTrace(Process, Frame.Address, INLINE_FRAME_CONTEXT_INIT, Frame.Address, Frame.Address, &Frame.InlineContext, &FrameIndex))
+					if (imports.SymQueryInlineTrace(Process, Address, INLINE_FRAME_CONTEXT_INIT, Address, Address, &InlineContext, &FrameIndex))
 					{
 						for (DWORD n = FrameIndex; n != InlineFramesCount; ++n)
 						{
-							handle_frame(Process, ModuleName, Frame, true, Storage, MapFiles, Consumer);
-							++Frame.InlineContext;
+							// Handle frames as StackWalkEx frames (same address, STACK_FRAME_TYPE_RA) for consistency
+							INLINE_FRAME_CONTEXT FrameContext{ InlineContext };
+							FrameContext.FrameType |= STACK_FRAME_TYPE_RA;
+							handle_frame(Process, { i.Address, FrameContext.ContextValue }, true, Storage, MapFiles, Consumer);
+							++InlineContext;
 						}
 					}
 				}
 			}
 
-			handle_frame(Process, ModuleName, i, false, Storage, MapFiles, Consumer);
+			handle_frame(Process, i, false, Storage, MapFiles, Consumer);
 		}
 	}
 }

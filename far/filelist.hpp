@@ -161,7 +161,7 @@ public:
 	const unordered_string_set* GetFilteredExtensions() const override;
 	int GetCurrentPos() const override;
 	bool FindPartName(string_view Name, int Next, int Direct = 1) override;
-	bool GetPlainString(string& Dest, int ListPos) const override;
+	bool GetPlainString(string& Dest, int ListPos, os::chrono::time_point CurrentTime) const override;
 	bool GoToFile(long idxItem) override;
 	bool GoToFile(string_view Name, bool OnlyPartName = false) override;
 	long FindFile(string_view Name, bool OnlyPartName = false) override;
@@ -318,7 +318,7 @@ private:
 		 Открывающий и закрывающий символ, которые используются для показа
 		 имени, которое не помещается в панели. По умолчанию - фигурные скобки.
 	*/
-	wchar_t openBracket[2]{L'{'}, closeBracket[2]{L'}'};
+	wchar_t openBracket{L'{'}, closeBracket{L'}'};
 
 	string strOriginalCurDir;
 	string strPluginDizName;

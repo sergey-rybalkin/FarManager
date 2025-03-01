@@ -1,4 +1,5 @@
 NAME = luamacro
+VERSION_LUASDK = 20241113
 
 SRCS = \
 	luafar/luaplug.c \
@@ -30,7 +31,6 @@ USERC = \
 	-DEXPORT_SETDIRECTORY \
 	-DEXPORT_SETFINDLIST \
 	-DEXPORT_GETCONTENTDATA \
-	-DRUN_LUAFAR_INIT \
 
 USERC += \
 	-Wno-cast-align \
@@ -47,7 +47,7 @@ endif
 
 USERLIBS = \
 	$(OBJDIR)/luafar3.lib \
-	luasdk/$(BITPREFIX)$(DIRBIT)/lua51.lib \
+	luasdk/$(VERSION_LUASDK)/$(BITPREFIX)$(DIRBIT)/lua51.lib \
 
 USERTARGETS = \
 	lualib \
@@ -76,7 +76,7 @@ lualegacy:
 ifndef ARM
 ifeq ($(DIRBIT),32)
 	@$(MKDIR) $(FAR_WORKDIR)/Legacy
-	@$(CP) luasdk/32/legacy/lua51.dll $(FAR_WORKDIR)/Legacy
+	@$(CP) luasdk/$(VERSION_LUASDK)/32/legacy/lua51.dll $(FAR_WORKDIR)/Legacy
 endif
 endif
 

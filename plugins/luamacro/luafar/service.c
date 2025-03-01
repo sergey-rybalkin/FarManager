@@ -33,6 +33,7 @@ extern int luaopen_unicode(lua_State *L);
 extern int luaopen_utf8(lua_State *L);
 extern int luaopen_upackage(lua_State *L);
 extern int luaopen_win(lua_State *L);
+extern int luaopen_lpeg(lua_State *L);
 
 extern int  luaB_dofileW(lua_State *L);
 extern int  luaB_loadfileW(lua_State *L);
@@ -186,12 +187,13 @@ void DeleteLuaStateTimerQueue(lua_State *L)
 	lua_setfield(L, LUA_REGISTRYINDEX, FarTimerQueueKey);
 }
 
-static TSynchroData* CreateSynchroData(TTimerData *td, int action, int data)
+static TSynchroData* CreateSynchroData(int type, int data, TTimerData *td)
 {
 	TSynchroData* SD = (TSynchroData*) malloc(sizeof(TSynchroData));
-	SD->timerData = td;
-	SD->regAction = action;
+	SD->type = type;
 	SD->data = data;
+	SD->ref = LUA_REFNIL;
+	SD->timerData = td;
 	return SD;
 }
 
@@ -2700,6 +2702,16 @@ static int far_GetPluginDirList(lua_State *L)
 	return 1;
 }
 
+static int SavedScreen_tostring (lua_State *L)
+{
+	void **pp = (void**)luaL_checkudata(L, 1, SavedScreenType);
+	if (*pp)
+		lua_pushfstring(L, "%s (%p)", SavedScreenType, *pp);
+	else
+		lua_pushfstring(L, "%s (freed)", SavedScreenType);
+	return 1;
+}
+
 // RestoreScreen (handle)
 //   handle:    handle of saved screen.
 static int far_RestoreScreen(lua_State *L)
@@ -4261,8 +4273,8 @@ static int viewer_Quit(lua_State *L)
 {
 	intptr_t ViewerId = luaL_optinteger(L, 1, -1);
 	PSInfo *Info = GetPluginData(L)->Info;
-	Info->ViewerControl(ViewerId, VCTL_QUIT, 0, 0);
-	return 0;
+	lua_pushboolean(L, Info->ViewerControl(ViewerId, VCTL_QUIT, 0, 0));
+	return 1;
 }
 
 static int viewer_Redraw(lua_State *L)
@@ -4801,7 +4813,9 @@ static int DoAdvControl (lua_State *L, int Command, int Delta)
 	PSInfo *Info = pd->Info;
 	intptr_t Param1 = 0;
 	void *Param2 = NULL;
-	lua_settop(L,pos3);  /* for proper calling GetOptIntFromTable and the like */
+
+	if (Command != ACTL_SYNCHRO)
+		lua_settop(L,pos3);  /* for proper calling GetOptIntFromTable and the like */
 
 	if (Delta == 0)
 		Command = CAST(int, check_env_flag(L, 1));
@@ -4855,11 +4869,25 @@ static int DoAdvControl (lua_State *L, int Command, int Delta)
 		}
 
 		case ACTL_SYNCHRO:
-		{
-			intptr_t p = luaL_checkinteger(L, pos2);
-			Param2 = CreateSynchroData(NULL, 0, (int)p);
-			break;
-		}
+			if (lua_isfunction(L, pos2)) {
+				TSynchroData *sd = CreateSynchroData(SYNCHRO_FUNCTION, 0, NULL);
+				int top = lua_gettop(L);
+				sd->narg = top - pos2 + 1;
+				lua_newtable(L);
+				for (int i=pos2,j=1; i <= top; ) {
+					lua_pushvalue(L, i++);
+					lua_rawseti(L, -2, j++);
+				}
+				sd->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+				lua_pushinteger(L, Info->AdvControl(PluginId, Command, 0, sd));
+				return 1;
+			}
+			else {
+				luaL_argcheck(L, lua_isnumber(L,pos2), pos2, "integer or function expected");
+				TSynchroData *sd = CreateSynchroData(SYNCHRO_COMMON, lua_tointeger(L,pos2), NULL);
+				lua_pushinteger(L, Info->AdvControl(PluginId, Command, 0, sd));
+				return 1;
+			}
 
 		case ACTL_SETPROGRESSSTATE:
 			Param1 = (intptr_t) check_env_flag(L, pos2);
@@ -4896,7 +4924,7 @@ static int DoAdvControl (lua_State *L, int Command, int Delta)
 			struct VersionInfo vi;
 			Info->AdvControl(PluginId, Command, 0, &vi);
 
-			if (lua_toboolean(L, 2))
+			if (lua_toboolean(L, pos2))
 			{
 				lua_pushinteger(L, vi.Major);
 				lua_pushinteger(L, vi.Minor);
@@ -5054,7 +5082,7 @@ AdvCommand( GetArrayColor,          ACTL_GETARRAYCOLOR)
 AdvCommand( GetColor,               ACTL_GETCOLOR)
 AdvCommand( GetCursorPos,           ACTL_GETCURSORPOS)
 AdvCommand( GetFarHwnd,             ACTL_GETFARHWND)
-AdvCommand( GetFarmanagerVersion,   ACTL_GETFARMANAGERVERSION)
+AdvCommand( GetFarManagerVersion,   ACTL_GETFARMANAGERVERSION)
 AdvCommand( GetFarRect,             ACTL_GETFARRECT)
 AdvCommand( GetWindowCount,         ACTL_GETWINDOWCOUNT)
 AdvCommand( GetWindowInfo,          ACTL_GETWINDOWINFO)
@@ -5737,7 +5765,7 @@ void CALLBACK TimerCallback(void *lpParameter, BOOLEAN TimerOrWaitFired)
 	(void)TimerOrWaitFired;
 	if (!td->needClose && td->enabled)
 	{
-		sd = CreateSynchroData(td, LUAFAR_TIMER_CALL, 0);
+		sd = CreateSynchroData(SYNCHRO_TIMER_CALL, 0, td);
 		td->Info->AdvControl(td->PluginGuid, ACTL_SYNCHRO, 0, sd);
 	}
 }
@@ -5813,7 +5841,7 @@ static int timer_Close(lua_State *L)
 		hQueue = GetLuaStateTimerQueue(L);
 		if (hQueue)
 			DeleteTimerQueueTimer(hQueue, td->hTimer, NULL);
-		sd = CreateSynchroData(td, LUAFAR_TIMER_UNREF, 0);
+		sd = CreateSynchroData(SYNCHRO_TIMER_UNREF, 0, td);
 		td->Info->AdvControl(td->PluginGuid, ACTL_SYNCHRO, 0, sd);
 	}
 	return 0;
@@ -6361,7 +6389,7 @@ static const luaL_Reg actl_funcs[] =
 	PAIR( adv, GetColor),
 	PAIR( adv, GetCursorPos),
 	PAIR( adv, GetFarHwnd),
-	PAIR( adv, GetFarmanagerVersion),
+	PAIR( adv, GetFarManagerVersion),
 	PAIR( adv, GetFarRect),
 	PAIR( adv, GetWindowCount),
 	PAIR( adv, GetWindowInfo),
@@ -6695,6 +6723,8 @@ static int luaopen_far(lua_State *L)
 	luaL_newmetatable(L, SavedScreenType);
 	lua_pushcfunction(L, far_FreeScreen);
 	lua_setfield(L, -2, "__gc");
+	lua_pushcfunction(L, SavedScreen_tostring);
+	lua_setfield(L, -2, "__tostring");
 
 	return 0;
 }
@@ -6743,6 +6773,7 @@ static const luaL_Reg lualibs[] =
 	{"unicode",       luaopen_unicode},
 	{"utf8",          luaopen_utf8},
 	{"win",           luaopen_win},
+	{"lpeg",          luaopen_lpeg},
 	{NULL, NULL}
 };
 
@@ -6833,6 +6864,7 @@ static const luaL_Reg lualibs_extra[] =
 	{"unicode",       luaopen_unicode},
 	{"utf8",          luaopen_utf8},
 	{"win",           luaopen_win},
+	{"lpeg",          luaopen_lpeg},
 	{NULL, NULL}
 };
 

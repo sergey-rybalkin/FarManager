@@ -271,6 +271,8 @@ private:
 	// This flag is set to true if the hotkey of either of Text/Hex radio is pressed.
 	// If true, the handler of Text/Hex radio button click will set focus on the Text/Hex editor
 	bool m_IsTextOrHexHotkeyUsed{};
+
+	os::chrono::time_point m_CurrentTime{};
 };
 
 // TODO BUGBUG DELETE THIS
@@ -2156,7 +2158,7 @@ void FindFiles::AddMenuRecord(Dialog* const Dlg, string_view const FullName, con
 					break;
 				}
 
-				append(MenuText, FormatStr_DateTime(std::invoke(FileTime, FindData), i.type, i.type_flags, Width), BoxSymbols[BS_V1]);
+				append(MenuText, FormatStr_DateTime(std::invoke(FileTime, FindData), i.type, i.type_flags, Width, m_CurrentTime), BoxSymbols[BS_V1]);
 				break;
 			}
 
@@ -2889,6 +2891,8 @@ bool FindFiles::FindFilesProcess()
 						if (FindPanel->GetType() != panel_type::FILE_PANEL)
 						{
 							FindPanel = Global->CtrlObject->Cp()->ChangePanel(FindPanel, panel_type::FILE_PANEL, TRUE, TRUE);
+							// BUGBUG gh-674 make sure to recreate FS watcher
+							// SetCurDir below should do that
 						}
 
 						string_view ArcPath=strArcName;
@@ -2956,6 +2960,9 @@ bool FindFiles::FindFilesProcess()
 						FindPanel = Global->CtrlObject->Cp()->ChangePanel(FindPanel, panel_type::FILE_PANEL, TRUE, TRUE);
 						FindPanel->SetVisible(true);
 						FindPanel->Update(0);
+
+						// BUGBUG gh-674 make sure to recreate FS watcher
+						FindPanel->InitCurDir(FindPanel->GetCurDir());
 					}
 
 					// ! Не меняем каталог, если мы уже в нем находимся.
@@ -3047,6 +3054,7 @@ FindFiles::FindFiles():
 
 	do
 	{
+		m_CurrentTime = os::chrono::nt_clock::now();
 		FindExitItem = nullptr;
 		FindFoldersChanged=false;
 		SearchFromChanged=false;

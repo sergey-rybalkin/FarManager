@@ -328,10 +328,10 @@ namespace console_detail
 		BufferSize = 8192
 	};
 
-	static bool is_redirected(int const HandleType)
+	static bool is_redirected(HANDLE const Handle)
 	{
 		DWORD Mode;
-		return !GetConsoleMode(GetStdHandle(HandleType), &Mode);
+		return !GetConsoleMode(Handle, &Mode);
 	}
 
 	class consolebuf final: public std::wstreambuf
@@ -339,9 +339,9 @@ namespace console_detail
 	public:
 		NONCOPYABLE(consolebuf);
 
-		explicit(false) consolebuf(int const Type):
-			m_Type(Type),
-			m_Redirected(is_redirected(Type)),
+		explicit(false) consolebuf(HANDLE const Handle):
+			m_Handle(Handle),
+			m_Redirected(is_redirected(m_Handle)),
 			m_InBuffer(BufferSize, {}),
 			m_OutBuffer(BufferSize, {})
 		{
@@ -395,7 +395,7 @@ protected:
 			if (m_Redirected)
 			{
 				DWORD BytesRead;
-				if (!ReadFile(GetStdHandle(m_Type), Str.data(), static_cast<DWORD>(Str.size() * sizeof(wchar_t)), &BytesRead, {}))
+				if (!ReadFile(m_Handle, Str.data(), static_cast<DWORD>(Str.size() * sizeof(wchar_t)), &BytesRead, {}))
 					throw far_fatal_exception(L"File read error"sv);
 
 				return BytesRead / sizeof(wchar_t);
@@ -418,11 +418,11 @@ protected:
 				const auto write = [&](void const* Data, size_t const Size)
 				{
 					DWORD BytesWritten;
-					if (!WriteFile(GetStdHandle(m_Type), Data, static_cast<DWORD>(Size), &BytesWritten, {}))
+					if (!WriteFile(m_Handle, Data, static_cast<DWORD>(Size), &BytesWritten, {}))
 						throw far_fatal_exception(L"File write error"sv);
 				};
 
-				if constexpr (constexpr auto UseUtf8Output = true)
+				if constexpr ([[maybe_unused]] constexpr auto UseUtf8Output = true)
 				{
 					const auto Utf8Str = encoding::utf8::get_bytes(Str);
 					write(Utf8Str.data(), Utf8Str.size());
@@ -454,14 +454,14 @@ protected:
 		{
 			if (m_Redirected)
 			{
-				FlushFileBuffers(GetStdHandle(m_Type));
+				FlushFileBuffers(m_Handle);
 				return;
 			}
 
 			::console.Commit();
 		}
 
-		int m_Type;
+		HANDLE m_Handle;
 		bool m_Redirected;
 		string m_InBuffer, m_OutBuffer;
 		std::optional<FarColor> m_Colour;
@@ -473,7 +473,7 @@ protected:
 		NONCOPYABLE(stream_buffer_overrider);
 
 		stream_buffer_overrider(std::wios& Stream, int const HandleType, std::optional<FarColor> const Color = {}):
-			m_Buf(HandleType),
+			m_Buf(GetStdHandle(HandleType)),
 			m_Override(Stream, m_Buf)
 		{
 			if (Color)
@@ -559,31 +559,6 @@ protected:
 		std::optional<DWORD> m_ConsoleMode;
 	};
 
-	class scoped_vt_input
-	{
-	public:
-		NONCOPYABLE(scoped_vt_input);
-
-		scoped_vt_input():
-			m_ConsoleMode(::console.UpdateMode(::console.GetInputHandle(), ENABLE_VIRTUAL_TERMINAL_INPUT, ENABLE_LINE_INPUT))
-		{
-		}
-
-		~scoped_vt_input()
-		{
-			if (m_ConsoleMode)
-				::console.SetMode(::console.GetInputHandle(), *m_ConsoleMode);
-		}
-
-		explicit operator bool() const
-		{
-			return m_ConsoleMode.has_value();
-		}
-
-	private:
-		std::optional<DWORD> m_ConsoleMode;
-	};
-
 	static string query_vt(string_view const Command)
 	{
 		// A VT query works as follows:
@@ -615,12 +590,12 @@ protected:
 		// Fortunately, it seems that user input is queued before and/or after the responses,
 		// but does not interlace with them.
 
-		// We also need to enable VT input, otherwise it will only work in a real console.
+		// We also need to disable line input, otherwise we will hang.
+		// It's usually disabled anyway, but just in case if we get here too early or too late.
 		// Are you not entertained?
 
-		scoped_vt_input const VtInput;
-		if (!VtInput)
-			throw far_exception(L"scoped_vt_input"sv);
+		const auto CurrentConsoleMode = ::console.UpdateMode(::console.GetInputHandle(), 0, ENABLE_LINE_INPUT);
+		SCOPE_EXIT{ if (CurrentConsoleMode) ::console.SetMode(::console.GetInputHandle(), *CurrentConsoleMode);};
 
 		const auto Dummy = CSI L"0c"sv;
 
@@ -631,15 +606,15 @@ protected:
 
 		std::optional<size_t>
 			FirstTokenPrefixPos,
-			FirstTokenSuffixPos,
-			SecondTokenPrefixPos,
-			SecondTokenSuffixPos;
+			FirstTokenSuffixPos;
 
 		const auto
 			TokenPrefix = CSI "?"sv,
 			TokenSuffix = L"c"sv;
 
-		while (!SecondTokenSuffixPos)
+		size_t DA_ResponseSize{};
+
+		for (;;)
 		{
 			wchar_t ResponseBuffer[8192];
 			size_t ResponseSize;
@@ -655,25 +630,26 @@ protected:
 
 			if (FirstTokenPrefixPos && !FirstTokenSuffixPos)
 				if (const auto Pos = Response.find(TokenSuffix, *FirstTokenPrefixPos + TokenPrefix.size()); Pos != Response.npos)
+				{
 					FirstTokenSuffixPos = Pos;
+					DA_ResponseSize = Pos + TokenSuffix.size();
+				}
 
-			if (FirstTokenSuffixPos && !SecondTokenPrefixPos)
-				if (const auto Pos = Response.find(TokenPrefix, *FirstTokenSuffixPos + TokenSuffix.size()); Pos != Response.npos)
-					SecondTokenPrefixPos = Pos;
+			if (DA_ResponseSize && Response.size() >= DA_ResponseSize * 2)
+			{
+				const auto FirstTokenEnd = *FirstTokenPrefixPos + DA_ResponseSize;
+				const auto DA_Response = string_view(Response).substr(*FirstTokenPrefixPos, FirstTokenEnd);
+				const auto SecondTokenPos = Response.find(DA_Response, FirstTokenEnd);
 
-			if (SecondTokenPrefixPos && !SecondTokenSuffixPos)
-				if (const auto Pos = Response.find(TokenSuffix, *SecondTokenPrefixPos + TokenPrefix.size()); Pos != Response.npos)
-					SecondTokenSuffixPos = Pos;
+				if (SecondTokenPos != Response.npos)
+					return Response.substr(FirstTokenEnd, SecondTokenPos - FirstTokenEnd);
+			}
 		}
-
-		Response.resize(*SecondTokenPrefixPos);
-		Response.erase(0, *FirstTokenSuffixPos + TokenSuffix.size());
-
-		return Response;
 	}
 
 	console::console():
 		m_OriginalInputHandle(GetStdHandle(STD_INPUT_HANDLE)),
+		m_StreamBuf(std::make_unique<consolebuf>(GetStdHandle(STD_OUTPUT_HANDLE))),
 		m_StreamBuffersOverrider(std::make_unique<stream_buffers_overrider>())
 	{
 		placement::construct(ExternalConsole);
@@ -1066,7 +1042,7 @@ protected:
 	static bool layout_has_altgr(HKL const Layout)
 	{
 		static std::unordered_map<HKL, bool> LayoutState;
-		const auto [Iterator, Inserted] = LayoutState.emplace(Layout, false);
+		const auto [Iterator, Inserted] = LayoutState.try_emplace(Layout, false);
 		if (!Inserted)
 			return Iterator->second;
 
@@ -1457,7 +1433,7 @@ protected:
 		{ FCF_FG_STRIKEOUT,    L"9"sv,     L"29"sv },
 		{ FCF_FG_FAINT,        L"2"sv,     L"22"sv },
 		{ FCF_FG_BLINK,        L"5"sv,     L"25"sv },
-		{ FCF_FG_INVERSE,      L"7"sv,     L"27"sv },
+		{ FCF_INVERSE,         L"7"sv,     L"27"sv },
 		{ FCF_FG_INVISIBLE,    L"8"sv,     L"28"sv },
 	};
 
@@ -1480,7 +1456,7 @@ protected:
 			if (colors::is_default(Color.Value))
 				append(Str, Mapping.Default);
 			else if (const auto Index = vt_color_index(colors::index_value(Color.Value)); Index < colors::index::nt_size && Mapping.PreferBasicIndex)
-				append(Str, Color.Value & FOREGROUND_INTENSITY? Mapping.Intense : Mapping.Normal, static_cast<wchar_t>(L'0' + (Index & 0b111)));
+				append(Str, Color.Value & C_INTENSE? Mapping.Intense : Mapping.Normal, static_cast<wchar_t>(L'0' + (Index & 0b111)));
 			else
 				far::format_to(Str, L"{1}{0}5{0}{2}"sv, Mapping.Separator, Mapping.ExtendedColour, Index);
 		}
@@ -1512,7 +1488,7 @@ protected:
 	static void make_vt_attributes(const FarColor& Color, string& Str, FarColor const& LastColor)
 	{
 		using colors::single_color;
-		const auto StyleMaskWithoutUnderline = FCF_STYLEMASK & ~FCF_FG_UNDERLINE_MASK;
+		const auto StyleMaskWithoutUnderline = FCF_STYLE_MASK & ~FCF_FG_UNDERLINE_MASK;
 
 		struct expanded_state
 		{
@@ -1530,6 +1506,15 @@ protected:
 				UnderlineStyle(Color.GetUnderline()),
 				UnderlineColor(single_color::underline(Color))
 			{
+				if (Color.Flags & COMMON_LVB_GRID_HORIZONTAL)
+					Style |= FCF_FG_OVERLINE;
+
+				if (Color.Flags & COMMON_LVB_REVERSE_VIDEO)
+					Style |= FCF_INVERSE;
+
+				if (Color.Flags & COMMON_LVB_UNDERSCORE && UnderlineStyle == UNDERLINE_STYLE::UNDERLINE_NONE)
+					UnderlineStyle = UNDERLINE_STYLE::UNDERLINE_SINGLE;
+
 				if (
 					// If there's no underline, no point in emitting its color
 					UnderlineStyle == UNDERLINE_NONE ||
@@ -1677,7 +1662,7 @@ protected:
 					(
 						encoding::utf16::is_high_surrogate(Cell.Char) ||
 						// FFFD can be wide too
-						(Cell.Char == encoding::replace_char && char_width::is_wide(encoding::replace_char))
+						(Cell.Char == encoding::replace_char && Cell.Reserved1 <= std::numeric_limits<wchar_t>::max() && char_width::is_wide(encoding::replace_char))
 					)
 				)
 				{
@@ -1708,6 +1693,63 @@ protected:
 
 	class console::implementation
 	{
+		class foreign_blocks_list
+		{
+		public:
+			void queue(FAR_CHAR_INFO const& Cell, point const& Point, rectangle const WorkingArea)
+			{
+				const auto IsForeign = check(Cell);
+				if (IsForeign)
+				{
+					if (!m_ForeignBlock)
+						m_ForeignBlock.emplace(WorkingArea.left + Point.x, WorkingArea.top + Point.y, WorkingArea.left + Point.x, WorkingArea.top + Point.y);
+					else
+						++m_ForeignBlock->right;
+				}
+
+				if (m_ForeignBlock && (!IsForeign || Point.x == WorkingArea.width() - 1 || Point.y == WorkingArea.height() - 1))
+					queue();
+			}
+
+			void unstash() const
+			{
+				for (const auto& Block : m_ForeignBlocks)
+					::console.unstash_output(Block);
+			}
+
+		private:
+			static bool check(FAR_CHAR_INFO const& Cell)
+			{
+				return
+					Cell.Attributes.Flags & FCF_FOREIGN &&
+					colors::is_transparent(Cell.Attributes.ForegroundColor) &&
+					colors::is_transparent(Cell.Attributes.BackgroundColor);
+			}
+
+			void queue()
+			{
+				for (auto& Block: m_ForeignBlocks)
+				{
+					if (
+						Block.left == m_ForeignBlock->left &&
+						Block.right == m_ForeignBlock->right &&
+						Block.bottom == m_ForeignBlock->top - 1
+						)
+					{
+						Block.bottom = m_ForeignBlock->bottom;
+						m_ForeignBlock.reset();
+						return;
+					}
+				}
+
+				m_ForeignBlocks.emplace_back(*m_ForeignBlock);
+				m_ForeignBlock.reset();
+			}
+
+			std::vector<rectangle> m_ForeignBlocks;
+			std::optional<rectangle> m_ForeignBlock;
+		};
+
 	public:
 		static bool WriteOutputVT(matrix<FAR_CHAR_INFO>& Buffer, point const BufferCoord, rectangle const& WriteRegion)
 		{
@@ -1793,31 +1835,7 @@ protected:
 				// Save cursor position
 				Str = ANSISYSSC L""sv;
 
-				std::vector<rectangle> ForeignBlocks;
-				std::optional<rectangle> ForeignBlock;
-
-				const auto queue_block = [&]
-				{
-					if (!ForeignBlock)
-						return;
-
-					for (auto& Block: ForeignBlocks)
-					{
-						if (
-							Block.left == ForeignBlock->left &&
-							Block.right == ForeignBlock->right &&
-							Block.bottom == ForeignBlock->top - 1
-							)
-						{
-							Block.bottom = ForeignBlock->bottom;
-							ForeignBlock.reset();
-							return;
-						}
-					}
-
-					ForeignBlocks.emplace_back(*ForeignBlock);
-					ForeignBlock.reset();
-				};
+				foreign_blocks_list ForeignBlocksList;
 
 				for (const auto i: std::views::iota(SubRect.top + SubrectOffset, std::min(SubRect.top + SubrectOffset + ViewportSize.y, SubRect.bottom + 1)))
 				{
@@ -1849,35 +1867,14 @@ protected:
 
 					for (const auto& Cell: BlockRow)
 					{
-						const auto CellIndex = &Cell - BlockRow.data();
-
-						if (
-							Cell.Attributes.Flags & FCF_FOREIGN &&
-							colors::is_transparent(Cell.Attributes.ForegroundColor) &&
-							colors::is_transparent(Cell.Attributes.BackgroundColor)
-						)
-						{
-							if (!ForeignBlock)
-								ForeignBlock.emplace(SubRect.left + CellIndex, i, SubRect.left + CellIndex, i);
-							else
-								++ForeignBlock->right;
-
-							continue;
-						}
-
-						queue_block();
+						ForeignBlocksList.queue(Cell, { static_cast<int>(&Cell - BlockRow.data()), i - (SubRect.top + SubrectOffset) }, SubRect);
 					}
-
-					queue_block();
 				}
-
-				queue_block();
 
 				if (!::console.Write(Str))
 					return false;
 
-				for (const auto& Block: ForeignBlocks)
-					::console.unstash_output(Block);
+				ForeignBlocksList.unstash();
 
 				Str.clear();
 			}
@@ -1885,7 +1882,7 @@ protected:
 			return ::console.Write(CSI L"m"sv);
 		}
 
-		class cursor_suppressor: public hide_cursor
+		class cursor_suppressor: hide_cursor
 		{
 		public:
 			NONCOPYABLE(cursor_suppressor);
@@ -1939,6 +1936,8 @@ protected:
 			std::vector<CHAR_INFO> ConsoleBuffer;
 			ConsoleBuffer.reserve(SubRect.width() * SubRect.height());
 
+			foreign_blocks_list ForeignBlocksList;
+
 			if (char_width::is_enabled())
 			{
 				for_submatrix(Buffer, SubRect, [&](FAR_CHAR_INFO& Cell, point const Point)
@@ -1974,13 +1973,15 @@ protected:
 					}
 
 					ConsoleBuffer.emplace_back(CHAR_INFO{ { ReplaceControlCharacter(Cell.Char) }, colors::FarColorToConsoleColor(Cell.Attributes) });
+					ForeignBlocksList.queue(Cell, Point, SubRect);
 				});
 			}
 			else
 			{
-				for_submatrix(Buffer, SubRect, [&](const FAR_CHAR_INFO& i)
+				for_submatrix(Buffer, SubRect, [&](const FAR_CHAR_INFO& Cell, point const Point)
 				{
-					ConsoleBuffer.emplace_back(CHAR_INFO{ { ReplaceControlCharacter(i.Char) }, colors::FarColorToConsoleColor(i.Attributes) });
+					ConsoleBuffer.emplace_back(CHAR_INFO{ { ReplaceControlCharacter(Cell.Char) }, colors::FarColorToConsoleColor(Cell.Attributes) });
+					ForeignBlocksList.queue(Cell, Point, SubRect);
 				});
 			}
 
@@ -2015,6 +2016,8 @@ protected:
 				if (!WriteOutputNTImpl(ConsoleBuffer.data(), BufferSize, WriteRegion))
 					return false;
 			}
+
+			ForeignBlocksList.unstash();
 
 			return true;
 		}
@@ -2138,7 +2141,7 @@ protected:
 				LOGDEBUG(L"VT palette read successfuly"sv);
 				return true;
 			}
-			catch (far_exception const& e)
+			catch (std::exception const& e)
 			{
 				LOGERROR(L"{}"sv, e);
 				return false;
@@ -2777,6 +2780,11 @@ protected:
 		return std::ranges::any_of(m_Buffer | std::views::take(EventsRead), Predicate);
 	}
 
+	std::wostream& console::OriginalOutputStream()
+	{
+		return m_OutputStream;
+	}
+
 	bool console::ScrollScreenBuffer(rectangle const& ScrollRectangle, point DestinationOrigin, const FAR_CHAR_INFO& Fill) const
 	{
 		const CHAR_INFO SysFill{ { Fill.Char }, colors::FarColorToConsoleColor(Fill.Attributes) };
@@ -2879,7 +2887,7 @@ protected:
 		return ExternalConsole.Imports.pWriteOutput.operator bool();
 	}
 
-	bool console::IsWidePreciseExpensive(char32_t const Codepoint)
+	size_t console::GetWidthPreciseExpensive(string_view const Str)
 	{
 		// It ain't stupid if it works
 
@@ -2910,27 +2918,31 @@ protected:
 			LOGWARNING(L"SetConsoleCursorPosition(): {}"sv, os::last_error());
 
 			if (GetLastError() != ERROR_INVALID_HANDLE)
-				return false;
+				return 1;
 
 			LOGINFO(L"Reinitializing"sv);
 			initialize();
-			return false;
 		}
 
 		DWORD Written;
-		const auto Pair = encoding::utf16::to_surrogate(Codepoint);
-		const std::array Chars{ Pair.first, Pair.second };
-		if (!WriteConsole(m_WidthTestScreen.native_handle(), Chars.data(), Pair.second? 2 : 1, &Written, {}))
+		if (!WriteConsole(m_WidthTestScreen.native_handle(), Str.data(), static_cast<DWORD>(Str.size()), &Written, {}))
 		{
 			LOGWARNING(L"WriteConsole(): {}"sv, os::last_error());
-			return false;
+			return Str.size();
 		}
 
 		CONSOLE_SCREEN_BUFFER_INFO Info;
 		if (!get_console_screen_buffer_info(m_WidthTestScreen.native_handle(), &Info))
-			return false;
+			return Str.size();
 
-		return Info.dwCursorPosition.X > 1;
+		return Info.dwCursorPosition.X;
+	}
+
+	size_t console::GetWidthPreciseExpensive(char32_t const Codepoint)
+	{
+		const auto Pair = encoding::utf16::to_surrogate(Codepoint);
+		const std::array Chars{ Pair.first, Pair.second };
+		return GetWidthPreciseExpensive({ Chars.data(), Pair.second? 2uz : 1uz });
 	}
 
 	void console::ClearWideCache()
@@ -3069,6 +3081,49 @@ protected:
 		send_vt_command(far::format(OSC("9001;CmdNotFound;{}"), Command));
 	}
 
+	std::optional<bool> console::is_grapheme_clusters_on() const
+	{
+		try
+		{
+#define DECRQM_REQUEST "?2027"
+
+			const auto ResponseData = query_vt(CSI DECRQM_REQUEST "$p"sv);
+			if (ResponseData.empty())
+			{
+				LOGWARNING(L"DECRQM 2027 query is not supported"sv);
+				return {};
+			}
+
+			const auto
+				Prefix = CSI DECRQM_REQUEST ";"sv,
+				Suffix = L"$y"sv;
+
+#undef DECRQM_REQUEST
+
+			const auto give_up = [&]
+			{
+				throw far_exception(far::format(L"Incorrect response: {}"sv, ResponseData), false);
+			};
+
+			if (ResponseData.size() != Prefix.size() + 1 + Suffix.size() || !ResponseData.starts_with(Prefix) || !ResponseData.ends_with(Suffix))
+				give_up();
+
+			switch (ResponseData[Prefix.size()])
+			{
+			case L'3': return true;
+			case L'4': return false;
+			default:
+				give_up();
+				std::unreachable();
+			}
+		}
+		catch (std::exception const& e)
+		{
+			LOGERROR(L"{}"sv, e);
+			return {};
+		}
+	}
+
 	bool console::GetCursorRealPosition(point& Position) const
 	{
 		CONSOLE_SCREEN_BUFFER_INFO ConsoleScreenBufferInfo;
@@ -3173,8 +3228,8 @@ TEST_CASE("console.vt_sequence")
 
 	{
 		FAR_CHAR_INFO Buffer[]{ def, def, def, def };
-		Buffer[1].Attributes.BackgroundColor = colors::opaque(F_MAGENTA);
-		Buffer[2].Attributes.ForegroundColor = colors::opaque(F_GREEN);
+		Buffer[1].Attributes.BackgroundColor = colors::opaque(C_MAGENTA);
+		Buffer[2].Attributes.ForegroundColor = colors::opaque(C_GREEN);
 		Buffer[3].Attributes.Flags |= FCF_FG_BOLD;
 		check(Buffer, VTSTR(
 			" "
@@ -3187,8 +3242,8 @@ TEST_CASE("console.vt_sequence")
 	{
 		FAR_CHAR_INFO Buffer[]{ def, def, def };
 		Buffer[0].Attributes.Flags |= FCF_FG_BOLD;
-		Buffer[0].Attributes.BackgroundColor = colors::opaque(F_BLUE);
-		Buffer[0].Attributes.ForegroundColor = colors::opaque(F_LIGHTGREEN);
+		Buffer[0].Attributes.BackgroundColor = colors::opaque(C_BLUE);
+		Buffer[0].Attributes.ForegroundColor = colors::opaque(C_LIGHTGREEN);
 
 		Buffer[1] = Buffer[0];
 
@@ -3203,8 +3258,8 @@ TEST_CASE("console.vt_sequence")
 
 	{
 		FAR_CHAR_INFO Buffer[]{ def, def, def, def, def };
-		Buffer[0].Attributes.BackgroundColor = colors::opaque(F_BLUE);
-		Buffer[0].Attributes.ForegroundColor = colors::opaque(F_YELLOW);
+		Buffer[0].Attributes.BackgroundColor = colors::opaque(C_BLUE);
+		Buffer[0].Attributes.ForegroundColor = colors::opaque(C_YELLOW);
 
 		Buffer[1] = Buffer[0];
 		Buffer[1].Attributes.SetUnderline(UNDERLINE_CURLY);
@@ -3212,13 +3267,13 @@ TEST_CASE("console.vt_sequence")
 		Buffer[1].Attributes.SetUnderlineIndex(Buffer[1].Attributes.IsFgIndex());
 
 		Buffer[2] = Buffer[1];
-		Buffer[2].Attributes.UnderlineColor = colors::opaque(F_RED);
+		Buffer[2].Attributes.UnderlineColor = colors::opaque(C_RED);
 
 		Buffer[3] = Buffer[1];
 
 		Buffer[4] = Buffer[3];
-		Buffer[4].Attributes.ForegroundColor = colors::opaque(F_MAGENTA);
-		Buffer[4].Attributes.UnderlineColor = colors::opaque(F_MAGENTA);
+		Buffer[4].Attributes.ForegroundColor = colors::opaque(C_MAGENTA);
+		Buffer[4].Attributes.UnderlineColor = colors::opaque(C_MAGENTA);
 
 
 		check(Buffer, VTSTR(
@@ -3233,13 +3288,13 @@ TEST_CASE("console.vt_sequence")
 	{
 		FAR_CHAR_INFO Buffer[]{ def, def, def, def, def, def };
 
-		Buffer[0].Attributes.BackgroundColor = colors::opaque(F_BLUE);
-		Buffer[0].Attributes.ForegroundColor = colors::opaque(F_LIGHTGREEN);
+		Buffer[0].Attributes.BackgroundColor = colors::opaque(C_BLUE);
+		Buffer[0].Attributes.ForegroundColor = colors::opaque(C_LIGHTGREEN);
 		Buffer[0].Attributes.SetUnderline(UNDERLINE_DOUBLE);
 
 		Buffer[1] = Buffer[0];
 		Buffer[1].Attributes.SetUnderline(UNDERLINE_CURLY);
-		Buffer[1].Attributes.UnderlineColor = colors::opaque(F_YELLOW);
+		Buffer[1].Attributes.UnderlineColor = colors::opaque(C_YELLOW);
 
 		Buffer[2] = Buffer[1];
 		Buffer[2].Attributes.SetUnderline(UNDERLINE_DOT);

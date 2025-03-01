@@ -73,12 +73,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 //----------------------------------------------------------------------------
 
-std::exception_ptr& GlobalExceptionPtr()
-{
-	static std::exception_ptr ExceptionPtr;
-	return ExceptionPtr;
-}
-
 #define DECLARE_PLUGIN_FUNCTION(name, signature) DECLARE_GEN_PLUGIN_FUNCTION(name, true, signature)
 
 DECLARE_PLUGIN_FUNCTION(iClosePanel,          void     (WINAPI*)(const ClosePanelInfo *Info))
@@ -1233,9 +1227,6 @@ void Plugin::ExecuteFunctionImpl(export_index const ExportId, function_ref<void(
 {
 	const auto HandleFailure = [&](DWORD const ExceptionCode = EXIT_FAILURE)
 	{
-		if (use_terminate_handler())
-			os::process::terminate_by_user(ExceptionCode);
-
 		m_Factory->Owner()->UnloadPlugin(this, ExportId);
 	};
 
@@ -1251,25 +1242,21 @@ void Plugin::ExecuteFunctionImpl(export_index const ExportId, function_ref<void(
 			Epilogue();
 		};
 
-		const auto HandleException = [&](const auto& Handler, auto&&... ProcArgs)
-		{
-			Handler(FWD(ProcArgs)..., this, Location)? HandleFailure() : throw;
-		};
-
 		cpp_try(
 		[&]
 		{
 			Callback();
-			rethrow_if(GlobalExceptionPtr());
 			m_Factory->ProcessError(m_Factory->ExportsNames()[ExportId].AName);
 		},
 		[&](source_location const&)
 		{
-			HandleException(handle_unknown_exception);
+			handle_unknown_exception(this, Location);
+			HandleFailure();
 		},
 		[&](std::exception const& e, source_location const&)
 		{
-			HandleException(handle_std_exception, e);
+			handle_std_exception(e, this, Location);
+			HandleFailure();
 		},
 		Location);
 	},

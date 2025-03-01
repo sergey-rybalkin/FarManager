@@ -365,7 +365,7 @@ void Manager::ExecuteNonModal(const window_ptr& NonModal)
 void Manager::ExecuteModal(const window_ptr& Executed)
 {
 	bool stop=false;
-	if (!m_Executed.emplace(Executed, &stop).second)
+	if (!m_Executed.try_emplace(Executed, &stop).second)
 		return;
 
 	const auto OriginalStartManager = StartManager;
@@ -666,12 +666,13 @@ void Manager::ExitMainLoop(int Ask, int ExitCode)
 		*/
 		if (ExitAll() || Global->CloseFAR)
 		{
-			Global->FarExitCode = ExitCode;
-			Global->CtrlObject->Plugins->NotifyExitLuaMacro();
-
 			const auto cp = Global->CtrlObject->Cp();
-			if (!cp || (!cp->LeftPanel()->ProcessPluginEvent(FE_CLOSE, nullptr) && !cp->RightPanel()->ProcessPluginEvent(FE_CLOSE, nullptr)))
-				EndLoop=true;
+			if (!cp || (!cp->LeftPanel()->ProcessPluginEvent(FE_CLOSE, nullptr) && !cp->RightPanel()->ProcessPluginEvent(FE_CLOSE, nullptr)) || Global->CloseFAR)
+			{
+				EndLoop = true;
+				Global->FarExitCode = ExitCode;
+				Global->CtrlObject->Plugins->NotifyExitLuaMacro();
+			}
 		}
 	}
 }
