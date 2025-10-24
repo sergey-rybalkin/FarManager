@@ -292,15 +292,12 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 					}
 				}
 
-				os::chrono::local_time SavedTime;
-				utc_to_local(i.Time, SavedTime);
-				if(LastDay != SavedTime.Day || LastMonth != SavedTime.Month || LastYear != SavedTime.Year)
+				if (os::chrono::local_time SavedTime; utc_to_local(i.Time, SavedTime) && (LastDay != SavedTime.Day || LastMonth != SavedTime.Month || LastYear != SavedTime.Year))
 				{
 					LastDay = SavedTime.Day;
 					LastMonth = SavedTime.Month;
 					LastYear = SavedTime.Year;
-					MenuItemEx Separator;
-					Separator.Flags = LIF_SEPARATOR;
+					menu_item_ex Separator{ LIF_SEPARATOR };
 					string Time;
 					std::tie(Separator.Name, Time) = time_point_to_string(i.Time, 8, 1);
 					HistoryMenu.AddItem(Separator);
@@ -310,7 +307,7 @@ history_return_type History::ProcessMenu(string& strStr, UUID* const Uuid, strin
 				if (m_TypeHistory != HISTORYTYPE_DIALOG)
 					inplace::escape_ampersands(strRecord);
 
-				MenuItemEx MenuItem(strRecord);
+				menu_item_ex MenuItem{ std::move(strRecord) };
 				i.Lock? MenuItem.SetCheck() : MenuItem.ClearCheck();
 				MenuItem.ComplexUserData = i.Id;
 

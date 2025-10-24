@@ -42,6 +42,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "filepanels.hpp"
 #include "panel.hpp"
 #include "cmdline.hpp"
+#include "desktop.hpp"
 #include "vmenu.hpp"
 #include "vmenu2.hpp"
 #include "dialog.hpp"
@@ -65,6 +66,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "keyboard.hpp"
 #include "log.hpp"
 #include "codepage.hpp"
+#include "strmix.hpp"
 
 // Platform:
 #include "platform.hpp"
@@ -407,7 +409,7 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 		{
 			try
 			{
-				if (const auto MenuFile = os::fs::file(strMenuFileFullPath, GENERIC_READ, os::fs::file_share_read, nullptr, OPEN_EXISTING))
+				if (const auto MenuFile = os::fs::file(strMenuFileFullPath, GENERIC_READ, os::fs::file_share_read, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 					DeserializeMenu(m_Menu, MenuFile, m_MenuCP);
 			}
 			catch (std::exception const& e)
@@ -537,7 +539,7 @@ static void FillUserMenu(VMenu2& FarUserMenu, UserMenu::menu_container& Menu, in
 	FOR_RANGE(Menu, MenuItem)
 	{
 		++NumLines;
-		MenuItemEx FarUserMenuItem;
+		menu_item_ex FarUserMenuItem;
 		int FuncNum=0;
 
 		// сепаратором является случай, когда хоткей == "--"
@@ -560,7 +562,8 @@ static void FillUserMenu(VMenu2& FarUserMenu, UserMenu::menu_container& Menu, in
 			FuncNum = PrepareHotKey(strHotKey);
 			const auto have_hotkey = !strHotKey.empty();
 			const auto Offset = have_hotkey && strHotKey.front() == L'&'? 5 : 4;
-			strHotKey.resize(Offset, L' ');
+			const auto VisualSize = visual_string_length(strHotKey);
+			strHotKey.append(Offset - VisualSize, L' ');
 			FarUserMenuItem.Name = concat(have_hotkey && !FuncNum? L"&"sv : L""sv, strHotKey, strLabel);
 
 			if (MenuItem->Submenu)
@@ -720,7 +723,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 						if (!ShellEditor->WasFileSaved())
 							break;
 					}
-					if (const auto MenuFile = os::fs::file(MenuFileName, GENERIC_READ, os::fs::file_share_read, nullptr, OPEN_EXISTING))
+					if (const auto MenuFile = os::fs::file(MenuFileName, GENERIC_READ, os::fs::file_share_read, nullptr, OPEN_EXISTING, FILE_FLAG_SEQUENTIAL_SCAN))
 					{
 						MenuRoot.clear();
 						try
@@ -798,6 +801,9 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 		/* $ 01.05.2001 IS Отключим до лучших времен */
 		//int LeftVisible,RightVisible,PanelsHidden=0;
 		Global->CtrlObject->CmdLine()->LockUpdatePanel(true);
+
+		Global->WindowManager->Desktop()->ConsoleSession().pin();
+		SCOPE_EXIT{ Global->WindowManager->Desktop()->ConsoleSession().unpin(); };
 
 		// Цикл исполнения команд меню (CommandX)
 		for (const auto& str: (*CurrentMenuItem)->Commands)

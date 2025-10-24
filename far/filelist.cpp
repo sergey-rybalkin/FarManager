@@ -226,7 +226,7 @@ static void FileListToSortingPanelItem(const FileListItem *arr, int index, Sorti
 	pi.FileName = fi.FileName.c_str();                   //! CHANGED
 	pi.AlternateFileName = fi.AlternateFileName().c_str(); //! CHANGED
 	pi.FileSize=fi.FileSize;
-	pi.AllocationSize=fi.AllocationSize;
+	pi.AllocationSize = fi.AllocationSize(FileListPtr);
 	pi.FileAttributes=fi.Attributes;
 	pi.LastWriteTime = os::chrono::nt_clock::to_filetime(fi.LastWriteTime);
 	pi.CreationTime = os::chrono::nt_clock::to_filetime(fi.CreationTime);
@@ -274,9 +274,8 @@ static bool SortFileList(CustomSort* cs, wchar_t* indicator)
 	FarMacroValue values[]{ cs };
 	FarMacroCall fmc{ sizeof(fmc), std::size(values), values };
 	OpenMacroPluginInfo info{ MCT_PANELSORT, &fmc };
-	void *ptr;
 
-	if (!Global->CtrlObject->Plugins->CallPlugin(Global->Opt->KnownIDs.Luamacro.Id, OPEN_LUAMACRO, &info, &ptr) || !ptr)
+	if (!Global->CtrlObject->Plugins->CallPlugin(Global->Opt->KnownIDs.Luamacro.Id, OPEN_LUAMACRO, &info))
 		return false;
 
 	indicator[0] = info.Ret.Values[0].String[0];
@@ -289,9 +288,8 @@ static bool CanSort(int SortMode)
 	FarMacroValue values[]{ static_cast<double>(SortMode) };
 	FarMacroCall fmc{ sizeof(fmc), std::size(values), values };
 	OpenMacroPluginInfo info{ MCT_CANPANELSORT, &fmc };
-	void *ptr;
 
-	return Global->CtrlObject->Plugins->CallPlugin(Global->Opt->KnownIDs.Luamacro.Id, OPEN_LUAMACRO, &info, &ptr) && ptr;
+	return Global->CtrlObject->Plugins->CallPlugin(Global->Opt->KnownIDs.Luamacro.Id, OPEN_LUAMACRO, &info);
 }
 
 }
@@ -331,6 +329,17 @@ FileListItem::FileListItem()
 static string GetItemFullName(const FileListItem& Item, const FileList* Owner)
 {
 	return path::join(Owner->GetCurDir(), IsParentDirectory(Item)? string{} : Item.FileName);
+}
+
+unsigned long long FileListItem::AllocationSize(FileList const* const Owner) const
+{
+	if (!os::fs::is_allocation_size_read(*this) && SizeState != size_state::file_allocation_size_attempted)
+	{
+		(void)os::fs::get_allocation_size(GetItemFullName(*this, Owner), AllocationSizeRaw);
+		SizeState = size_state::file_allocation_size_attempted;
+	}
+
+	return AllocationSizeRaw;
 }
 
 bool FileListItem::IsNumberOfLinksRead() const
@@ -767,7 +776,7 @@ private:
 			return string_sort::compare(a.Owner(m_Owner), b.Owner(m_Owner));
 
 		case panel_sort::BY_COMPRESSEDSIZE:
-			return a.AllocationSize <=> b.AllocationSize;
+			return a.AllocationSize(m_Owner) <=> b.AllocationSize(m_Owner);
 
 		case panel_sort::BY_NUMLINKS:
 			return a.NumberOfLinks(m_Owner) <=> b.NumberOfLinks(m_Owner);
@@ -817,7 +826,7 @@ void FileList::SortFileList(bool KeepPosition)
 	}
 
 	const auto PluginPanel = GetPluginHandle();
-	const auto hSortPlugin = (m_PanelMode == panel_mode::PLUGIN_PANEL && PluginPanel && PluginPanel->plugin()->has(iCompare))? PluginPanel : nullptr;
+	auto hSortPlugin = (m_PanelMode == panel_mode::PLUGIN_PANEL && PluginPanel && PluginPanel->plugin()->has(iCompare))? PluginPanel : nullptr;
 
 	// ЭТО ЕСТЬ УЗКОЕ МЕСТО ДЛЯ СКОРОСТНЫХ ХАРАКТЕРИСТИК Far Manager
 	// при считывании директории
@@ -826,6 +835,11 @@ void FileList::SortFileList(bool KeepPosition)
 	{
 		const auto NameColumn = std::ranges::find(m_ViewSettings.PanelColumns, column_type::name, &column::type);
 		const auto IgnorePaths = NameColumn != m_ViewSettings.PanelColumns.cend() && NameColumn->type_flags & COLFLAGS_NAMEONLY;
+
+		if (PluginPanel && ProcessPluginEvent(FE_STARTSORT, nullptr))
+		{
+			hSortPlugin = nullptr;
+		}
 
 		list_less const Predicate(this, hSortPlugin, IgnorePaths);
 
@@ -839,6 +853,11 @@ void FileList::SortFileList(bool KeepPosition)
 		else
 		{
 			std::ranges::stable_sort(m_ListData, Predicate);
+		}
+
+		if (PluginPanel)
+		{
+			ProcessPluginEvent(FE_ENDSORT, nullptr);
 		}
 	}
 	else if (m_SortMode >= panel_sort::BY_USER)
@@ -3020,17 +3039,20 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 		IsPopPlugin = !PrevDataList.empty();
 		PopPrevData(strFindDir, PluginClosed, !GoToPanelFile, IsParent, SetDirectorySuccess);
 
+		Parent()->Refresh();
+
 		return SetDirectorySuccess;
 	}
-	else
-	{
+
+		// BUGBUG indentation
+
 		if (!equal_icase(ConvertNameToFull(strSetDir), m_CurDir))
 			Global->CtrlObject->FolderHistory->AddToHistory(m_CurDir);
 
-		if (IsParent)
+		if (IsParent && RootPath)
 		{
-			if (RootPath)
-			{
+				// BUGBUG indentation
+
 				if (NetPath)
 				{
 					auto ShareName = m_CurDir; // strCurDir can be altered during next call
@@ -3053,9 +3075,7 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 				}
 				ChangeDisk(Parent()->ActivePanel());
 				return true;
-			}
 		}
-	}
 
 	strFindDir = PointToName(m_CurDir);
 	/*
@@ -3070,7 +3090,7 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 	*/
 	int UpdateFlags = 0;
 
-	if (m_PanelMode != panel_mode::PLUGIN_PANEL && IsRelativeRoot(strSetDir))
+	if (IsRelativeRoot(strSetDir))
 	{
 		strSetDir = extract_root_directory(m_CurDir);
 	}
@@ -3124,9 +3144,6 @@ bool FileList::ChangeDir(string_view const NewDir, bool IsParent, bool ResolvePa
 		AnotherPanel->SetCurDir(m_CurDir, false);
 		AnotherPanel->Redraw();
 	}
-
-	if (m_PanelMode == panel_mode::PLUGIN_PANEL)
-		Parent()->RedrawKeyBar();
 
 	return SetDirectorySuccess;
 }
@@ -3569,7 +3586,8 @@ void FileList::ChangeDirectoriesFirst(bool Mode)
 	Panel::ChangeDirectoriesFirst(Mode);
 	SortFileList(true);
 	ProcessPluginEvent(FE_CHANGESORTPARAMS, nullptr);
-	Show();
+	if (IsVisible())
+		Show();
 }
 
 void FileList::OnSortingChange()
@@ -3785,6 +3803,17 @@ bool FileList::FindPartName(string_view const Name,int Next,int Direct)
 	}
 }
 
+static auto folder_size_display_type(FileListItem::size_state const SizeType)
+{
+	switch (SizeType)
+	{
+	default:
+	case FileListItem::size_state::folder_size_unknown: return folder_size::unknown;
+	case FileListItem::size_state::folder_size_precise: return folder_size::precise;
+	case FileListItem::size_state::folder_size_outdated: return folder_size::outdated;
+	}
+}
+
 // собрать в одну строку все данные в отображаемых колонках
 bool FileList::GetPlainString(string& Dest, int ListPos, os::chrono::time_point const CurrentTime) const
 {
@@ -3850,7 +3879,7 @@ bool FileList::GetPlainString(string& Dest, int ListPos, os::chrono::time_point 
 			case column_type::streams_size:
 			{
 				const auto SizeToDisplay = (Column.type == column_type::size_compressed) ?
-					m_ListData[ListPos].AllocationSize :
+					m_ListData[ListPos].AllocationSize(this) :
 					Column.type == column_type::streams_size ?
 					m_ListData[ListPos].StreamsSize(this) :
 					m_ListData[ListPos].FileSize;
@@ -3859,7 +3888,7 @@ bool FileList::GetPlainString(string& Dest, int ListPos, os::chrono::time_point 
 					SizeToDisplay,
 					m_ListData[ListPos].FileName,
 					m_ListData[ListPos].Attributes,
-					m_ListData[ListPos].ShowFolderSize,
+					folder_size_display_type(m_ListData[ListPos].SizeState),
 					m_ListData[ListPos].ReparseTag,
 					Column.type,
 					Column.type_flags,
@@ -4738,7 +4767,7 @@ static void edit_sort_layers(int MenuPos)
 				const auto NewSortModeIndex = std::ranges::find(SortModes, Result, &sort_mode::MenuPosition) - SortModes;
 				const auto Order = SortModes[NewSortModeIndex].DefaultLayers.begin()->second;
 				const auto InsertPos = Pos > 0? Pos : 1;
-				SortLayersMenu->AddItem(MenuItemEx{ msg(SortModes[NewSortModeIndex].Label), MIF_CHECKED | order_indicator(Order) }, InsertPos);
+				SortLayersMenu->AddItem(menu_item_ex{ msg(SortModes[NewSortModeIndex].Label), MIF_CHECKED | order_indicator(Order) }, InsertPos);
 				SortLayersMenu->SetSelectPos(InsertPos);
 				SortLayers.emplace(SortLayers.begin() + InsertPos, static_cast<panel_sort>(NewSortModeIndex), Order);
 			}
@@ -4852,8 +4881,7 @@ void FileList::SelectSortMode()
 	MacroPluginReturn const* mpr{};
 	size_t extra = 0; // number of additional menu items due to custom sort modes
 	{
-		void *ptr;
-		if (Global->CtrlObject->Plugins->CallPlugin(Global->Opt->KnownIDs.Luamacro.Id, OPEN_LUAMACRO, &ompInfo, &ptr) && ptr)
+		if (Global->CtrlObject->Plugins->CallPlugin(Global->Opt->KnownIDs.Luamacro.Id, OPEN_LUAMACRO, &ompInfo))
 		{
 			mpr = &ompInfo.Ret;
 			if (mpr->Count >= 3)
@@ -4908,7 +4936,7 @@ void FileList::SelectSortMode()
 
 		SortOptCount
 	};
-	const menu_item InitSortMenuOptions[]=
+	const menu_item InitSortMenuOptions[]
 	{
 		{ msg(lng::MMenuSortUseGroups), GetSortGroups()? MIF_CHECKED : 0, KEY_SHIFTF11 },
 		{ msg(lng::MMenuSortSelectedFirst), SelectedFirst? MIF_CHECKED : 0, KEY_SHIFTF12 },
@@ -5173,7 +5201,9 @@ bool FileList::ApplyCommand()
 	++UpdateDisabled;
 	Parent()->GetCmdLine()->LockUpdatePanel(true);
 	{
-		const auto ExecutionContext = Global->WindowManager->Desktop()->ConsoleSession().GetContext();
+		Global->WindowManager->Desktop()->ConsoleSession().pin();
+		SCOPE_EXIT{ Global->WindowManager->Desktop()->ConsoleSession().unpin(); };
+
 		for (const auto& i: enum_selected())
 		{
 			if (CheckForEscAndConfirmAbort())
@@ -5258,8 +5288,8 @@ void FileList::CountDirSize(bool IsRealNames)
 				SelFileSize += Data.FileSize;
 
 				i.FileSize = Data.FileSize;
-				i.AllocationSize = Data.AllocationSize;
-				i.ShowFolderSize = 1;
+				i.AllocationSizeRaw = Data.AllocationSize;
+				i.SizeState = FileListItem::size_state::folder_size_precise;
 
 				Total.Items += Data.DirCount + Data.FileCount;
 				Total.Size += Data.FileSize;
@@ -5304,7 +5334,7 @@ void FileList::CountDirSize(bool IsRealNames)
 				{
 					++BasicData.FileCount;
 					BasicData.FileSize += i.FileSize;
-					BasicData.AllocationSize += i.AllocationSize;
+					BasicData.AllocationSize += i.AllocationSize(this);
 
 					++Total.Items;
 					Total.Size += i.FileSize;
@@ -5327,8 +5357,8 @@ void FileList::CountDirSize(bool IsRealNames)
 		     (IsRealNames && GetDirInfo(IsParentDirectory(CurFile)? L"."s : CurFile.FileName, Data, m_Filter.get(), DirInfoCallback, GETDIRINFO_SCANSYMLINKDEF) == 1))
 		{
 			CurFile.FileSize = Data.FileSize;
-			CurFile.AllocationSize = Data.AllocationSize;
-			CurFile.ShowFolderSize = 1;
+			CurFile.AllocationSizeRaw = Data.AllocationSize;
+			CurFile.SizeState = FileListItem::size_state::folder_size_precise;
 		}
 	}
 
@@ -5522,7 +5552,8 @@ void FileList::ChangeSortOrder(bool Reverse)
 	Panel::ChangeSortOrder(Reverse);
 	SortFileList(true);
 	ProcessPluginEvent(FE_CHANGESORTPARAMS, nullptr);
-	Show();
+	if (IsVisible())
+		Show();
 }
 
 void FileList::UpdateKeyBar()
@@ -5544,7 +5575,7 @@ bool FileList::PluginPanelHelp(const plugin_panel* hPlugin) const
 {
 	string_view strPath = hPlugin->plugin()->ModuleName();
 	CutToSlash(strPath);
-	const auto HelpFile = OpenLangFile(strPath, Global->HelpFileMask, Global->Opt->strHelpLanguage);
+	const auto HelpFile = OpenHelpFile(strPath, Global->Opt->strHelpLanguage);
 	if (!HelpFile)
 		return false;
 
@@ -5802,7 +5833,7 @@ static void FileListItemToPluginPanelItemBasic(const FileListItem& From, PluginP
 	To.LastWriteTime = os::chrono::nt_clock::to_filetime(From.LastWriteTime);
 	To.ChangeTime = os::chrono::nt_clock::to_filetime(From.ChangeTime);
 	To.FileSize = From.FileSize;
-	To.AllocationSize = From.AllocationSize;
+	To.AllocationSize = os::fs::is_allocation_size_read(From)? From.AllocationSizeRaw : 0;
 	To.FileName = {};
 	To.AlternateFileName = {};
 	To.Description = {};
@@ -5974,7 +6005,7 @@ FileListItem::FileListItem(const PluginPanelItem& pi)
 	ChangeTime = os::chrono::nt_clock::from_filetime(pi.ChangeTime);
 
 	FileSize = pi.FileSize;
-	AllocationSize = pi.AllocationSize;
+	AllocationSizeRaw = pi.AllocationSize;
 
 	UserFlags = pi.Flags;
 	UserData = pi.UserData;
@@ -6851,6 +6882,20 @@ void FileList::UpdateIfRequired()
 	Update((m_KeepSelection? UPDATE_KEEP_SELECTION : 0) | UPDATE_IGNORE_VISIBLE);
 }
 
+static bool ShouldHideFilesFromView(DWORD const Attributes, string_view const FileName)
+{
+	if (Global->Opt->ShowHidden)
+		return false;
+
+	if (Attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM))
+		return true;
+
+	if (!Global->Opt->TreatDotFilesAsHidden)
+		return false;
+
+	return FileName.starts_with(L'.');
+}
+
 void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPanelInvisible)
 {
 	const auto DataLock = lock_data();
@@ -7034,12 +7079,12 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 
 	for (const auto& fdata: Find)
 	{
+		if (ShouldHideFilesFromView(fdata.Attributes, fdata.FileName))
+			continue;
+
 		ErrorState = os::last_error();
 
 		const auto IsDirectory = os::fs::is_directory(fdata);
-
-		if (fdata.Attributes & (FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM) && !Global->Opt->ShowHidden)
-			continue;
 
 		if (UseFilter && !m_Filter->FileInFilter(fdata, fdata.FileName))
 		{
@@ -7147,8 +7192,6 @@ void FileList::ReadFileNames(bool const KeepSelection, bool const UpdateEvenIfPa
 			for (const auto& i: PanelData)
 			{
 				FileListItem Item{ i };
-				Item.PrevSelected = Item.Selected = false;
-				Item.ShowFolderSize = 0;
 				Item.SortGroup = Global->CtrlObject->HiFiles->GetGroup(Item, this);
 				Item.Position = m_ListData.size();
 				m_ListData.emplace_back(std::move(Item));
@@ -7367,11 +7410,11 @@ void FileList::MoveSelection(list_data& From, list_data& To)
 
 		OldPositions.emplace_back(OldItemIterator->Position);
 
-		if (OldItemIterator->ShowFolderSize)
+		if (OldItemIterator->SizeState == FileListItem::size_state::folder_size_precise || OldItemIterator->SizeState == FileListItem::size_state::folder_size_outdated)
 		{
-			i.ShowFolderSize = 2;
+			i.SizeState = FileListItem::size_state::folder_size_outdated;
 			i.FileSize = OldItemIterator->FileSize;
-			i.AllocationSize = OldItemIterator->AllocationSize;
+			i.AllocationSizeRaw = OldItemIterator->AllocationSizeRaw;
 		}
 
 		Select(i, OldItemIterator->Selected);
@@ -7537,19 +7580,19 @@ void FileList::UpdatePlugin(bool const KeepSelection, bool const UpdateEvenIfPan
 
 	for (const auto& PanelItem: PanelData)
 	{
+		if (ShouldHideFilesFromView(PanelItem.FileAttributes, NullToEmpty(PanelItem.FileName)))
+			continue;
+
 		if (UseFilter && !(m_CachedOpenPanelInfo.Flags & OPIF_DISABLEFILTER))
 		{
 			if (!m_Filter->FileInFilter(PanelItem))
 			{
 				if (!(PanelItem.FileAttributes & FILE_ATTRIBUTE_DIRECTORY))
-					m_FilteredExtensions.emplace(name_ext(PanelItem.FileName).second);
+					m_FilteredExtensions.emplace(name_ext(NullToEmpty(PanelItem.FileName)).second);
 
 				continue;
 			}
 		}
-
-		if (!Global->Opt->ShowHidden && (PanelItem.FileAttributes & (FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM)))
-			continue;
 
 		FileListItem NewItem(PanelItem);
 
@@ -7770,6 +7813,8 @@ void FileList::ShowFileList(bool Fast)
 			UpdateIfChanged(m_UpdatePending);
 	}
 
+	Parent()->HideChildren();
+
 	bool CurFullScreen=IsFullScreen();
 	PrepareViewSettings(m_ViewMode);
 	CorrectPosition();
@@ -7949,7 +7994,7 @@ void FileList::ShowFileList(bool Fast)
 
 	strTitle = GetTitle();
 	int TitleX2 = m_Where.right;
-	if (Global->Opt->Clock && !Global->Opt->ShowMenuBar && m_Where.left + strTitle.size() + 2 >= ScrX - Global->CurrentTime.size())
+	if (Global->Opt->Clock && !Global->Opt->ShowMenuBar && m_Where.left + visual_string_length(strTitle) + 2 >= ScrX - Global->CurrentTime.size())
 		TitleX2 = std::min(static_cast<int>(ScrX - Global->CurrentTime.size()), static_cast<int>(m_Where.right));
 
 	int MaxSize = TitleX2 - m_Where.left - 1;
@@ -7968,7 +8013,7 @@ void FileList::ShowFileList(bool Fast)
 	strTitle.insert(0, 1, L' ');
 	strTitle.push_back(L' ');
 
-	const auto TitleSize = static_cast<int>(strTitle.size());
+	const auto TitleSize = static_cast<int>(visual_string_length(strTitle));
 	int TitleX = m_Where.left + 1 + XShift + (TitleX2 - m_Where.left - XShift - TitleSize) / 2;
 
 	if (Global->Opt->Clock && !Global->Opt->ShowMenuBar && TitleX + TitleSize > ScrX - static_cast<int>(Global->CurrentTime.size()))
@@ -7976,7 +8021,7 @@ void FileList::ShowFileList(bool Fast)
 
 	SetColor(IsFocused()? COL_PANELSELECTEDTITLE:COL_PANELTITLE);
 	GotoXY(TitleX, m_Where.top);
-	Text(strTitle);
+	Text(strTitle, MaxSize);
 
 	const auto DataLock = lock_data();
 	const auto& m_ListData = *DataLock;
@@ -8059,6 +8104,7 @@ void FileList::ShowFileList(bool Fast)
 
 	if (m_PanelMode == panel_mode::PLUGIN_PANEL)
 		Parent()->RedrawKeyBar();
+	Parent()->ShowChildren();
 }
 
 
@@ -8707,15 +8753,18 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 
 							if (Global->Opt->Highlight && m_ListData[ListPos].Colors && !m_ListData[ListPos].Colors->Mark.Mark.empty() && Width>1)
 							{
-								const auto MarkLength = visual_string_length(m_ListData[ListPos].Colors->Mark.Mark);
-								Width -= static_cast<int>(MarkLength);
+								const auto MarkLength = static_cast<int>(visual_string_length(m_ListData[ListPos].Colors->Mark.Mark));
+								if (Width >= MarkLength)
+								{
+									Width -= MarkLength;
 
-								const auto OldColor = GetColor();
-								if (!ShowStatus)
-									SetShowColor(ListPos, false);
+									const auto OldColor = GetColor();
+									if (!ShowStatus)
+										SetShowColor(ListPos, false);
 
-								Text(m_ListData[ListPos].Colors->Mark.Mark, MarkLength);
-								SetColor(OldColor);
+									Text(m_ListData[ListPos].Colors->Mark.Mark, MarkLength);
+									SetColor(OldColor);
+								}
 							}
 
 							string_view Name = m_ListData[ListPos].AlternateOrNormal(m_ShowShortNames);
@@ -8878,7 +8927,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 						case column_type::streams_size:
 						{
 							const auto SizeToDisplay = (ColumnType == column_type::size_compressed)
-								? m_ListData[ListPos].AllocationSize
+								? m_ListData[ListPos].AllocationSize(this)
 								: (ColumnType == column_type::streams_size)
 									? m_ListData[ListPos].StreamsSize(this)
 									: m_ListData[ListPos].FileSize;
@@ -8887,7 +8936,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 								SizeToDisplay,
 								m_ListData[ListPos].FileName,
 								m_ListData[ListPos].Attributes,
-								m_ListData[ListPos].ShowFolderSize,
+								folder_size_display_type(m_ListData[ListPos].SizeState),
 								m_ListData[ListPos].ReparseTag,
 								ColumnType,
 								Columns[K].type_flags,
@@ -8962,7 +9011,7 @@ void FileList::ShowList(int ShowStatus,int StartColumn)
 							const auto& Owner = m_ListData[ListPos].Owner(this);
 							size_t Offset = 0;
 
-							if (!(Columns[K].type_flags & COLFLAGS_FULLOWNER) && m_PanelMode != panel_mode::PLUGIN_PANEL)
+							if (!(Columns[K].type_flags & COLFLAGS_FULLOWNER))
 							{
 								const auto SlashPos = FindSlash(Owner);
 								if (SlashPos != string::npos)

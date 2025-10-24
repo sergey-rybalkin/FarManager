@@ -76,6 +76,7 @@ public:
 	int IsProcessAssignMacroKey{};
 	size_t PluginPanelsCount{};
 	int FarExitCode{EXIT_SUCCESS};
+	bool ScreenSaverActive{};
 
 	class far_clock
 	{
@@ -94,7 +95,6 @@ public:
 	far_clock CurrentTime;
 
 	size_t LastShownTimeSize{};
-	string_view HelpFileMask{L"*.hlf"sv};
 	bool OnlyEditorViewerUsed{}; // -e or -v
 #ifdef DIRECT_RT
 	bool DirectRT{};

@@ -344,6 +344,10 @@ $ #Polecenia kontroli menu#
  #Alt+Shift+End#
  Wyrównuje zaznaczone elementy do prawej.
 
+ #Shift+F5#
+ Niektóre menu, np. ~wszystkich znalezionych wystąpień~@FindAllMenu@ w ~wewnętrznym edytorze~@Editor@,
+co najmniej jedną stałą kolumnę po lewej. Kombinacja #Shift+F5# przełącza widoczność tych kolumn.
+
  Zobacz także listę ~klawiszy makropoleceń~@KeyMacroMenuList@, dostępnych w menu.
 
 
@@ -3431,6 +3435,12 @@ jest zgodna z odnalezionym ciągiem. Na przykład:
 @FindAllMenu
 $ #Edytor: menu wszystkich znalezionych wystąpień#
  Następujące kombinacje klawiszy są dostępne w tym menu:
+
+ #F4#
+ Kopiuje wszystkie znalezione linie do nowego edytora i zamyka to menu.
+
+ #Alt+F4#
+ Kopiuje wszystkie linie bieżącego filtra do nowego edytora i zamyka to menu.
 
  #F5#
  Przełącza wielkość menu.
@@ -6595,6 +6605,25 @@ w Edytorze.
  Ten parametr można zmienić tylko w ~far:config~@FarConfig@.
 
 
+@Editor.SearchAllUseAltFileNameFormat
+$ #far:config Editor.SearchAllUseAltFileNameFormat#
+ Ten parametr łańcuchowy kontroluje tworzenie nazwy pliku używanej przez
+nowy Edytor zawierający ~wszystkie pasujące wpisy~@FindAllMenu@.
+Wartością jest jedna lub więcej ~masek plików~@FileMasks@.
+
+ Nowa nazwa pliku jest tworzona wg nazwy podstawowego pliku i rozszerzenia
+pliku aktualnie otwartego w edytorze. W zależoności od oryginalnej nazwy
+pliku, nowa nazwa jest formatowana przy użyciu jednego z dwóch alternatywnych
+ciągów zdefiniowanych w ~plikach .lng~@CustomizingUI@.
+Łańcuch o identyfikatorze #MEditSearchAllFileNameFormatAlt# jest używany,
+jeżeli oryginalna nazwa pliku pasuje do jednej z masek plików;
+w przeciwnym razie używany jest identyfikator #MEditSearchAllFileNameFormat#.
+
+ Wartość domyślna: #*.txt,*.log,*.md,*.csv,*.ini,*.cmd,*.map#
+
+ Parametr też można zmienić tylko w ~far:config~@FarConfig@.
+
+
 @Panel.ShortcutAlwaysChdir
 $ #far:config Panel.ShortcutAlwaysChdir#
  Ten parametr logiczny kontroluje zachowanie ~Skrótów do folderów~@FolderShortcuts@
@@ -6855,6 +6884,21 @@ drzewa plików (nawet jeżeli istnieją) nie są aktualizowane podczas
 tworzenia, usuwania lub zmiany nazw folderów.
 
  Domyślna wartość: True (wszystkie operacje na drzewie folderów są wyłączone).
+
+ Ten parametr można zmienić tylko w ~far:config~@FarConfig@.
+
+
+@Panel.TreatDotFilesAsHidden
+$ #far:config Panel.TreatDotFilesAsHidden#
+ Ten parametr logiczny kontroluje filtrowanie plików lub folderów rozpoczynających się
+od kropki (“dotfiles”). Działa w połączeniu z opcją #Pokazuj pliki ukryte i systemowe#
+w oknie ~ustawień panelu~@PanelSettings@.
+
+ Fałsz  - ^<wrap>Pliki zaczynające się kropkami zawsze będę widoczne.
+ Prawda  - Pliki zaczynające się kropkami będą ukrywane/wyświetlane razem z plikami
+ukrytymi i systemowymi.
+
+ Domyślna wartość: Fałsz (pliki zawsze będą wyświetlane.)
 
  Ten parametr można zmienić tylko w ~far:config~@FarConfig@.
 

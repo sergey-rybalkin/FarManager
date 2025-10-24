@@ -6,7 +6,7 @@
     <ConfigurationType>DynamicLibrary</ConfigurationType>
   </PropertyGroup>
   <PropertyGroup Label="UserMacros">
-    <VersionLuaSDK>20241113</VersionLuaSDK>
+    <VersionLuaSDK>20250712</VersionLuaSDK>
     <DirBit Condition="'$(Platform)'=='Win32'">32</DirBit>
     <DirBit Condition="'$(Platform)'=='x64'">64</DirBit>
     <DirBit Condition="'$(Platform)'=='ARM64'">ARM64</DirBit>
@@ -31,8 +31,8 @@
     <ClCompile Include="luafar\luaplug.c" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="luafar\luafar.h" />
-    <ClInclude Include="luafar\version.h" />
+    <ClInclude Include="luafar\lf_luafar.h" />
+    <ClInclude Include="luafar\lf_version.h" />
     <ClInclude Include="luasdk\include\lauxlib.h" />
     <ClInclude Include="luasdk\include\lua.h" />
     <ClInclude Include="luasdk\include\lualib.h" />

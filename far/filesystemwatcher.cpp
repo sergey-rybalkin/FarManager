@@ -89,6 +89,7 @@ public:
 			SCOPED_ACTION(std::scoped_lock)(m_CS);
 
 			std::erase(m_Clients, Client);
+			m_OutdatedDirectoryHandles.emplace(Client->m_DirectoryHandle.native_handle());
 
 			m_Synchronised.reset();
 			m_Update.set();
@@ -126,6 +127,13 @@ private:
 						}
 						return Handle;
 					});
+
+					while (!m_OutdatedDirectoryHandles.empty())
+					{
+						// "Continue monitoring..." read is issued by this thread, so CancelIo must come from it as well.
+						CancelIo(m_OutdatedDirectoryHandles.front());
+						m_OutdatedDirectoryHandles.pop();
+					}
 				}
 			}
 
@@ -177,6 +185,7 @@ private:
 	os::event m_Synchronised{ os::event::type::manual, os::event::state::nonsignaled };
 	std::vector<FileSystemWatcher*> m_Clients;
 	std::atomic_bool m_Exit{};
+	std::queue<HANDLE> m_OutdatedDirectoryHandles;
 	os::thread m_Thread;
 };
 
@@ -190,7 +199,7 @@ static os::handle open(const string_view Directory)
 		os::fs::file_share_all,
 		{},
 		OPEN_EXISTING,
-		FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED
+		FILE_FLAG_OVERLAPPED
 	);
 
 	if (!DirectoryHandle)
@@ -221,7 +230,8 @@ FileSystemWatcher::FileSystemWatcher(const string_view EventId, const string_vie
 
 FileSystemWatcher::~FileSystemWatcher()
 {
-	background_watcher::instance().remove(this);
+	if (m_Overlapped.hEvent)
+		background_watcher::instance().remove(this);
 
 	{
 		SCOPED_ACTION(std::scoped_lock)(m_CS);
@@ -231,10 +241,9 @@ FileSystemWatcher::~FileSystemWatcher()
 
 		LOGDEBUG(L"Stop monitoring {}"sv, m_Directory);
 
-		if (const auto Handle = m_DirectoryHandle.native_handle(); imports.CancelIoEx)
-			imports.CancelIoEx(Handle, &m_Overlapped);
-		else
-			CancelIo(Handle);
+		// CancelIoEx isn't really necessary as we issue CancelIo from the background thread too, but why not.
+		if (const auto Handle = m_DirectoryHandle.native_handle(); imports.CancelIoEx? imports.CancelIoEx(Handle, &m_Overlapped) : CancelIo(Handle))
+			(void)get_result();
 
 		m_DirectoryHandle = {};
 
@@ -290,6 +299,16 @@ bool FileSystemWatcher::get_result() const
 
 	switch (const auto LastError = os::last_error(); LastError.Win32Error)
 	{
+	case ERROR_NOTIFY_ENUM_DIR:
+		// ReadDirectoryChangesW fails with ERROR_NOTIFY_ENUM_DIR
+		// when the system was unable to record all the changes to the directory.
+		// In this case, you should compute the changes
+		// by enumerating the directory or subtree.
+
+		// We don't care about individual events, so it's basically a success.
+		return true;
+
+	case ERROR_NOTIFY_CLEANUP:
 	case ERROR_OPERATION_ABORTED:
 		return false; // BAU, no need to make noise
 

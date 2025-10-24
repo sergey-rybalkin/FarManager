@@ -301,6 +301,9 @@
           <Component Id="Edit.SelectionStartEnd.lua" Guid="$(var.Guid.Edit.SelectionStartEnd.lua)" Win64="$(var.Win64)">
             <File Id="Edit.SelectionStartEnd.lua" KeyPath="yes" Source="$(var.SourceDir)\Addons\Macros\Edit.SelectionStartEnd.lua" />
           </Component>
+          <Component Id="Edit.SyncEditorAndFindAllMenu.lua" Guid="$(var.Guid.Edit.SyncEditorAndFindAllMenu.lua)" Win64="$(var.Win64)">
+            <File Id="Edit.SyncEditorAndFindAllMenu.lua" KeyPath="yes" Source="$(var.SourceDir)\Addons\Macros\Edit.SyncEditorAndFindAllMenu.lua" />
+          </Component>
           <Component Id="F3.lua" Guid="$(var.Guid.F3.lua)" Win64="$(var.Win64)">
             <File Id="F3.lua" KeyPath="yes" Source="$(var.SourceDir)\Addons\Macros\F3.lua" />
           </Component>
@@ -309,6 +312,9 @@
           </Component>
           <Component Id="F9Table.lua" Guid="$(var.Guid.F9Table.lua)" Win64="$(var.Win64)">
             <File Id="F9Table.lua" KeyPath="yes" Source="$(var.SourceDir)\Addons\Macros\F9Table.lua" />
+          </Component>
+          <Component Id="Menu.CtrlClear.lua" Guid="$(var.Guid.Menu.CtrlClear.lua)" Win64="$(var.Win64)">
+            <File Id="Menu.CtrlClear.lua" KeyPath="yes" Source="$(var.SourceDir)\Addons\Macros\Menu.CtrlClear.lua" />
           </Component>
           <Component Id="OpeningLastFile.lua" Guid="$(var.Guid.OpeningLastFile.lua)" Win64="$(var.Win64)">
             <File Id="OpeningLastFile.lua" KeyPath="yes" Source="$(var.SourceDir)\Addons\Macros\OpeningLastFile.lua" />

@@ -41,6 +41,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "config.hpp"
 #include "global.hpp"
 #include "locale.hpp"
+#include "strmix.hpp"
 
 // Platform:
 
@@ -784,7 +785,7 @@ std::pair<string, string> format_datetime(os::chrono::time const Time)
 			Time.Hours,
 			Time.Minutes,
 			Time.Seconds,
-			Time.Hectonanoseconds / (1ms / 1_hns)
+			Time.milliseconds()
 		)
 	};
 }

@@ -328,7 +328,7 @@ bool Help::ReadHelp(string_view const Mask)
 		return true;
 	}
 
-	auto HelpFile = OpenLangFile(strPath, Mask.empty()? Global->HelpFileMask : Mask, Global->Opt->strHelpLanguage);
+	auto HelpFile = OpenHelpFile(strPath, Global->Opt->strHelpLanguage, Mask);
 	if (!HelpFile)
 	{
 		ErrorHelp = true;
@@ -1958,7 +1958,6 @@ void Help::Search(lang_file& HelpFile)
 	string strCurTopic, strEntryName;
 
 	regex_match Match;
-	named_regex_match NamedMatch;
 	RegExp re;
 
 	if (m_SearchDlgParams.Regex.value())
@@ -2018,7 +2017,6 @@ void Help::Search(lang_file& HelpFile)
 				Searcher,
 				re,
 				Match,
-				&NamedMatch,
 				CurPos,
 				{
 					.CaseSensitive = m_SearchDlgParams.CaseSensitive.value(),
@@ -2076,7 +2074,7 @@ void Help::ReadDocumentsHelp(int TypeIndex)
 			{
 				string_view Path = i->ModuleName();
 				CutToSlash(Path);
-				auto HelpFile = OpenLangFile(Path, Global->HelpFileMask, Global->Opt->strHelpLanguage);
+				auto HelpFile = OpenHelpFile(Path, Global->Opt->strHelpLanguage);
 				if (!HelpFile)
 					continue;
 

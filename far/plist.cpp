@@ -164,7 +164,7 @@ static void AddMenuItem(HWND const Window, DWORD const Pid, size_t const PidWidt
 
 	const auto Self = Pid == GetCurrentProcessId() || Window == console.GetWindow();
 
-	MenuItemEx NewItem(far::format(L"{:{}} {} {}"sv, Pid, PidWidth, BoxSymbols[BS_V1], MenuItem), Self? MIF_CHECKED : MIF_NONE);
+	menu_item_ex NewItem{ far::format(L"{:{}} {} {}"sv, Pid, PidWidth, BoxSymbols[BS_V1], MenuItem), Self? MIF_CHECKED : MIF_NONE };
 	NewItem.ComplexUserData = menu_data{ WindowTitle, Pid, Window };
 	Menu->AddItem(NewItem);
 }
@@ -212,7 +212,7 @@ void ShowProcessList()
 	if (!FillProcList())
 		return;
 
-	ProcList->AssignHighlights();
+	ProcList->EnableAutoHighlight();
 	ProcList->SetBottomTitle(KeysToLocalizedText(KEY_DEL, KEY_F2, KEY_CTRLR));
 
 	ProcList->Run([&](const Manager::Key& RawKey)

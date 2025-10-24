@@ -868,6 +868,7 @@ FAR_INLINE_CONSTANT FARDIALOGFLAGS
 	FDLG_NODRAWPANEL         = 0x0000000000000008ULL,
 	FDLG_KEEPCONSOLETITLE    = 0x0000000000000010ULL,
 	FDLG_NONMODAL            = 0x0000000000000020ULL,
+	FDLG_STAY_ON_TOP         = 0x0000000000000040ULL,
 	FDLG_NONE                = 0;
 
 typedef intptr_t(WINAPI *FARWINDOWPROC)(
@@ -1267,7 +1268,7 @@ FAR_INLINE_CONSTANT EDITOR_FLAGS
 #ifdef FAR_USE_INTERNALS
 	EF_SERVICEREGION         = 0x0000000000001000ULL,
 #endif // END FAR_USE_INTERNALS
-	EN_NONE                  = 0;
+	EF_NONE                  = 0;
 
 enum EDITOR_EXITCODE
 {
@@ -1479,6 +1480,10 @@ enum FARMACROVARTYPE
 	FMVT_ARRAY                  = 8,
 	FMVT_PANEL                  = 9,
 	FMVT_ERROR                  = 10,
+	FMVT_MBSTRING               = 11,
+	FMVT_NEWTABLE               = 12,
+	FMVT_SETTABLE               = 13,
+	FMVT_DIALOG                 = 14,
 };
 
 struct FarMacroValue
@@ -1490,6 +1495,7 @@ struct FarMacroValue
 		long long        Boolean;
 		double         Double;
 		const wchar_t *String;
+		const char    *MBString;
 		void          *Pointer;
 		struct
 		{
@@ -1516,6 +1522,8 @@ struct FarMacroValue
 	FarMacroValue(double v)           { Type=FMVT_DOUBLE; Double=v; }
 	FarMacroValue(const wchar_t* v)   { Type=FMVT_STRING; String=v; }
 	FarMacroValue(void* v)            { Type=FMVT_POINTER; Pointer=v; }
+	FarMacroValue(const char* v)      { Type=FMVT_MBSTRING; MBString=v; }
+	FarMacroValue(FARMACROVARTYPE tp) { Type=tp; Integer=0; }
 	FarMacroValue(const UUID& v)      { Type=FMVT_BINARY; Binary.Data=&const_cast<UUID&>(v); Binary.Size=sizeof(UUID); }
 	FarMacroValue(FarMacroValue* arr,size_t count) { Type=FMVT_ARRAY; Array.Values=arr; Array.Count=count; }
 #ifdef FAR_USE_INTERNALS
@@ -2163,6 +2171,7 @@ enum FAR_REGEXP_CONTROL_COMMANDS
 	RECTL_SEARCHEX                  = 5,
 	RECTL_BRACKETSCOUNT             = 6,
 	RECTL_NAMEDGROUPINDEX           = 7,
+	RECTL_GETNAMEDGROUPS            = 8,
 };
 
 struct RegExpMatch
@@ -2178,6 +2187,12 @@ struct RegExpSearch
 	struct RegExpMatch* Match;
 	intptr_t Count;
 	void* Reserved;
+};
+
+struct RegExpNamedGroup
+{
+	size_t Index;
+	const wchar_t* Name;
 };
 
 enum FAR_SETTINGS_CONTROL_COMMANDS
@@ -2984,6 +2999,8 @@ enum FAR_EVENTS
 	FE_GOTFOCUS         =6,
 	FE_KILLFOCUS        =7,
 	FE_CHANGESORTPARAMS =8,
+	FE_STARTSORT        =9,
+	FE_ENDSORT          =10,
 };
 
 struct OpenInfo

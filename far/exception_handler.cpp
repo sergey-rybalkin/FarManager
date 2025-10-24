@@ -661,13 +661,18 @@ public:
 	// IUnknown
 	STDMETHOD(QueryInterface)(REFIID InterfaceId, PVOID* Interface) override
 	{
-		if (none_of(InterfaceId, IID_IUnknown, IID_IDebugOutputCallbacks, IID_IDebugOutputCallbacksWide))
+		if (InterfaceId == IID_IUnknown)
+			*Interface = static_cast<IUnknown*>(static_cast<IDebugOutputCallbacks*>(this));
+		else if (InterfaceId == IID_IDebugOutputCallbacks)
+			*Interface = static_cast<IDebugOutputCallbacks*>(this);
+		else if (InterfaceId == IID_IDebugOutputCallbacksWide)
+			*Interface = static_cast<IDebugOutputCallbacksWide*>(this);
+		else
 		{
 			*Interface = {};
 			return E_NOINTERFACE;
 		}
 
-		*Interface = this;
 		AddRef();
 		return S_OK;
 	}
@@ -681,7 +686,7 @@ public:
 	// IUnknown
 	STDMETHOD_(ULONG, Release)() override
 	{
-		return 0;
+		return 1;
 	}
 
 	// IDebugOutputCallbacks
@@ -743,8 +748,13 @@ public:
 
 		try
 		{
-			if (!m_DebugControl)
+			if (!m_Initialized)
+			{
+				// One attempt is good enough, even if initialize() throws
+				m_Initialized = true;
+
 				initialize();
+			}
 
 			const auto DisassembleFlags =
 				DEBUG_DISASM_EFFECTIVE_ADDRESS |
@@ -822,6 +832,7 @@ private:
 
 	string* m_To;
 	DebugOutputCallbacks m_Callbacks;
+	bool m_Initialized{};
 	os::com::ptr<IDebugClient> m_DebugClient;
 	os::com::ptr<IDebugControl> m_DebugControl;
 };
@@ -1024,7 +1035,7 @@ static expected<DWORD, os::error_state> get_console_host_pid_from_window()
 	// Apparently this is also the only way to do it on WOW64,
 	// since ProcessConsoleHostProcess doesn't work there.
 	// Yes, it's horrible, but it's better than nothing.
-	const auto ImeWnd = ImmGetDefaultIMEWnd(GetConsoleWindow());
+	const auto ImeWnd = ImmGetDefaultIMEWnd(console.GetWindow());
 	if (!ImeWnd)
 		return os::error_state{ GetLastError(), 0 };
 
@@ -2204,7 +2215,7 @@ extern "C" void _invalid_parameter(wchar_t const*, wchar_t const*, wchar_t const
 WARNING_PUSH()
 WARNING_DISABLE_CLANG("-Wmissing-noreturn")
 
-static void _invalid_parameter(wchar_t const*, wchar_t const*, wchar_t const*, unsigned int, uintptr_t)
+void _invalid_parameter(wchar_t const*, wchar_t const*, wchar_t const*, unsigned int, uintptr_t)
 {
 	os::process::terminate(STATUS_INVALID_CRUNTIME_PARAMETER);
 }
