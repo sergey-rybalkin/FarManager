@@ -779,7 +779,7 @@ std::list<CommandLine::segment> CommandLine::GetPrompt()
 		return m_Prompt;
 	}
 
-	FN_RETURN_TYPE(CommandLine::GetPrompt) Result;
+	fn_return_type<&CommandLine::GetPrompt> Result;
 	size_t NewPromptSize = DEFAULT_CMDLINE_WIDTH;
 
 	const auto& PrefixColor = colors::PaletteColorToFarColor(COL_COMMANDLINEPREFIX);
