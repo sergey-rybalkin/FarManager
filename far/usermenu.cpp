@@ -117,9 +117,10 @@ private:
 
 	enum class menu_mode
 	{
-		local,
-		user,
-		global,
+		local,       // .\FarMenu.ini
+		user,        // %FARPROFILE%\FarMenu.ini
+		global,      // %FARHOME%\FarMenu.ini
+		custom,      // arbitrary file
 	};
 
 	menu_mode m_MenuMode{ menu_mode::local };
@@ -386,9 +387,8 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 		}
 		else
 		{
-			auto ParentDir = MenuFileName;
-			CutToParent(ParentDir);
-			strMenuFilePath = ParentDir;
+			m_MenuMode = menu_mode::custom;
+			strMenuFilePath = path::parent_path(MenuFileName);
 		}
 	}
 
@@ -418,7 +418,7 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 				LOGERROR(L"{}"sv, e);
 			}
 		}
-		else if (m_MenuMode != menu_mode::user)
+		else if (m_MenuMode != menu_mode::user && m_MenuMode != menu_mode::custom)
 		{
 			// Файл не открылся. Смотрим дальше.
 			if (m_MenuMode == menu_mode::global) // был в %FARHOME%?
@@ -457,6 +457,10 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 		case menu_mode::user:
 			MenuTitle = concat(msg(lng::MMainMenuTitle), L" ("sv, msg(m_MenuMode == menu_mode::global? lng::MMainMenuGlobal : lng::MMainMenuUser), L')');
 			break;
+
+		case menu_mode::custom:
+			MenuTitle = PointToName(MenuFileName);
+			break;
 		}
 
 		// вызываем меню
@@ -471,11 +475,14 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 				// Показать меню родительского каталога
 			case EC_PARENT_MENU:
 			{
-				if (m_MenuMode == menu_mode::local)
+				if (m_MenuMode == menu_mode::local || m_MenuMode == menu_mode::custom)
 				{
-					// Menu can be invoked from any file with any name
-					// Going up switches to standard names & logic
-					MenuFileName = {};
+					if (m_MenuMode == menu_mode::custom)
+					{
+						// Menu can be invoked from any file with any name
+						// Going up switches to standard names & logic
+						MenuFileName = {};
+					}
 
 					if (CutToParent(strMenuFilePath))
 					{
@@ -499,11 +506,12 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 				// $ 14.07.2000 VVM: Shift+F2 переключает Главное меню/локальное в цикле
 				switch (m_MenuMode)
 				{
-					case menu_mode::local:
+					case menu_mode::custom:
 						// Menu can be invoked from any file with any name
 						// Switching to global switches to standard names & logic
 						MenuFileName = {};
-
+						[[fallthrough]];
+					case menu_mode::local:
 						m_MenuMode = menu_mode::global;
 						strMenuFilePath = Global->Opt->GlobalUserMenuDir;
 						break;
@@ -516,6 +524,7 @@ void UserMenu::ProcessUserMenu(bool ChooseMenuType, string_view MenuFileName)
 					case menu_mode::user:
 						strMenuFilePath = Global->CtrlObject->CmdLine()->GetCurDir();
 						m_MenuMode = menu_mode::local;
+						break;
 				}
 
 				break;
@@ -561,9 +570,10 @@ static void FillUserMenu(VMenu2& FarUserMenu, UserMenu::menu_container& Menu, in
 			string strHotKey = MenuItem->strHotKey;
 			FuncNum = PrepareHotKey(strHotKey);
 			const auto have_hotkey = !strHotKey.empty();
-			const auto Offset = have_hotkey && strHotKey.front() == L'&'? 5 : 4;
+			const auto Offset = have_hotkey && strHotKey.front() == L'&'? 5uz : 4uz;
 			const auto VisualSize = visual_string_length(strHotKey);
-			strHotKey.append(Offset - VisualSize, L' ');
+			if (Offset > VisualSize)
+				strHotKey.append(Offset - VisualSize, L' ');
 			FarUserMenuItem.Name = concat(have_hotkey && !FuncNum? L"&"sv : L""sv, strHotKey, strLabel);
 
 			if (MenuItem->Submenu)
@@ -758,7 +768,7 @@ int UserMenu::ProcessSingleMenu(std::list<UserMenuItem>& Menu, int MenuPos, std:
 					return 1;
 
 				case KEY_BS: // Показать меню из родительского каталога только в MM_LOCAL режиме
-					if (m_MenuMode == menu_mode::local)
+					if (m_MenuMode == menu_mode::local || m_MenuMode == menu_mode::custom)
 					{
 						ReturnCode=EC_PARENT_MENU;
 						UserMenu->Close(-1);

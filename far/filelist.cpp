@@ -1980,9 +1980,7 @@ bool FileList::ProcessKey(const Manager::Key& Key)
 									// The user could potentially save the temporary file to a different location
 									string Dummy;
 									ShellEditor->GetTypeAndName(Dummy, strFileName);
-									string_view ParentDirectory = strFileName;
-									CutToParent(ParentDirectory);
-									if (!equal_icase(ParentDirectory, TemporaryDirectory))
+									if (!equal_icase(path::parent_path(strFileName), TemporaryDirectory))
 										DeleteTemporaryFile = false;
 								}
 
@@ -2842,7 +2840,19 @@ void FileList::ProcessEnter(bool EnableExec,bool SeparateWindow,bool EnableAssoc
 				{
 					int PutCode = Global->CtrlObject->Plugins->PutFiles(GetPluginHandle(), { &PanelItem.Item, 1 }, false, OPM_EDIT);
 					if (PutCode == 1 || PutCode == 2)
+					{
 						SetPluginModified();
+
+						Update(UPDATE_KEEP_SELECTION);
+						Redraw();
+						const auto AnotherPanel = Parent()->GetAnotherPanel(this);
+
+						if (AnotherPanel->GetMode() == panel_mode::NORMAL_PANEL)
+						{
+							AnotherPanel->Update(UPDATE_KEEP_SELECTION);
+							AnotherPanel->Redraw();
+						}
+					}
 				}
 			}
 		}
