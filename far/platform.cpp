@@ -94,7 +94,7 @@ namespace os
 				{
 					// Why such a condition?
 					// Usually API functions return string length (without \0) on success and
-					// required buffer size (i. e. string length + \0) on failure.
+					// required buffer size (i.e. string length + \0) on failure.
 					// Some of them, however, always return buffer size.
 					// It's Callable's responsibility to handle and fix that.
 					return ReturnedSize >= AllocatedSize;
@@ -122,15 +122,20 @@ namespace os
 		{
 			switch (const auto Result = WaitForSingleObject(Handle, Timeout? *Timeout / 1ms : INFINITE))
 			{
+			case WAIT_ABANDONED:
+				LOGWARNING(L"WaitForSingleObject(): WAIT_ABANDONED for handle {}"sv, Handle);
+				[[fallthrough]];
 			case WAIT_OBJECT_0:
 				return true;
 
 			case WAIT_TIMEOUT:
 				return false;
 
+			case WAIT_FAILED:
+				throw far_fatal_exception(far::format(L"WaitForSingleobject failed: {}"sv, last_error()));
+
 			default:
-				// Abandoned or error
-				throw far_fatal_exception(far::format(L"WaitForSingleobject returned {}"sv, Result));
+				std::unreachable();
 			}
 		}
 
@@ -143,18 +148,22 @@ namespace os
 			const auto Result = WaitForMultipleObjects(static_cast<DWORD>(Handles.size()), Handles.data(), WaitAll, Timeout? *Timeout / 1ms : INFINITE);
 
 			if (in_closed_range<size_t>(WAIT_OBJECT_0, Result, WAIT_OBJECT_0 + Handles.size() - 1))
-			{
 				return Result - WAIT_OBJECT_0;
-			}
-			else if (Result == WAIT_TIMEOUT)
-			{
+
+			if (Result == WAIT_TIMEOUT)
 				return {};
-			}
-			else
+
+			if (in_closed_range<size_t>(WAIT_ABANDONED, Result, WAIT_ABANDONED + Handles.size() - 1))
 			{
-				// Abandoned or error
-				throw far_fatal_exception(far::format(L"WaitForMultipleObjects returned {}"sv, Result));
+				const auto HandleIndex = Result - WAIT_ABANDONED;
+				LOGWARNING(L"WaitForMultipleObjects(): WAIT_ABANDONED for handle {} ({}/{})"sv, Handles[HandleIndex], HandleIndex, Handles.size());
+				return HandleIndex;
 			}
+
+			if (Result == WAIT_FAILED)
+				throw far_fatal_exception(far::format(L"WaitForMultipleObjects failed: {}"sv, last_error()));
+
+			std::unreachable();
 		}
 
 		void handle_implementation::wait(HANDLE const Handle)
@@ -978,14 +987,14 @@ bool is_interactive_user_session()
 	if (!WindowStation)
 	{
 		LOGWARNING(L"GetProcessWindowStation(): {}"sv, last_error());
-		return false; // assume the worse
+		return false; // assume the worst
 	}
 
 	USEROBJECTFLAGS Flags;
 	if (!GetUserObjectInformation(WindowStation, UOI_FLAGS, &Flags, sizeof(Flags), {}))
 	{
 		LOGWARNING(L"GetUserObjectInformation(): {}"sv, last_error());
-		return false; // assume the worse
+		return false; // assume the worst
 	}
 
 	// An invisible window station suggests that we aren't interactive.

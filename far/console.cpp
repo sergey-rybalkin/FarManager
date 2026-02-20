@@ -604,7 +604,7 @@ protected:
 
 		// To make sure that we do not deadlock ourselves here we prepend & append
 		// this dummy DA command that always works (since it was in the initial WT release),
-		// so that the response is always non-empty and we know exactly where it starts and ends.
+		// so that the response is always non-empty, and we know exactly where it starts and ends.
 		// In other words:
 		// - <attributes>[the response we are actually after]<attributes>: yay.
 		// - <attributes><attributes>: nay, the request is unsupported.
@@ -1585,7 +1585,7 @@ protected:
 			append(Str, Is > Was? i.On : i.Off, L';');
 		}
 
-		// We should only enter this function if the style has changed and it should add or remove at least something,
+		// We should only enter this function if the style has changed, and it should add or remove at least something,
 		// so no need to check before pop:
 		Str.pop_back();
 	}
@@ -1919,7 +1919,7 @@ protected:
 				ViewportSize = { WindowRect.width(), WindowRect.height() };
 			}
 
-			// If SubRect is too tall (e.g. when we flushing the old content of console resize), the rest will be dropped.
+			// If SubRect is too tall (e.g. when we're flushing the old content of console resize), the rest will be dropped.
 			// VT is a bloody joke.
 			for (int SubrectOffset = 0; SubrectOffset < SubRect.height(); SubrectOffset += ViewportSize.y)
 			{
@@ -2148,24 +2148,26 @@ protected:
 			return true;
 		}
 
-		static bool GetPaletteVT(std::array<COLORREF, 256>& Palette)
+		static size_t GetPaletteVT_partial(std::array<COLORREF, 256>& Palette, size_t const Offset, size_t const Count)
 		{
 			try
 			{
-				LOGDEBUG(L"Reading VT palette - here be dragons"sv);
-
 				const auto
 					OSCPrefix = ESC L"]4"sv,
 					OSCSuffix = ST L""sv;
 
+				const auto Begin = static_cast<int>(Offset), End = static_cast<int>(Offset + Count);
+				const auto Under100 = std::max(0, 100 - Begin) - std::max(0, 100 - End);
+				const auto Under10 = std::max(0, 10 - Begin) - std::max(0, 10 - End);
+
 				string Request;
-				Request.reserve(OSCPrefix.size() + L";255;?"sv.size() * Palette.size() - 100 - 10 + OSCSuffix.size());
+				Request.reserve(OSCPrefix.size() + L";255;?"sv.size() * Count - Under100 - Under10 + OSCSuffix.size());
 
 				// A single OSC for the whole thing.
 				// Querying the palette was introduced after the terse syntax, so it's fine.
 				Request = OSCPrefix;
 
-				for (const auto i: std::views::iota(0uz, Palette.size()))
+				for (const auto i: std::views::iota(Offset, Offset + Count))
 					far::format_to(Request, L";{};?"sv, vt_color_index(static_cast<uint8_t>(i)));
 
 				Request += OSCSuffix;
@@ -2174,7 +2176,7 @@ protected:
 				if (ResponseData.empty())
 				{
 					LOGWARNING(L"OSC 4 query is not supported"sv, Request);
-					return false;
+					return 0;
 				}
 
 				const auto make_exception = [&](source_location const& Location = source_location::current())
@@ -2216,7 +2218,11 @@ protected:
 					if (VtIndex >= Palette.size())
 						throw make_exception();
 
-					auto& PaletteColor = Palette[vt_color_index(VtIndex)];
+					const auto NtIndex = vt_color_index(VtIndex);
+					if (NtIndex != Offset + ColorsSet)
+						throw make_exception();
+
+					auto& PaletteColor = Palette[NtIndex];
 
 					auto ColorStr = *SubIterator;
 					if (!ColorStr.starts_with(RGBPrefix))
@@ -2227,9 +2233,9 @@ protected:
 					if (ColorStr.size() != L"0000"sv.size() * 3 + 2)
 						throw make_exception();
 
-					const auto color = [&](size_t const Offset)
+					const auto color = [&](size_t const RGBOffset)
 					{
-						const auto Value = from_string<unsigned>(ColorStr.substr(Offset * L"0000/"sv.size(), 4), {}, 16);
+						const auto Value = from_string<unsigned>(ColorStr.substr(RGBOffset * L"0000/"sv.size(), 4), {}, 16);
 						if (Value > 0xffff)
 							throw make_exception();
 
@@ -2240,17 +2246,49 @@ protected:
 					++ColorsSet;
 				}
 
-				if (ColorsSet != Palette.size())
-					throw make_exception();
-
-				LOGDEBUG(L"VT palette read successfuly"sv);
-				return true;
+				return ColorsSet;
 			}
 			catch (std::exception const& e)
 			{
 				LOGERROR(L"{}"sv, e);
-				return false;
+				return 0;
 			}
+		}
+
+		static bool GetPaletteVT(std::array<COLORREF, 256>& Palette)
+		{
+			LOGDEBUG(L"Reading VT palette - here be dragons"sv);
+
+			static auto BatchSize = Palette.size();
+			static bool BatchSizeAdjusted = false;
+
+			for (size_t Offset = 0; Offset < Palette.size();)
+			{
+				const auto ColorsSet = GetPaletteVT_partial(Palette, Offset, std::min(BatchSize, Palette.size() - Offset));
+				if (ColorsSet == 0)
+					return false;
+
+				if (ColorsSet == Palette.size())
+					break; // Full palette read successfully, no need to continue
+
+				// Some terminals (e.g. wezterm/wezterm#6124) fail to return the whole response in one go,
+				// so we do multiple queries with increasing offsets.
+				// This is silly, but better than nothing.
+				LOGDEBUG(L"VT palette [{} - {}] read"sv, Offset, Offset + ColorsSet - 1);
+
+				// Skip already read
+				Offset += ColorsSet;
+
+				// No point in trying to read more than it can return
+				if (!BatchSizeAdjusted)
+				{
+					BatchSize = ColorsSet;
+					BatchSizeAdjusted = true;
+				}
+			}
+
+			LOGDEBUG(L"VT palette read successfuly"sv);
+			return true;
 		}
 
 		static bool GetPaletteNT(std::array<COLORREF, 256>& Palette)
@@ -2533,7 +2571,7 @@ protected:
 		return os::detail::ApiDynamicErrorBasedStringReceiver(ERROR_INSUFFICIENT_BUFFER, Value, [&](std::span<wchar_t> Buffer)
 		{
 			// This API design is mental:
-			// - If everything is ok, it return the string size, including the terminating \0
+			// - If everything is ok, it returns the string size, including the terminating \0
 			// - If the buffer size is too small, it returns the input buffer size and sets last error to ERROR_INSUFFICIENT_BUFFER
 			// - It can also return 0 in case of other errors
 			// This means that if the string size is exactly (BufferSize - 1), the only way to understand whether it succeeded or not
@@ -2644,7 +2682,7 @@ protected:
 		// As of 15 Jul 2024 GetLargestConsoleWindowSize is broken in WT.
 		// It takes the current screen size in pixels and divides it by an inadequate font size, e.g. 1x16 or 1x1.
 
-		// It is unlikely that it is ever gonna be fixed, so we do a few very basic checks here to filter out obvious rubbish.
+		// It is unlikely that it is ever going to be fixed, so we do a few very basic checks here to filter out obvious rubbish.
 
 		if (Size.x <= 0 || Size.y <= 0)
 			return false;

@@ -58,6 +58,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "common.hpp"
 #include "common/algorithm.hpp"
 #include "common/scope_exit.hpp"
+#include "common/uuid.hpp"
 
 // External:
 
@@ -290,11 +291,11 @@ namespace os::fs
 	// "When working with this field, use FileNameLength to determine the length of the file name
 	// rather than assuming the presence of a trailing null delimiter."
 
-	// Some buggy implementations (e. g. ms sharepoint, rdesktop) set the length incorrectly
-	// (e. g. including the terminating \0 or as ((number of bytes in the source string) * 2) when source is in UTF-8),
+	// Some buggy implementations (e.g. ms sharepoint, rdesktop) set the length incorrectly
+	// (e.g. including the terminating \0 or as ((number of bytes in the source string) * 2) when source is in UTF-8),
 	// so instead of, say, "name" (4) they return "name\0\0\0\0" (8).
-	// Generally speaking, it's their own problems and we shall use it as is, as per the verse above.
-	// However, most of applications use FindFirstFile API, which copies this string
+	// Generally speaking, it's their own problems, and we shall use it as is, as per the verse above.
+	// However, most of the applications use FindFirstFile API, which copies this string
 	// to a fixed-size buffer, WIN32_FIND_DATA.cFileName, leaving the burden of finding its length
 	// to the application itself, which, by coincidence, does it correctly, effectively masking the initial error.
 	// So people come to us and claim that Far isn't working properly while other programs are fine.
@@ -1869,6 +1870,11 @@ WARNING_POP()
 			SetLastError(Result);
 			return Result == ERROR_SUCCESS && !fop.fAnyOperationsAborted;
 		}
+
+		bool set_volume_label(const wchar_t* Object, const wchar_t* Label)
+		{
+			return SetVolumeLabel(Object, Label) != FALSE;
+		}
 	}
 
 	//-------------------------------------------------------------------------
@@ -2316,7 +2322,7 @@ WARNING_POP()
 		return os::detail::ApiDynamicErrorBasedStringReceiver(ERROR_INSUFFICIENT_BUFFER, Path, [&](std::span<wchar_t> Buffer)
 		{
 			const auto ReturnedSize = ::QueryDosDevice(DeviceNamePtr, Buffer.data(), static_cast<DWORD>(Buffer.size()));
-			// Upon success it includes two trailing '\0', we don't need them
+			// Upon success, it includes two trailing '\0', we don't need them
 			return ReturnedSize? ReturnedSize - 2 : 0;
 		});
 	}
@@ -2423,6 +2429,19 @@ WARNING_POP()
 
 		if (ElevationRequired(ELEVATION_MODIFY_REQUEST, false)) // ShellAPI doesn't set LastNtStatus
 			return elevation::instance().fMoveToRecycleBin(Object);
+
+		return false;
+	}
+
+	bool set_volume_label(string_view const Object, string const& Label)
+	{
+		const auto NtObject = nt_path(Object);
+
+		if (low::set_volume_label(NtObject.c_str(), Label.c_str()))
+			return true;
+
+		if (ElevationRequired(ELEVATION_MODIFY_REQUEST))
+			return elevation::instance().set_volume_label(NtObject, Label);
 
 		return false;
 	}
@@ -2572,7 +2591,11 @@ WARNING_POP()
 
 	bool can_create_file_in(string_view const DirectoryName)
 	{
-		return create_file(DirectoryName, FILE_ADD_FILE, file_share_all, nullptr, OPEN_EXISTING)? true : false;
+		return
+			// without a temporary file, see https://devblogs.microsoft.com/oldnewthing/20251203-00/?p=111836
+			create_file(DirectoryName, FILE_ADD_FILE, file_share_all, nullptr, OPEN_EXISTING) ||
+			// just in case, with a temporary file, for non-trivial setups like gh-1070
+			create_file(path::join(DirectoryName, ::uuid::str(uuid::generate())), GENERIC_WRITE, file_share_all, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE);
 	}
 
 	bool CreateSymbolicLinkInternal(string_view const Object, string_view const Target, DWORD Flags)

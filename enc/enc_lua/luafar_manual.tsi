@@ -2611,7 +2611,7 @@ id=71
 lv=2
 dt=Text
 nm=far.SendDlgMessage
-mtime=3921264341
+mtime=3975946037
 <article>
 #_Result = far.SendDlgMessage (hDlg, Msg, Param1, Param2)
 #_    or
@@ -2630,8 +2630,6 @@ mtime=3921264341
 #_
 #_DM_CLOSE,
 #_DM_EDITUNCHANGEDFLAG,
-#_DM_ENABLE,
-#_DM_ENABLEREDRAW,
 #_DM_GETCHECK,
 #_DM_GETCURSORSIZE,
 #_DM_GETDROPDOWNOPENED,
@@ -2652,6 +2650,15 @@ mtime=3921264341
 #_DM_SHOWITEM,
 #_DM_USER:
 #_    Param2:  integer
+#_    Result:  integer
+#_
+#_DM_ENABLE:
+#_    Param2:  boolean or integer (default = -1)
+#_    Result:  integer
+#_
+#_DM_ENABLEREDRAW:
+#_    Param1:  boolean or integer (default = -1)
+#_    Param2:  ignored
 #_    Result:  integer
 #_
 #_DM_ADDHISTORY,
@@ -4256,7 +4263,7 @@ id=29
 lv=2
 dt=Text
 nm=editor.GetInfo
-mtime=3602447116
+mtime=3977814290
 <article>
 #_Info = editor.GetInfo (EditorId)
 #_
@@ -4285,6 +4292,8 @@ mtime=3602447116
 #_      SessionBookmarkCount:  integer
 #_      CurState:              integer
 #_      CodePage:              integer
+#_      WindowArea:            table (fields: left, top, right, bottom)
+#_      ClientArea:            table (fields: left, top, right, bottom)
 #_
 #_**Far API used:**
 #_  EditorControl, ECTL_GETINFO
@@ -4369,7 +4378,7 @@ id=31
 lv=2
 dt=Text
 nm=editor.GetString
-mtime=3921827714
+mtime=3978958646
 <article>
 #_**Note:**
 #_  This function is an extension over its prototype in Far API.
@@ -4381,10 +4390,10 @@ mtime=3921827714
 #_**Parameters:**
 #_  EditorId:     integer (default=CURRENT_EDITOR)
 #_  StringNumber: integer, 1-based (default=0)
-#_  Mode:         integer (0,1,2,3; default=0)
+#_  Mode:         integer (0,1,2,3,4; default=0)
 #_
 #_**Returns:**
-#_  LineInfo: table (Mode<2), or 2 strings (Mode>=2), or nil
+#_  LineInfo: table (Mode<2), or multiple values (Mode>=2), or nil
 #_    fields of LineInfo:
 #_      StringNumber: integer, 1-based
 #_      StringText:   string
@@ -7300,14 +7309,14 @@ lv=2
 dt=Text
 nm=far.CmpName
 ctime=3909321696
-mtime=3909321862
+mtime=3980616823
 <article>
 #_Result = far.CmpName (Mask, Name, Flags)
 #_
 #_**Parameters:**
 #_  Mask:  string
 #_  Name:  string
-#_  Flags: flags  (combination of PN_SKIPPATH, PN_CASEINSENSITIVE
+#_  Flags: flags  (combination of PN_SKIPPATH
 #_                 and PN_SHOWERRORMESSAGE; default=0)
 #_
 #_**Returns:**
@@ -7326,14 +7335,14 @@ lv=2
 dt=Text
 nm=far.CmpNameList
 ctime=3909321707
-mtime=3909321923
+mtime=3980616835
 <article>
 #_Result = far.CmpNameList (Mask, Name, Flags)
 #_
 #_**Parameters:**
 #_  Mask:  string
 #_  Name:  string
-#_  Flags: flags  (combination of PN_SKIPPATH, PN_CASEINSENSITIVE
+#_  Flags: flags  (combination of PN_SKIPPATH
 #_                 and PN_SHOWERRORMESSAGE; default=0)
 #_
 #_**Returns:**
@@ -8944,7 +8953,7 @@ lv=2
 dt=Text
 nm=far.Show
 ctime=3476617735
-mtime=3599756101
+mtime=3976301768
 <article>
 #_Item, Position = far.Show (...)
 #_
@@ -8964,6 +8973,8 @@ mtime=3599756101
 #_
 #_  Due to using `far.MakeMenuItems` the returned *Item* table contains
 #_  the value of the corresponding original argument under the field 'arg'.
+#_
+#_  *Ctrl+C* and *Ctrl+Ins* copy the selected line to clipboard and close the menu.
 #_
 #_@@@
 #_[far.Menu]: 64.html

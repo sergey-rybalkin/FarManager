@@ -97,6 +97,7 @@ enum ELEVATION_COMMAND: int
 	C_FUNCTION_GETFILESECURITY,
 	C_FUNCTION_SETFILESECURITY,
 	C_FUNCTION_RESETFILESECURITY,
+	C_FUNCTION_SETVOLUMELABEL,
 
 	C_COMMANDS_COUNT
 };
@@ -422,13 +423,14 @@ static os::handle create_elevated_process(const string& Parameters)
 {
 	SHELLEXECUTEINFO info
 	{
-		sizeof(info),
-		SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
-		nullptr,
-		L"runas",
-		Global->g_strFarModuleName.c_str(),
-		Parameters.c_str(),
-		Global->g_strFarPath.c_str(),
+		.cbSize = sizeof(info),
+		.fMask = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC | SEE_MASK_NOCLOSEPROCESS,
+		.hwnd = console.GetWindow(),
+		.lpVerb = L"runas",
+		.lpFile = Global->g_strFarModuleName.c_str(),
+		.lpParameters = Parameters.c_str(),
+		.lpDirectory = Global->g_strFarPath.c_str(),
+		.nShow = SW_HIDE,
 	};
 
 	if (!ShellExecuteEx(&info))
@@ -997,6 +999,21 @@ bool elevation::reset_file_security(string const& Object)
 		});
 }
 
+bool elevation::set_volume_label(string const& Object, string const& Label)
+{
+	return execute(lng::MElevationRequiredSetVolumeLabel, Object,
+		false,
+		[&]
+		{
+			return os::fs::low::set_volume_label(Object.c_str(), Label.c_str());
+		},
+		[&]
+		{
+			Write(C_FUNCTION_SETVOLUMELABEL, Object, Label);
+			return RetrieveLastErrorAndResult<bool>();
+		});
+}
+
 elevation::suppress::suppress(bool const Completely):
 	m_owner(Global? &instance() : nullptr),
 	m_Completely(Completely)
@@ -1341,6 +1358,16 @@ private:
 		Write(os::last_error(), Result);
 	}
 
+	void SetVolumeLabelHandler() const
+	{
+		const auto Object = Read<string>();
+		const auto Label = Read<string>();
+
+		const auto Result = os::fs::low::set_volume_label(Object.c_str(), Label.c_str());
+
+		Write(os::last_error(), Result);
+	}
+
 	static DWORD CALLBACK CopyProgressRoutineWrapper(LARGE_INTEGER TotalFileSize, LARGE_INTEGER TotalBytesTransferred, LARGE_INTEGER StreamSize, LARGE_INTEGER StreamBytesTransferred, DWORD StreamNumber, DWORD CallbackReason, HANDLE SourceFile,HANDLE DestinationFile, LPVOID Data)
 	{
 		const auto Param = static_cast<callback_param*>(Data);
@@ -1402,6 +1429,7 @@ private:
 			&elevated::GetFileSecurityHandler,
 			&elevated::SetFileSecurityHandler,
 			&elevated::ResetFileSecurityHandler,
+			&elevated::SetVolumeLabelHandler,
 		};
 
 		static_assert(Handlers.size() == C_COMMANDS_COUNT);

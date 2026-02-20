@@ -1007,6 +1007,7 @@ static int wmain_seh()
 	SCOPED_ACTION(vectored_exception_handler);
 	SCOPED_ACTION(signal_handler);
 	SCOPED_ACTION(invalid_parameter_handler);
+	SCOPED_ACTION(crt_report_hook);
 	SCOPED_ACTION(new_handler);
 
 #ifdef ENABLE_TESTS

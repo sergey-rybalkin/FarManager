@@ -4601,19 +4601,19 @@ MEditConfigScrollbar
 upd:"S&how scrollbar"
 
 MEditConfigLineNumbers
-"Показывать номера строк"
-"Show line numbers"
-"Zobrazovat čísla řádků"
-"Zeilennummern anzeigen"
-"Sorokszámok megjelenítes"
-"Wyświetl numery wierszy"
-"Mostrar números de línea"
-"Zobrazovať čísla riadkov"
-"Mostra Numeri Di Riga"
-"Показувати номери рядків"
-"Адлюстроўваць нумары радкоў"
-"Rodyti eilučių numerius"
-"Mostrar números de linha"
+"По&казывать номера строк"
+"&Show line numbers"
+"Zob&razovat čísla řádků"
+"&Zeilennummern anzeigen"
+"&Sorokszámok megjelenítes"
+"W&yświetl numery wierszy"
+"&Mostrar números de línea"
+"&Zobrazovať čísla riadkov"
+"&Mostra Numeri Di Riga"
+"По&казувати номери рядків"
+"&Адлюстроўваць нумары радкоў"
+"Rodyt&i eilučių numerius"
+"Mo&strar números de linha"
 
 MEditShowWhiteSpace
 "Пробел&ьные символы"
@@ -8893,21 +8893,6 @@ MEditCtrlF12
 ""
 ""
 
-MEditCtrlF3Hide
-"СкрСтр"
-"HideNum"
-"SkrýtČ"
-"VerstNr"
-"ElrejtS"
-"UkrWier"
-"OcultN"
-"SkryťČ"
-"NascRig"
-"СховРяд"
-"СхавНум"
-"SlėptEil"
-"OcultN"
-
 MEditAltShiftF1
 l:
 l:// Editor: AltShift
@@ -9652,6 +9637,22 @@ l:// This is another text for F8
 "OEM"
 "OEM"
 "OEM"
+
+MEditCtrlF3Hide
+l:// This is another text for CtrlF3
+"СкрСтр"
+"HideNum"
+"SkrýtČ"
+"VerstNr"
+"ElrejtS"
+"UkrWier"
+"OcultN"
+"SkryťČ"
+"NascRig"
+"СховРяд"
+"СхавНум"
+"SlėptEil"
+"OcultN"
 
 MEditSaveAs
 l:
@@ -17476,6 +17477,21 @@ upd:"Detect virtual disks"
 "Вызначаць віртуальныя дыскі"
 upd:"Detect virtual disks"
 upd:"Detect virtual disks"
+
+MChangeDriveVolumeLabel
+"Метка тома"
+"Volume label"
+"Popisek svazku"
+"Volume Label"
+"Kötetcímke"
+"Etykieta"
+"Etiqueta de volumen"
+"Označenie zväzku"
+"Etichetta volume"
+"Позначка тому"
+"Метка тома"
+"Tomo etiketė"
+"Etiqueta do volume"
 
 MSearchFileTitle
 l:
@@ -32050,6 +32066,21 @@ upd:"to decrypt this object:"
 "для адчынення тайнапісу гэтага аб'екту:"
 upd:"to decrypt this object:"
 upd:"to decrypt this object:"
+
+MElevationRequiredSetVolumeLabel
+upd:"to set volume label:"
+"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
+upd:"to set volume label:"
 
 MElevationDoForAll
 "Выполнить это действие для &всех текущих объектов"
